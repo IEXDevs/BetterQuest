@@ -1,0 +1,20 @@
+{
+  "name": "betterquest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "jsdom": "^26.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.7.0"
+  }
+}

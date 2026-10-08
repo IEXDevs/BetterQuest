@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "BetterQuest",
+  "version": "0.1.0",
+  "description": "A minimal BetterQuest entry point in Quest's student navigation.",
+  "minimum_chrome_version": "120",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://quest.cns.utexas.edu/student",
+        "https://quest.cns.utexas.edu/student/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
