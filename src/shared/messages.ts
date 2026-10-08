@@ -13,6 +13,9 @@ export function isStudentPage(value: string): boolean {
 export interface Ping { type: 'betterquest:ping' }
 export interface Pong { type: 'betterquest:pong'; version: string }
 
+export interface CommandMessage { type: 'betterquest:command'; command: import('../storage/commands').Command }
+export type CommandResponse = { ok: true; state: import('./models').LocalState } | { ok: false; error: string };
+
 export function isPing(value: unknown): value is Ping {
   return !!value && typeof value === 'object' &&
     'type' in value && value.type === 'betterquest:ping';

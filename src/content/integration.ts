@@ -1,6 +1,7 @@
 import { findNavigation } from './navigation';
 import { createNavigationButton, createPanel } from './ui';
 import { isStudentPage } from '../shared/messages';
+import { startPageFeatures } from './features';
 
 export interface Integration { reconcile: () => void; dispose: () => void }
 
@@ -10,6 +11,7 @@ export function startIntegration(document: Document, window: Window): Integratio
   let scheduled: number | null = null;
   let lastUrl = window.location.href;
   let navigation: ReturnType<typeof createNavigationButton> | null = null;
+  const features = startPageFeatures(document, window);
 
   // Remove orphaned hosts from a previous injection, without touching Quest nodes.
   document.querySelectorAll('[data-betterquest="navigation"], [data-betterquest="panel"]').forEach(node => node.remove());
@@ -27,6 +29,7 @@ export function startIntegration(document: Document, window: Window): Integratio
 
   function reconcile() {
     if (disposed) return;
+    features.reconcile();
     const nextUrl = window.location.href;
     if (nextUrl !== lastUrl) { panel.close(false); lastUrl = nextUrl; }
     if (!isStudentPage(nextUrl)) { unmount(); return; }
@@ -80,6 +83,7 @@ export function startIntegration(document: Document, window: Window): Integratio
     dispose() {
       disposed = true;
       observer.disconnect();
+      features.dispose();
       if (scheduled !== null) window.clearTimeout(scheduled);
       window.removeEventListener('popstate', schedule);
       window.removeEventListener('hashchange', schedule);

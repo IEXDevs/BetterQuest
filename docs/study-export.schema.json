@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BetterQuest Study Export v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "exportedAt", "courses", "assignments", "questions", "sources", "collection"],
+  "properties": {
+    "schema": { "const": "betterquest.study.v1" },
+    "exportedAt": { "$ref": "#/$defs/timestamp" },
+    "courses": { "type": "array", "items": { "$ref": "#/$defs/course" } },
+    "assignments": { "type": "array", "items": { "$ref": "#/$defs/assignment" } },
+    "questions": { "type": "array", "items": { "$ref": "#/$defs/question" } },
+    "sources": { "type": "array", "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["courseId", "assignmentId", "url", "collectedAt"],
+      "properties": { "courseId": { "type": "string" }, "assignmentId": { "type": "string" }, "url": { "$ref": "#/$defs/url" }, "collectedAt": { "$ref": "#/$defs/timestamp" } }
+    } },
+    "collection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["records", "extractedPrompts", "unextractedPrompts"],
+      "properties": { "records": { "type": "integer", "minimum": 0 }, "extractedPrompts": { "type": "integer", "minimum": 0 }, "unextractedPrompts": { "type": "integer", "minimum": 0 } }
+    }
+  },
+  "$defs": {
+    "url": { "type": "string", "format": "uri", "maxLength": 2000, "pattern": "^https://quest\\.cns\\.utexas\\.edu/student(?:[/#?]|$)" },
+    "timestamp": { "type": "string", "format": "date-time", "maxLength": 100 },
+    "course": {
+      "type": "object", "additionalProperties": false, "required": ["id", "sourceId", "title", "url"],
+      "properties": { "id": { "type": "string" }, "sourceId": { "type": "string", "minLength": 1, "maxLength": 2000 }, "title": { "type": "string", "maxLength": 500 }, "url": { "$ref": "#/$defs/url" } }
+    },
+    "deadline": {
+      "type": "object", "additionalProperties": false, "required": ["iso", "label", "timeZone"],
+      "properties": { "iso": { "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] }, "label": { "type": ["string", "null"], "maxLength": 500 }, "timeZone": { "type": ["string", "null"], "maxLength": 100 } }
+    },
+    "assignment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "sourceId", "courseId", "title", "url", "deadline", "completion", "kind", "historical"],
+      "properties": {
+        "id": { "type": "string" }, "sourceId": { "type": "string", "minLength": 1, "maxLength": 2000 }, "courseId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 500 }, "url": { "$ref": "#/$defs/url" }, "deadline": { "$ref": "#/$defs/deadline" },
+        "completion": { "enum": ["unknown", "not-started", "in-progress", "completed"] }, "kind": { "const": "homework" }, "historical": { "const": true }
+      }
+    },
+    "material": {
+      "type": "object", "additionalProperties": false, "required": ["availability", "url"],
+      "properties": { "availability": { "enum": ["unknown", "available", "unavailable"] }, "url": { "anyOf": [{ "$ref": "#/$defs/url" }, { "type": "null" }] } },
+      "if": { "properties": { "availability": { "enum": ["unknown", "unavailable"] } } }, "then": { "properties": { "url": { "type": "null" } } }
+    },
+    "prompt": {
+      "type": "object", "additionalProperties": false, "required": ["status", "text", "format", "reason"],
+      "properties": { "status": { "enum": ["not-extracted", "extracted", "unavailable"] }, "text": { "type": ["string", "null"], "maxLength": 100000 }, "format": { "const": "plain-text" }, "reason": { "type": ["string", "null"], "maxLength": 1000 } },
+      "if": { "properties": { "status": { "const": "extracted" } } },
+      "then": { "properties": { "text": { "type": "string", "minLength": 1, "pattern": "\\S" } } },
+      "else": { "properties": { "text": { "type": "null" } } }
+    },
+    "question": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "sourceId", "courseId", "assignmentId", "number", "url", "anchor", "prompt", "answer", "solution"],
+      "properties": {
+        "id": { "type": "string" }, "sourceId": { "type": "string", "minLength": 1, "maxLength": 2000 }, "courseId": { "type": "string" }, "assignmentId": { "type": "string" },
+        "number": { "type": ["string", "null"], "maxLength": 100 }, "url": { "$ref": "#/$defs/url" }, "anchor": { "type": ["string", "null"], "maxLength": 500 },
+        "prompt": { "$ref": "#/$defs/prompt" }, "answer": { "$ref": "#/$defs/material" }, "solution": { "$ref": "#/$defs/material" }
+      }
+    }
+  }
+}
