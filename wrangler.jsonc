@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "betterquest",
+  "compatibility_date": "2026-10-09",
+  "assets": {
+    "directory": "site",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "routes": [
+    { "pattern": "betterquest.iexdevs.com", "custom_domain": true }
+  ],
+  "workers_dev": false,
+  "preview_urls": false
+}

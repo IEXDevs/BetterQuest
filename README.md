@@ -1,5 +1,7 @@
 # BetterQuest
 
+Public product and privacy pages live in `site/` and deploy independently as a Cloudflare static-assets Worker at `betterquest.iexdevs.com`. The extension build remains in `dist/`; website commands are `npm run site:dev`, `npm run site:check`, and `npm run site:deploy`.
+
 Manifest V3 Chrome extension: a global assignment overview enhances `/student/courses`, Upcoming Assignments remains in the empty course-info column after Meets, and response-table questions have local bookmark icons. BetterQuest's native-style navigation item opens settings with assignment/bookmark toggles, persistent dark mode, and Saved Questions. PDF enhancement and study capture remain disabled.
 
 ## Privacy policy hosting

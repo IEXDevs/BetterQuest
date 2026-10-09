@@ -6,7 +6,10 @@
   "scripts": {
     "build": "tsc --noEmit && node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "site:check": "wrangler deploy --dry-run",
+    "site:dev": "wrangler dev",
+    "site:deploy": "wrangler deploy"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",
@@ -15,6 +18,7 @@
     "esbuild": "^0.25.0",
     "jsdom": "^26.0.0",
     "tsx": "^4.20.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "wrangler": "^4.149.0"
   }
 }

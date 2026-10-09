@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+<<<<<<< Updated upstream
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -85,4 +86,236 @@
     <footer class="muted">We will update this page and its last-updated date when BetterQuest's data practices change.</footer>
   </main>
 </body>
+=======
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#173f3a" />
+    <meta
+      name="description"
+      content="How the BetterQuest Chrome extension and website handle student information."
+    />
+    <title>Privacy Policy | BetterQuest</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="wordmark" href="/" aria-label="BetterQuest home">
+        <span class="wordmark-mark" aria-hidden="true">BQ</span>
+        <span>BetterQuest</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="/">Home</a>
+        <a aria-current="page" href="/privacy">Privacy</a>
+        <a class="nav-contact" href="https://iexdevs.com/contact">Contact</a>
+      </nav>
+    </header>
+
+    <main class="policy" id="main">
+      <header class="policy-hero">
+        <div>
+          <p class="eyebrow">Plain-language policy</p>
+          <h1>Privacy should be part of the product.</h1>
+        </div>
+        <div class="policy-summary">
+          <strong>BetterQuest Privacy Policy</strong>
+          <p>Effective and last updated: October 9, 2026</p>
+          <p>This policy covers the BetterQuest Chrome extension and this public website.</p>
+        </div>
+      </header>
+
+      <div class="policy-layout">
+        <aside class="policy-nav">
+          <p>On this page</p>
+          <a href="#extension-data">Extension data</a>
+          <a href="#quest-access">Quest access</a>
+          <a href="#website">Website requests</a>
+          <a href="#diagnostics">Error diagnostics</a>
+          <a href="#easyaccess">EasyAccess</a>
+          <a href="#analytics">Aggregate analytics</a>
+          <a href="#sharing">Sharing</a>
+          <a href="#choices">Your choices</a>
+          <a href="#contact">Contact</a>
+        </aside>
+
+        <article class="policy-copy">
+          <section class="policy-lede">
+            <p>
+              BetterQuest is an independent IEXDevs student project that adds optional organization and appearance
+              tools to UT Austin Quest. Coursework the extension remembers stays in your Chrome profile. Limited
+              de-identified diagnostics may leave the device for issue reporting, and future EasyAccess support is
+              described separately below.
+            </p>
+          </section>
+
+          <section id="extension-data">
+            <span class="section-index">01</span>
+            <h2>Information stored by the extension</h2>
+            <p>
+              BetterQuest uses the single Chrome <strong>storage</strong> permission. Its local state is stored under
+              <code>betterquest.local.v1</code> and may include:
+            </p>
+            <ul>
+              <li>theme and feature preferences;</li>
+              <li>course and assignment metadata visible on Quest, including titles, source identifiers, URLs, deadlines, and completion labels;</li>
+              <li>a record of which course pages were observed and when they were last observed;</li>
+              <li>question identifiers, question numbers, source links, bookmark status, and bookmark notes; and</li>
+              <li>locally cached study records created by enabled features.</li>
+            </ul>
+            <p>
+              This information remains in Chrome storage on your device. BetterQuest does not currently operate an
+              account system or upload this local coursework state as an account library. The diagnostics described
+              below are a separate, limited data flow.
+            </p>
+          </section>
+
+          <section id="quest-access">
+            <span class="section-index">02</span>
+            <h2>What BetterQuest can see on Quest</h2>
+            <p>
+              The content script runs only on <code>quest.cns.utexas.edu/student</code> pages. It reads the course,
+              assignment, deadline, status, and question identifiers already visible in the page so it can build the
+              enabled overview and bookmark features.
+            </p>
+            <div class="boundary-grid">
+              <div>
+                <strong>BetterQuest does</strong>
+                <p>Enhance pages you visit and cache the limited metadata described above.</p>
+              </div>
+              <div>
+                <strong>BetterQuest does not</strong>
+                <p>
+                  Read or store your passwords, UT login credentials, submitted answers, response text, or solution
+                  text. It does not submit work, change grades, or automate assessments.
+                </p>
+              </div>
+            </div>
+            <p>
+              BetterQuest does not scan every course automatically. An assignment appears in the overview only after
+              the relevant Quest page has been visited and observed.
+            </p>
+          </section>
+
+          <section id="website">
+            <span class="section-index">03</span>
+            <h2>Website and network requests</h2>
+            <p>
+              The extension contains its own feature code and does not use an advertising tracker. Quest itself
+              continues to make the requests needed to operate the page you are using. When diagnostic and aggregate
+              measurement features are enabled, they use IEXDevs services only for the limited purposes below.
+            </p>
+            <p>
+              Visiting this website sends ordinary requests to our hosting provider. Security and operational logs may
+              include your IP address, browser type, requested path, and request time. We use those logs to deliver,
+              protect, and troubleshoot the site.
+            </p>
+          </section>
+
+          <section id="diagnostics">
+            <span class="section-index">04</span>
+            <h2>Error and issue diagnostics</h2>
+            <p>
+              When diagnostics are enabled, BetterQuest may send a de-identified user-submitted issue report or an
+              automatic extension error report after the extension detects an unexpected failure. A report may include
+              the error category, affected feature, extension and browser version, page type, time, and sanitized
+              technical context needed to reproduce the problem.
+            </p>
+            <p>
+              Diagnostic reports do not include passwords, submitted answers, coursework text, solution text, names,
+              account identifiers, or the contents of bookmark notes. If you type information into a report yourself,
+              the submitted text is handled as support correspondence.
+            </p>
+          </section>
+
+          <section id="easyaccess">
+            <span class="section-index">05</span>
+            <h2>EasyAccess and future account sync</h2>
+            <p>
+              EasyAccess is the unified IEXDevs login system and is currently available only in UTMAX. BetterQuest does
+              not currently offer EasyAccess login. If it is added, the interface and this policy will identify which
+              compatible preferences or product data can be stored on IEXDevs servers and shared across IEXDevs
+              services after you create or use an account.
+            </p>
+          </section>
+
+          <section id="analytics">
+            <span class="section-index">06</span>
+            <h2>De-identified product analytics</h2>
+            <p>
+              When enabled, IEXDevs may collect de-identified measurements such as coarse general location,
+              approximate connection quality or internet speed, API request counts and hourly usage, product version,
+              and sanitized error categories.
+            </p>
+            <p>
+              Cross-product aggregates may describe high-level schedule or degree-completion trends, frequently used or
+              requested courses, and popular majors, minors, or certificates. BetterQuest does not contribute raw
+              answers, coursework text, names, account IDs, or complete student records to these aggregates.
+            </p>
+            <p>
+              De-identified aggregate results may appear in public reports and restricted internal developer dashboards.
+              These reports are designed so an individual user cannot reasonably be identified from them.
+            </p>
+          </section>
+
+          <section id="sharing">
+            <span class="section-index">07</span>
+            <h2>Sharing and third parties</h2>
+            <p>
+              We do not sell, rent, or use your information for advertising. Our website host and diagnostic delivery
+              infrastructure may process ordinary requests and the limited de-identified reports described above.
+            </p>
+            <p>
+              If you choose the contact link, you leave BetterQuest for the IEXDevs contact form. That form collects the
+              name, email, and message you submit, uses Cloudflare Turnstile to prevent abuse, and uses an email provider
+              to deliver the message. We retain contact correspondence only as reasonably necessary to answer it,
+              maintain service records, or address abuse.
+            </p>
+          </section>
+
+          <section id="choices">
+            <span class="section-index">08</span>
+            <h2>Your choices and deletion</h2>
+            <p>
+              You can disable assignment or bookmark features from BetterQuest settings. You can delete local data by
+              removing the extension and clearing its extension data in Chrome. Clearing ordinary Quest website data
+              alone may not remove Chrome extension storage.
+            </p>
+            <p>
+              BetterQuest is intended for college students and is not directed to children under 13. We may update this
+              policy when the product or its data practices change; the effective date at the top will change with it.
+            </p>
+          </section>
+
+          <section class="contact-panel" id="contact">
+            <p class="eyebrow">Questions or privacy requests</p>
+            <h2>Talk to the people building it.</h2>
+            <p>
+              Use the IEXDevs contact form for privacy questions, correction requests, or concerns about BetterQuest.
+            </p>
+            <a class="button button-primary" href="https://iexdevs.com/contact">Contact IEXDevs</a>
+          </section>
+
+          <section class="independence-note">
+            <h2>Independent project</h2>
+            <p>
+              BetterQuest is not affiliated with, endorsed by, or officially connected to The University of Texas at
+              Austin. Quest and related marks belong to their respective owners.
+            </p>
+          </section>
+        </article>
+      </div>
+    </main>
+
+    <footer>
+      <div>
+        <a class="wordmark footer-mark" href="/">
+          <span class="wordmark-mark" aria-hidden="true">BQ</span><span>BetterQuest</span>
+        </a>
+        <p>Local-first tools for a clearer study workflow.</p>
+      </div>
+      <div class="footer-links"><a href="/">Home</a><a href="/privacy">Privacy</a><a href="https://iexdevs.com/contact">Contact</a></div>
+    </footer>
+  </body>
+>>>>>>> Stashed changes
 </html>
