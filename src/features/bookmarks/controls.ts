@@ -43,7 +43,7 @@ export function createBookmarkControls(root: Element, service = new BookmarkServ
         host.dataset.questionId = binding.question.id;
         const shadow = host.attachShadow({ mode: 'open' });
         const style = root.ownerDocument.createElement('style');
-        style.textContent = ':host{display:inline-flex;vertical-align:middle}button{all:unset;display:grid;place-items:center;width:16px;height:20px;cursor:pointer;border-radius:3px;color:#6c8293}button:hover{color:#2563eb;background:#eff6ff}button[aria-pressed="true"]{color:#2563eb}button:disabled{opacity:.5;cursor:wait}button:focus-visible{outline:2px solid #2563eb;outline-offset:2px}svg{width:14px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linejoin:round}button[aria-pressed="true"] svg{fill:currentColor}';
+        style.textContent = ':host{display:inline-flex;vertical-align:middle}button{all:unset;display:grid;place-items:center;width:16px;height:20px;cursor:pointer;border-radius:3px;color:var(--bq-muted,#6c8293)}button:hover{color:var(--bq-accent,#2563eb);background:var(--bq-raised,#eff6ff)}button[aria-pressed="true"]{color:var(--bq-accent,#2563eb)}button:disabled{opacity:.5;cursor:wait}button:focus-visible{outline:2px solid var(--bq-accent,#2563eb);outline-offset:2px}svg{width:14px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linejoin:round}button[aria-pressed="true"] svg{fill:currentColor}';
         const button = root.ownerDocument.createElement('button');
         button.type = 'button'; button.innerHTML = icon;
         shadow.append(style, button);

@@ -21,20 +21,20 @@ export function createAssignmentSection(root: Element, run: Execute = execute, s
     :host { display:block; color:inherit; font-family:inherit; scroll-margin-top:84px; }
     * { box-sizing:border-box; }
     section { font:inherit; font-size:13px; line-height:1.4; text-align:left; }
-    h2 { font:inherit; font-size:14px; font-weight:500; margin:0 0 6px; color:#42576a; }
-    h2:focus-visible,a:focus-visible { outline:2px solid #168d83; outline-offset:3px; }
+    h2 { font:inherit; font-size:14px; font-weight:500; margin:0 0 6px; color:var(--bq-text,#42576a); }
+    h2:focus-visible,a:focus-visible { outline:2px solid var(--bq-accent,#168d83); outline-offset:3px; }
     ul { list-style:none; margin:0; padding:0; }
     li { padding:4px 0; }
-    .assignment-link { display:block; color:#227ab0; text-decoration:none; overflow:hidden;
+    .assignment-link { display:block; color:var(--bq-accent,#227ab0); text-decoration:none; overflow:hidden;
       white-space:nowrap; text-overflow:ellipsis; font-weight:500; }
     a:hover { text-decoration:underline; }
-    .deadline { display:block; color:#748491; font-size:11px; margin-top:1px; }
-    .overdue { color:#a96645; }
+    .deadline { display:block; color:var(--bq-muted,#748491); font-size:11px; margin-top:1px; }
+    .overdue { color:var(--bq-warning,#a96645); }
     .footer { display:flex; align-items:center; flex-wrap:wrap; gap:4px 9px; margin-top:7px; font-size:11px; }
-    .view-all { color:#227ab0; text-decoration:none; white-space:nowrap; }
-    .note { color:#84909a; font-size:10px; }
-    .empty,.error { margin:5px 0; color:#748491; font-size:12px; }
-    .error { color:#a3453c; }
+    .view-all { color:var(--bq-accent,#227ab0); text-decoration:none; white-space:nowrap; }
+    .note { color:var(--bq-muted,#84909a); font-size:10px; }
+    .empty,.error { margin:5px 0; color:var(--bq-muted,#748491); font-size:12px; }
+    .error { color:var(--bq-warning,#a3453c); }
   `;
   const section = document.createElement('section');
   section.setAttribute('aria-labelledby', 'bq-upcoming-title');

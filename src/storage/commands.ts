@@ -1,4 +1,4 @@
-import type { AssignmentSnapshot, Bookmark, LocalState, StudyRecord, ThemePreference } from '../shared/models';
+import { featurePreferences, type AssignmentSnapshot, type Bookmark, type FeatureName, type LocalState, type StudyRecord, type ThemePreference } from '../shared/models';
 import { isBookmark, isSnapshot, isStudyRecord, object, themePreference, timestamp } from '../shared/validation';
 
 export type Command =
@@ -8,6 +8,7 @@ export type Command =
   | { kind: 'bookmarks:put'; bookmark: Bookmark }
   | { kind: 'bookmarks:remove'; questionId: string }
   | { kind: 'theme:set'; preference: ThemePreference }
+  | { kind: 'feature:set'; feature: FeatureName; enabled: boolean }
   | { kind: 'study:save'; record: StudyRecord };
 
 export function isCommand(value: unknown): value is Command {
@@ -20,6 +21,7 @@ export function isCommand(value: unknown): value is Command {
     case 'bookmarks:put': return isBookmark(value.bookmark);
     case 'bookmarks:remove': return typeof value.questionId === 'string' && value.questionId.length <= 8000;
     case 'theme:set': return themePreference(value.preference);
+    case 'feature:set': return (value.feature === 'assignments' || value.feature === 'bookmarks') && typeof value.enabled === 'boolean';
     case 'study:save': return isStudyRecord(value.record);
     default: return false;
   }
@@ -60,6 +62,7 @@ export function applyCommand(state: LocalState, command: Command): LocalState {
     }
     case 'bookmarks:remove': next.bookmarks = next.bookmarks.filter(bookmark => bookmark.id !== command.questionId); break;
     case 'theme:set': next.preferences.theme = command.preference; break;
+    case 'feature:set': next.preferences.features = { ...featurePreferences(next.preferences), [command.feature]: command.enabled }; break;
     case 'study:save': next.study = [...next.study.filter(record => record.assignment.id !== command.record.assignment.id), command.record]; break;
   }
   return next;

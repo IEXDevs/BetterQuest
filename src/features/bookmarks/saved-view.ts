@@ -9,19 +9,19 @@ export function createSavedQuestionsView(document: Document, service: BookmarkSe
   shadow.addEventListener('click', event => event.stopPropagation());
   const style = document.createElement('style');
   style.textContent = `
-    :host{display:block;margin:12px 18px;color:#26384a;scroll-margin-top:80px;font-family:inherit}
+    :host{display:block;margin:12px 18px;color:var(--bq-text,#26384a);scroll-margin-top:80px;font-family:inherit}
     :host([hidden]){display:none}
-    section{background:#fff;border:1px solid #e1e7ed;border-radius:7px;padding:16px 18px;font:inherit;font-size:13px;line-height:1.5}
+    section{background:var(--bq-surface,#fff);border:1px solid var(--bq-border,#e1e7ed);border-radius:7px;padding:16px 18px;font:inherit;font-size:13px;line-height:1.5}
     header{display:flex;align-items:center;justify-content:space-between;gap:15px}
     h2{font:inherit;font-size:17px;font-weight:600;margin:0}h2:focus-visible{outline:2px solid #2563eb;outline-offset:4px}
-    .actions{display:flex;gap:8px;align-items:center}button{font:inherit;cursor:pointer;background:transparent;color:#227ab0;border:0;border-radius:4px;padding:5px 7px}
-    button:hover{background:#eff6ff}button:disabled{opacity:.5;cursor:wait}
-    button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
-    .caption,.empty{color:#71808c;font-size:12px;margin:8px 0}.error{color:#a3453c}
-    .groups{max-height:420px;overflow:auto;margin-top:12px}details{border-top:1px solid #edf1f4;padding:10px 0}summary{cursor:pointer;font-weight:500}
+    .actions{display:flex;gap:8px;align-items:center}button{font:inherit;cursor:pointer;background:transparent;color:var(--bq-accent,#227ab0);border:0;border-radius:4px;padding:5px 7px}
+    button:hover{background:var(--bq-raised,#eff6ff)}button:disabled{opacity:.5;cursor:wait}
+    button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--bq-accent,#2563eb);outline-offset:2px}
+    .caption,.empty{color:var(--bq-muted,#71808c);font-size:12px;margin:8px 0}.error{color:var(--bq-warning,#a3453c)}
+    .groups{max-height:420px;overflow:auto;margin-top:12px}details{border-top:1px solid var(--bq-border,#edf1f4);padding:10px 0}summary{cursor:pointer;font-weight:500}
     h3{font:inherit;font-size:13px;font-weight:600;margin:12px 0 6px}ul{padding:0;margin:0;list-style:none}
-    li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0}a{color:#227ab0;text-decoration:none}a:hover{text-decoration:underline}
-    .question-note{display:block;color:#71808c;font-size:11px}.remove{font-size:11px}
+    li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0}a{color:var(--bq-accent,#227ab0);text-decoration:none}a:hover{text-decoration:underline}
+    .question-note{display:block;color:var(--bq-muted,#71808c);font-size:11px}.remove{font-size:11px}
   `;
   const section = document.createElement('section'); section.setAttribute('aria-labelledby', 'bq-saved-title');
   const header = document.createElement('header');

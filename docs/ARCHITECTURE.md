@@ -1,16 +1,16 @@
 # V1 foundations
 
-Assignment presentation remains in the empty course-info column after Meets. Response-table bookmarks are now enabled, and the navbar button opens grouped Saved Questions in normal page flow after the verified navbar. Its Upcoming shortcut still focuses the course summary without forcing the collapse open. PDF enhancement, study capture, and theme adapters remain disabled.
+The verified homepage now has an observed-assignment overview after the native course table and before enrollment. The course-info summary and response bookmarks remain. BetterQuest sits inside `.qh-nav` and opens a compact settings menu with implemented feature switches, persistent dark mode, and Saved Questions. PDF enhancement and study capture remain disabled; no toggles are offered for them.
 
 ## Implemented versus disabled
 
 | Feature | Working infrastructure | Awaiting inspected Quest DOM |
 | --- | --- | --- |
-| Assignments | Existing parser/cache/storage reused; next three incomplete assignments in an existing course-info column; linked names/deadlines; native View all; course-only/unscanned note | Verified homepage placement/course discovery, internal course/term IDs, semester rollover, additional layouts and live Chrome testing |
+| Assignments | Existing cache/tracker reused; verified homepage discovery and overview; observed-only progress; unscanned-course summaries; existing three-item course preview | Internal course/term mapping, semester rollover, additional layouts and live Chrome checking |
 | Bookmarks | Verified response-table/row IDs; compact filled/outlined icons; existing persistent service; cloned/recycled row reconciliation; grouped Saved Questions; original assignment links | Slide/other layouts, additional assessment-type evidence, live Chrome visual checks |
 | PDF | Detection adapter contract; capability-gated navigation/zoom/view intent dispatcher; bridge disposal; original-source URLs | Actual link/embed markup, safe controls slot, verified bridge to the document renderer. No controls or replacements are enabled |
 | Study export | Historical-homework validation; explicit save/collect API; JSON export builder/serializer/download; schema; source provenance; extracted/not-extracted counts; answer/solution **availability metadata** | Historical homework eligibility, visible prompt/math/diagram representation, released answer/solution links, existing export insertion slot |
-| Theme | Persistent light/dark/system preferences; system resolution; component-local custom-property tokens; media-query updates and restoration on cleanup | Verified component roots and CSS that consumes the tokens. No existing Quest component is recolored |
+| Theme | Persistent settings switch; existing light/dark/system resolution/tokens; scoped verified Quest tables/cards/forms/navbar; addon palette integration; cleanup; no inversion | Live Chrome contrast/MathJax/PDF checks and any additional unsupported component markup |
 
 ## Modules
 
@@ -24,6 +24,7 @@ src/
   adapters/quest/
     assignments.ts         Verified #target/#tabs-elements assignment parser
     assignment-placement.ts Verified empty column after Meets; no fallback card
+    homepage.ts            Verified course table/enrollment slot and inventory
     questions.ts           Verified response-table IDs and empty final slots
     saved-questions-placement.ts Verified navbar sibling for the inline view
     pdf.ts                 PDF source/document boundary (null until inspected)
@@ -34,6 +35,8 @@ src/
     assignments/tracker.ts Cache, freshness, refresh orchestration
     assignments/section.ts Three-item course-info summary and native View all
     assignments/view-model.ts Pure filtering, sorting, deadlines, and coverage
+    assignments/homepage.ts Observed-only progress and course overview
+    settings/menu.ts        Compact native-nav preference menu
     bookmarks/service.ts   Bookmark CRUD/filter/group/source navigation
     bookmarks/controls.ts  Compact SVG icons and source-ID reconciliation
     bookmarks/saved-view.ts Grouped metadata-only Saved Questions view
@@ -42,6 +45,7 @@ src/
     study/export.ts        Explicit historical collection + portable JSON
     theme/preferences.ts  Persistent preference API
     theme/tokens.ts        Component-scoped token application/restoration
+    theme/quest.ts         Verified shell styling lifecycle
   shared/
     models.ts              Versioned domain/storage/export types
     identity.ts            Stable ID construction and source-URL validation
@@ -86,7 +90,11 @@ Presentation is independent of collection. A dedicated placement adapter uses th
 
 View all uses the supplied `#student-elements-a` tab and `#tabs-elements` target. It invokes the native tab's click/loading behavior rather than changing classes, replacing tables, or opening another extension UI. The summary is a child of the existing collapse and is hidden/shown by Quest's existing behavior. Mounting and navbar focus do not force it open. Replacing the row within the same root repositions the single existing host into the new empty column; it does not append duplicate widgets or columns.
 
-The student homepage still has no assignment-summary placement adapter. Saved Questions can be opened at the verified navbar sibling position without guessing a homepage content selector. It is an inline user-opened view, not an overlay or separate extension page.
+The supplied full homepage establishes `#courses-table_wrapper` inside `#courses-table-div`, followed by `#enroll-div`. The overview uses that exact position only on `/student/courses`. Name/Unique columns and native course URLs discover known courses; they do not extract assignment bodies or mark a course scanned. The discovery snapshot has no assignments and an empty scannedCourseIds list. UI updates use existing storage and scoped lifecycle; cache notifications never recursively recollect course assignments.
+
+Progress uses only assignment IDs from the most recent matching native course-page observation. Course URL matching is conservative so unrelated semesters/aliases are not promoted to scanned. The bar is labeled completed/total observed assignments; missing course data is excluded and called out, never counted as completed. The current list can itself be partial, and hidden/new assignments may be missing even from an observed page. No account-wide sync claim is made. Course summaries link directly to native course pages to collect data; upcoming links retain original assignment URLs.
+
+The menu is an owned LI in `.qh-nav`, after the native name item when present. The trigger uses native navigation classes instead of the former blue button. A small scoped menu offers assignment/bookmark switches and working dark mode, plus Saved Questions and Upcoming actions. Existing preference records remain valid; missing feature flags mean enabled. New feature:set commands only update flags. Preference notifications reconcile/unmount disabled controls while retaining user data.
 
 Records and messages are runtime-validated. Unknown fields are rejected, preventing accidental persistence of response fields. Parent references must agree. Historical study records still require verified historical homework. Metadata-only bookmarks permit unknown assignment types without changing their type or enabling study capture; known assessments are rejected. Answer/solution fields remain availability/source metadata, never response values or answer text.
 
@@ -111,10 +119,10 @@ Saved Questions uses BookmarkService grouping/removal and worker storage. It dis
 
 Assignment and question adapters use synchronous DOM reads at present. Asynchronous PDF/history work can use the `PageContext.signal` contract; never apply a late result after cancellation. Study collection remains explicitly user-triggered through `StudyService.collect`; it is not part of automatic page refresh. PDF controls remain disabled until a real `PdfBridge` declares support and passes integration tests.
 
-Theme scopes only set `--bq-*` custom properties on explicit component roots. They reject `body`/`documentElement`, avoid global CSS/filters, and restore overwritten custom properties on disposal. A future verified component stylesheet must consume the tokens before Quest dark mode has any visual effect.
+Theme scopes reuse `createThemeScope` tokens on verified `#main-content` and `#quest-nav-header-div` roots. A dedicated theme adapter owns native CSS selectors. A separate marker on the verified `#body-id.mdb-skin` paints the page background without broad element overrides. The controller avoids reapplying identical tokens on every DOM reconciliation and restores original attributes/properties on cleanup. Native cards/tables/forms/status colors are targeted explicitly; MathJax foreground inherits readable text, PDF frames keep original paper colors, and no blanket filters/inversion are used. Shadow-DOM widgets consume the same variables. The switch is hidden when the verified main shell is absent.
 
 ## Validation boundary
 
-Only bookmarking-focused tests and the TypeScript/extension build are run for this change. The supplied response fixture covers persistence, icon states, cloning/recycling, grouped links, cleanup, and unchanged original form/cell markup. Live Chrome rendering still needs checking in the authenticated session. Synthetic data is confined to tests and never imported into the extension UI.
+No tests were run for the homepage/settings/dark-mode update, per request. TypeScript compilation and packaging are separate from runtime testing. Regression sources were adjusted for the new native trigger/menu but were not executed. Live Chrome layout, contrast, preference persistence, and original Quest interactions still need manual checking. The supplied reference HTML's scripts/configuration/third-party extension components are not executed or stored; only verified structural facts are used.
 
 The JSON Schema describes the portable export shape. Runtime validators additionally enforce stable identities, parent references, historical eligibility, and accurate extraction counts. Exported text is plain text; math/diagrams require future explicit representations. No empty prompt is represented as successfully extracted. Source URLs and collection timestamps remain in `sources` even when prompt text is unavailable.

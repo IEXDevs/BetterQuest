@@ -96,7 +96,7 @@ test('summary belongs to native collapse and neither mounting nor navbar focus f
     await pause();
     const widget = document.querySelector('[data-betterquest="assignment-section"]')!;
     assert.equal(widget.closest('#student-course-info-header'), info);
-    document.querySelector('[data-betterquest="navigation"]')!.shadowRoot!.querySelector<HTMLButtonElement>('button')!.click();
+    document.querySelector('[data-betterquest="navigation"]')!.querySelector<HTMLButtonElement>('button.qh-nav-link')!.click();
     assert.equal(info.className, before); assert.equal(info.style.display, 'none');
     assert.equal(widget.shadowRoot!.activeElement, null);
   } finally { integration.dispose(); dom.window.close(); }

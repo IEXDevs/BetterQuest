@@ -78,14 +78,16 @@ function isCachedPage(value: unknown): value is CachedPage {
 export function isLocalState(value: unknown): value is LocalState {
   if (!object(value) || value.schemaVersion !== 1 || !object(value.cache) || !object(value.preferences)) return false;
   const cache = value.cache;
-  return only(value, ['schemaVersion', 'cache', 'bookmarks', 'study', 'preferences']) && only(cache, ['courses', 'assignments', 'pages', 'refreshRequestedAt']) && only(value.preferences, ['theme']) &&
+  return only(value, ['schemaVersion', 'cache', 'bookmarks', 'study', 'preferences']) && only(cache, ['courses', 'assignments', 'pages', 'refreshRequestedAt']) && only(value.preferences, ['theme', 'features']) &&
     array(cache.courses, isCourse, 2000) && array(cache.assignments, isAssignment, 10000) && array(cache.pages, isCachedPage, 2000) &&
     unique(cache.courses) && unique(cache.assignments) &&
     cache.assignments.every(a => (cache.courses as Course[]).some(c => c.id === a.courseId)) &&
     cache.pages.every(p => p.courseIds.every(id => (cache.courses as Course[]).some(c => c.id === id)) && p.assignmentIds.every(id => (cache.assignments as Assignment[]).some(a => a.id === id))) &&
     (cache.refreshRequestedAt === null || timestamp(cache.refreshRequestedAt)) &&
     array(value.bookmarks, isBookmark, 5000) && unique(value.bookmarks) && array(value.study, isStudyRecord, 1000) &&
-    themePreference(value.preferences.theme);
+    themePreference(value.preferences.theme) &&
+    (value.preferences.features === undefined || (object(value.preferences.features) && only(value.preferences.features, ['assignments', 'bookmarks']) &&
+      typeof value.preferences.features.assignments === 'boolean' && typeof value.preferences.features.bookmarks === 'boolean'));
 }
 
 export function isStudyExport(value: unknown): value is StudyExport {

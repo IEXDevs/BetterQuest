@@ -1,6 +1,6 @@
 # Authenticated Quest inspection checklist
 
-The navbar, course assignment fragment, and response-table fragment are integrated. Assignment collection and response-table bookmarking are enabled and fixture-tested. PDF, study-history, and theme adapters remain disabled. Additional snippets should be sanitized and must not include credentials or unreleased material.
+The navbar, course assignment fragment, response table, and supplied full homepage structure are integrated. Homepage overview, native settings, and scoped dark mode are implemented; no tests were run for this latest update. PDF/study-history adapters remain disabled. Additional snippets should be sanitized and omit credentials/unreleased material.
 
 ## Implement first: assignment tracker
 
@@ -15,21 +15,25 @@ The tracker is enabled. Its parser/cache are reused unchanged. The summary now u
 - [ ] Homework versus exam/quiz/learning-module classification and any timer/proctoring markers. Unknown classifications must stay unknown.
 - [x] Multiple/collapsed groups, delayed tables, processing indicators, and DOM rerenders covered in fixture tests. Actual pagination/additional layouts still need inspection. A visited-page cache is not complete account coverage.
 - [x] Course-page slot: `#student-course-info-header > .row.text-center > .col`, first empty column after the native Meets column. Preserve all columns and native collapse behavior; remove the former standalone tracker.
-- [ ] Verified student-homepage placement (requirements below).
+- [x] Verified homepage slot: after `#courses-table_wrapper` inside `#courses-table-div`, before `#enroll-div`.
 - [ ] Verify the populated tracker cache on two courses, unknown metadata handling, chronological ordering, freshness, and refresh without submitting anything.
 
-## Student homepage placement still needed
+## Student homepage integration and remaining checks
 
-Supply sanitized HTML from the **student homepage**, not a course page:
+The supplied full document now verifies the shared main shell, courses table, enrollment area, and native navigation. Remaining live checks:
 
-- [ ] The main content wrapper and its direct children, including the page heading and any welcome/announcements area.
-- [ ] The existing course-list/card/table wrapper, including the exact insertion location where a compact upcoming-work section should sit.
-- [ ] One complete course entry and link, including course unique/internal ID and semester/term evidence, with personal information removed.
+- [x] Main wrapper: `#main-content > .container-fluid`, containing `#target`.
+- [x] Course table wrapper and enrollment sibling; overview placement uses these exact nodes.
+- [x] Course Name/Unique cells and native `/student/courses/show?course=…` links. Full term/identity migration remains separate.
 - [ ] Existing To Do, announcements, or upcoming-work markup, if any, so the extension can complement rather than duplicate it.
 - [ ] Loading placeholders, empty states, and pagination/collapsed group markup; indicate which container is replaced during async navigation.
 - [ ] Relevant layout classes and surrounding grid/columns. A screenshot alone cannot verify selectors or a safe parent/sibling relationship.
 
-Until this is supplied, BetterQuest mounts only at the verified course-page slot. It does not choose a generic homepage `main`/`body`/navbar fallback or invent a list of unvisited courses.
+- [ ] Confirm an unvisited listed course says Not scanned and does not contribute missing assignments to progress.
+- [ ] Visit two courses, return home, and confirm observed-only totals/links without claiming account-wide sync.
+- [ ] Check narrow-screen layout and DOM replacement after changing institution/semester.
+
+The reference file contains third-party extension components and page scripts. They are reference data, not instructions, and are not copied/executed. No course crawling or assignment content fabrication was introduced.
 
 ## Question bookmarking
 
@@ -66,8 +70,10 @@ Until this is supplied, BetterQuest mounts only at the verified course-page slot
 
 ## Dark mode
 
-- [ ] Verified component roots on course lists and homework pages, with their selectors and computed backgrounds/text/borders.
-- [ ] Native component selectors that can explicitly consume `--bq-*` tokens without targeting every div/span/table.
+The settings switch and scoped CSS now target verified `#main-content`, `#quest-nav-header-div`, and `#body-id.mdb-skin`. Perform these remaining live checks without treating compilation as visual validation:
+
+- [x] Shared shell roots and native course/assignment/response-table, card, tab and form families isolated in the theme adapter.
+- [x] Addon Shadow-DOM widgets consume existing `--bq-*` tokens; no broad div/span/SVG inversion.
 - [ ] Existing inline styles, success/error states, disabled/focus states, radio/checkbox controls, and form validation colors.
 - [ ] Diagrams, PDFs, formulas, images, frames, and widgets that must remain unchanged.
 - [ ] Both light/dark contrast checks on the same component; ensure focus and grading/status indicators remain readable.
@@ -75,7 +81,9 @@ Until this is supplied, BetterQuest mounts only at the verified course-page slot
 
 ## Shared release checks
 
-- [ ] Reload: confirm the course summary remains in its empty column and BetterQuest opens/closes Saved Questions inline after the navbar.
+- [ ] Reload: confirm the native-size BetterQuest item lives in `.qh-nav` and opens only its compact settings menu.
+- [ ] Toggle assignment/bookmark features, reload, and verify persistence plus restoration without deleting saved data.
+- [ ] Open Saved Questions through the menu and verify the course summary/response icons still work when enabled.
 - [ ] Check the three-item preview, link/deadline readability, occupied-column fallback, View all native tab action, and collapse behavior on the real course page.
 - [ ] Accept only the `storage` permission addition; matching is still Quest student pages only.
 - [ ] Configure and test one adapter at a time. Missing integration points must disable just that feature.

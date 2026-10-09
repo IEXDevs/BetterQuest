@@ -1,26 +1,31 @@
 import { assignmentAdapter, readCourseIdentity } from '../adapters/quest/assignments';
 import { findAssignmentSectionSlot } from '../adapters/quest/assignment-placement';
 import { createAssignmentSection, type Subscribe } from '../features/assignments/section';
+import { findHomepageSlot } from '../adapters/quest/homepage';
+import { createHomepageOverview } from '../features/assignments/homepage';
+import { featurePreferences, type FeaturePreferences } from '../shared/models';
+import { createQuestTheme } from '../features/theme/quest';
 import { questionAdapter } from '../adapters/quest/questions';
 import { pdfAdapter } from '../adapters/quest/pdf';
-import { themeAdapter } from '../adapters/quest/theme';
 import { createFeatureRuntime, type FeatureDefinition } from '../features/lifecycle';
 import { AssignmentTracker } from '../features/assignments/tracker';
 import { createBookmarkControls } from '../features/bookmarks/controls';
 import { BookmarkService } from '../features/bookmarks/service';
 import { createPdfController } from '../features/pdf/controller';
-import { ThemePreferences } from '../features/theme/preferences';
-import { createThemeScope } from '../features/theme/tokens';
 import { execute, subscribeLocal, type Execute } from '../shared/client';
 
 /** Composition point: null adapters create no controls, observers, RPCs, or CSS. */
 export function startPageFeatures(document: Document, window: Window, run: Execute = execute, subscribe: Subscribe = subscribeLocal) {
   const definitions: FeatureDefinition[] = [];
   let assignmentSection: ReturnType<typeof createAssignmentSection> | undefined;
+  let homepage: ReturnType<typeof createHomepageOverview> | undefined;
+  let enabled: FeaturePreferences = { assignments: true, bookmarks: true };
+  let ready = false, disposed = false, preferenceGeneration = 0;
+  const theme = createQuestTheme(document, window);
   if (assignmentAdapter) {
     const adapter = assignmentAdapter;
     const tracker = new AssignmentTracker(run);
-    definitions.push({ name: 'assignments', locate: doc => adapter.locate(doc),
+    definitions.push({ name: 'assignments', locate: doc => ready && enabled.assignments ? adapter.locate(doc) : null,
       attributeFilter: ['class', 'href', 'data-order', 'style'],
       mount: () => {
         let fingerprint = '';
@@ -41,7 +46,7 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
   }
   definitions.push({
     name: 'assignment-section',
-    locate: doc => findAssignmentSectionSlot(doc)?.root || null,
+    locate: doc => ready && enabled.assignments ? findAssignmentSectionSlot(doc)?.root || null : null,
     mount: root => {
       const section = createAssignmentSection(root, run, subscribe);
       assignmentSection = section;
@@ -54,9 +59,16 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       };
     },
   });
+  definitions.push({ name: 'homepage-overview', locate: doc => ready && enabled.assignments ? findHomepageSlot(doc)?.root || null : null,
+    mount: root => {
+      const overview = createHomepageOverview(root, run, subscribe); homepage = overview;
+      return { refresh: async context => { if (!context.signal.aborted) await overview.refresh(); },
+        dispose: () => { overview.dispose(); if (homepage === overview) homepage = undefined; } };
+    },
+  });
   if (questionAdapter) {
     const adapter = questionAdapter;
-    definitions.push({ name: 'bookmarks', locate: doc => adapter.locate(doc),
+    definitions.push({ name: 'bookmarks', locate: doc => ready && enabled.bookmarks ? adapter.locate(doc) : null,
       attributeFilter: ['class', 'id', 'data-id', 'data-order'], observeOwnedRemovals: true, mount: root => {
       const controls = createBookmarkControls(root, new BookmarkService(run));
       return {
@@ -84,27 +96,6 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       };
     } });
   }
-  if (themeAdapter) {
-    const adapter = themeAdapter;
-    const preferences = new ThemePreferences();
-    definitions.push({ name: 'theme', locate: doc => adapter.locate(doc), mount: root => {
-      let scopes: ReturnType<typeof createThemeScope>[] = [];
-      return {
-        refresh: async context => {
-          const preference = await preferences.get();
-          if (context.signal.aborted) return;
-          scopes.forEach(scope => scope.dispose());
-          scopes = [];
-          try {
-            for (const element of adapter.roots(root)) scopes.push(createThemeScope(element, window, preference));
-          } catch (error) {
-            scopes.forEach(scope => scope.dispose()); scopes = [];
-            throw error;
-          }
-        }, dispose: () => scopes.forEach(scope => scope.dispose()),
-      };
-    } });
-  }
   // Historical collection/export stays explicitly user-triggered through StudyService.
   const runtime = createFeatureRuntime(document, definitions);
   const manualAbort = new AbortController();
@@ -116,18 +107,35 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
   };
   // Never re-collect assignments in response to the cache write itself.
   let unsubscribe: (() => void) | undefined;
+  async function refreshPreferences() {
+    const current = ++preferenceGeneration;
+    try {
+      const state = await run({ kind: 'state:read' });
+      if (disposed || current !== preferenceGeneration) return;
+      enabled = featurePreferences(state.preferences); ready = true;
+      theme.update(state.preferences.theme);
+      runtime.reconcile();
+      runtime.refresh(['bookmarks']);
+    } catch { /* Do not mount storage-backed features with unknown preferences. */ }
+  }
   const reconcile = () => {
+    theme.reconcile();
     runtime.reconcile();
-    const needsChanges = Boolean(questionAdapter?.locate(document) || themeAdapter?.locate(document));
-    if (needsChanges && !unsubscribe) {
-      try { unsubscribe = subscribe(() => runtime.refresh(['bookmarks', 'theme'])); } catch { /* Other page features remain available during worker reloads. */ }
-    } else if (!needsChanges && unsubscribe) { unsubscribe(); unsubscribe = undefined; }
+    if (!unsubscribe) { try { unsubscribe = subscribe(() => { void refreshPreferences(); }); } catch { /* Page navigation still reconciles existing controls. */ } }
+    if (!ready) void refreshPreferences();
   };
+  const preferencesChanged = () => { void refreshPreferences(); };
+  window.addEventListener('betterquest:preferences-changed', preferencesChanged);
+  window.addEventListener('focus', preferencesChanged);
   return { reconcile, refreshAssignments,
-    focusAssignments: () => assignmentSection?.focus() || false,
-    hasAssignmentSection: () => assignmentSection?.isConnected() || false,
+    focusAssignments: () => assignmentSection?.focus() || homepage?.focus() || false,
+    hasAssignmentSection: () => Boolean(assignmentSection?.isConnected() || homepage),
+    darkAvailable: theme.available,
     dispose: () => {
+    disposed = true; preferenceGeneration++;
+    window.removeEventListener('betterquest:preferences-changed', preferencesChanged);
+    window.removeEventListener('focus', preferencesChanged);
     manualAbort.abort();
-    unsubscribe?.(); runtime.dispose();
+    unsubscribe?.(); runtime.dispose(); theme.dispose();
   } };
 }

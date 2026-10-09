@@ -2,8 +2,8 @@ import { resolveTheme } from './preferences';
 import type { ThemePreference } from '../../shared/models';
 
 export const themeTokens = {
-  light: { '--bq-surface': '#ffffff', '--bq-text': '#18253a', '--bq-border': '#d7e2f0', '--bq-accent': '#2563eb' },
-  dark: { '--bq-surface': '#182434', '--bq-text': '#e7eef8', '--bq-border': '#3b4b63', '--bq-accent': '#79a8ff' },
+  light: { '--bq-surface': '#ffffff', '--bq-text': '#18253a', '--bq-border': '#d7e2f0', '--bq-accent': '#227ab0', '--bq-muted': '#748491', '--bq-raised': '#eef3f6', '--bq-good': '#26a69a', '--bq-warning': '#a96645' },
+  dark: { '--bq-surface': '#182434', '--bq-text': '#e7eef8', '--bq-border': '#3b4b63', '--bq-accent': '#9cc9ff', '--bq-muted': '#a9b8ca', '--bq-raised': '#27394e', '--bq-good': '#76d4b4', '--bq-warning': '#ebc48b' },
 } as const;
 
 /** Custom properties only; future verified component styles opt in explicitly. */

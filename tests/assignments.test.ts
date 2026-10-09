@@ -238,10 +238,12 @@ test('full integration keeps the automatic summary while navbar opens Saved Ques
   const integration = startIntegration(dom.window.document, dom.window as unknown as Window, { run: f.run, subscribe: f.subscribe });
   try {
     await pause();
-    const button = dom.window.document.querySelector('[data-betterquest="navigation"]')!.shadowRoot!.querySelector<HTMLButtonElement>('button')!;
+    const navigation = dom.window.document.querySelector('[data-betterquest="navigation"]')!;
+    const button = navigation.querySelector<HTMLButtonElement>('button.qh-nav-link')!;
     const section = dom.window.document.querySelector<HTMLElement>('[data-betterquest="assignment-section"]')!;
     assert.equal(section.shadowRoot!.querySelectorAll('.row').length, 1);
     button.click();
+    navigation.querySelector('span')!.shadowRoot!.querySelector<HTMLButtonElement>('.saved-action')!.click();
     const saved = dom.window.document.querySelector('[data-betterquest="saved-questions"]')!;
     assert.equal(saved.shadowRoot!.activeElement, saved.shadowRoot!.querySelector('h2'));
     assert.equal(dom.window.document.querySelector('[data-betterquest="panel"]'), null);

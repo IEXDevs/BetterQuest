@@ -252,15 +252,18 @@ test('BetterQuest navbar opens/closes Saved Questions on response pages and keep
   try {
     await pause(); const row = dom.window.document.querySelector('tr.instanceitempart')!;
     buttonFor(row).click(); await pause();
-    const launcher = dom.window.document.querySelector('[data-betterquest="navigation"]')!.shadowRoot!.querySelector<HTMLButtonElement>('button')!;
+    const navigation = dom.window.document.querySelector('[data-betterquest="navigation"]')!;
+    const launcher = navigation.querySelector<HTMLButtonElement>('button.qh-nav-link')!;
     assert.equal(launcher.disabled, false); launcher.click(); await pause();
+    navigation.querySelector(':scope > span')!.shadowRoot!.querySelector<HTMLButtonElement>('.saved-action')!.click(); await pause();
     const view = dom.window.document.querySelector<HTMLElement>('[data-betterquest="saved-questions"]')!;
-    assert.equal(view.hidden, false); assert.equal(launcher.getAttribute('aria-expanded'), 'true');
+    assert.equal(view.hidden, false); assert.equal(launcher.getAttribute('aria-expanded'), 'false');
     view.shadowRoot!.querySelector<HTMLButtonElement>('.remove')!.click(); await pause();
     assert.equal(buttonFor(row).getAttribute('aria-pressed'), 'false');
     view.shadowRoot!.querySelector<HTMLButtonElement>('[aria-label="Close Saved Questions"]')!.click();
     assert.equal(view.hidden, true); assert.equal(launcher.getAttribute('aria-expanded'), 'false');
     launcher.click(); await pause();
+    navigation.querySelector(':scope > span')!.shadowRoot!.querySelector<HTMLButtonElement>('.saved-action')!.click(); await pause();
     assert.equal(dom.window.document.querySelectorAll('[data-betterquest="saved-questions"]').length, 1);
   } finally { integration.dispose(); dom.window.close(); }
 });

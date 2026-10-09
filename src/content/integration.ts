@@ -7,6 +7,7 @@ import { execute, subscribeLocal, type Execute } from '../shared/client';
 import { BookmarkService } from '../features/bookmarks/service';
 import { createSavedQuestionsView } from '../features/bookmarks/saved-view';
 import { findSavedQuestionsNavbar } from '../adapters/quest/saved-questions-placement';
+import { createSettingsMenu } from '../features/settings/menu';
 
 export interface Integration { reconcile: () => void; dispose: () => void }
 
@@ -16,12 +17,14 @@ export function startIntegration(document: Document, window: Window, options: { 
   let scheduled: number | null = null;
   let navigation: ReturnType<typeof createNavigationButton> | null = null;
   let savedView: ReturnType<typeof createSavedQuestionsView> | undefined;
+  let settings: ReturnType<typeof createSettingsMenu> | undefined;
   let lastUrl = window.location.href;
   const features = startPageFeatures(document, window, options.run || execute, options.subscribe || subscribeLocal);
 
   // Remove orphaned hosts from a previous injection, without touching Quest nodes.
   document.querySelectorAll('[data-betterquest="navigation"], [data-betterquest="panel"], [data-betterquest="saved-questions"]').forEach(node => node.remove());
   function unmount() {
+    settings?.dispose(); settings = undefined;
     savedView?.close(false);
     navigation?.host.remove();
     navigation = null;
@@ -31,35 +34,33 @@ export function startIntegration(document: Document, window: Window, options: { 
     if (disposed) return;
     features.reconcile();
     const nextUrl = window.location.href;
-    if (nextUrl !== lastUrl) { savedView?.close(false); lastUrl = nextUrl; }
+    if (nextUrl !== lastUrl) { settings?.close(false); savedView?.close(false); lastUrl = nextUrl; }
     if (!isStudentPage(nextUrl)) { unmount(); return; }
     const target = findNavigation(document);
     if (!target) { unmount(); return; }
 
     if (!navigation) {
-      navigation = createNavigationButton(document, false, () => {
+      const openSaved = () => {
         const navbar = findSavedQuestionsNavbar(document);
         if (!navbar) return;
         if (!savedView) savedView = createSavedQuestionsView(
           document, new BookmarkService(options.run || execute), options.subscribe || subscribeLocal,
-          restoreFocus => {
-            navigation?.button.setAttribute('aria-expanded', 'false');
-            if (restoreFocus && navigation?.host.isConnected) navigation.button.focus();
-          }, () => features.focusAssignments(),
+          restoreFocus => { if (restoreFocus && navigation?.host.isConnected) navigation.button.focus(); }, () => features.focusAssignments(),
         );
-        if (savedView.isOpen()) savedView.close();
-        else { savedView.open(navbar, features.hasAssignmentSection()); navigation?.button.setAttribute('aria-expanded', 'true'); }
-      });
-      navigation.button.removeAttribute('aria-haspopup');
-      navigation.button.setAttribute('aria-expanded', 'false');
-      navigation.button.setAttribute('aria-label', 'Show Saved Questions');
+        savedView.open(navbar, features.hasAssignmentSection());
+      };
+      navigation = createNavigationButton(document, true, () => { settings?.toggle(); });
+      settings = createSettingsMenu(navigation.host, navigation.button, options.run || execute, options.subscribe || subscribeLocal,
+        { saved: openSaved, upcoming: () => features.focusAssignments(), hasUpcoming: () => features.hasAssignmentSection(), darkAvailable: features.darkAvailable });
     }
-    if (navigation.host.parentElement !== target.navbar || navigation.host.nextSibling !== target.before) {
-      target.navbar.insertBefore(navigation.host, target.before);
+    const items = target.before;
+    const nameItem = [...items.children].find(item => !item.hasAttribute('data-betterquest') && item.querySelector(':scope > span.qh-nav-link'));
+    if (navigation.host.parentElement !== items) {
+      if (nameItem) nameItem.after(navigation.host); else items.prepend(navigation.host);
     }
     const navbar = findSavedQuestionsNavbar(document);
     navigation.button.disabled = !navbar;
-    navigation.button.title = 'Saved Questions · stored on this device';
+    navigation.button.title = 'BetterQuest settings';
     if (navbar && savedView?.isOpen()) savedView.position(navbar);
   }
 
@@ -96,6 +97,7 @@ export function startIntegration(document: Document, window: Window, options: { 
       disposed = true;
       observer.disconnect();
       features.dispose();
+      settings?.dispose(); settings = undefined;
       savedView?.dispose();
       if (scheduled !== null) window.clearTimeout(scheduled);
       window.removeEventListener('popstate', schedule);

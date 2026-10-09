@@ -15,8 +15,8 @@ function setup(html = trail) {
   const document = dom.window.document;
   const integration = startIntegration(document, dom.window as unknown as Window);
   const navigation = () => document.querySelector<HTMLElement>('[data-betterquest="navigation"]');
-  const root = () => navigation()?.shadowRoot || navigation()?.firstElementChild?.shadowRoot;
-  const button = () => root()?.querySelector<HTMLButtonElement>('button');
+  const root = () => navigation();
+  const button = () => navigation()?.querySelector<HTMLButtonElement>('button.qh-nav-link');
   const panel = () => document.querySelector<HTMLElement>('[data-betterquest="panel"]');
   const cleanup = () => { integration.dispose(); dom.window.close(); };
   return { dom, document, integration, navigation, root, button, panel, cleanup };
@@ -36,22 +36,21 @@ test('one button between breadcrumbs and nav; unverified pages do not open an as
     const breadcrumbs = f.document.querySelector('.qh-breadcrumbs')!;
     const originalNav = f.document.querySelector('.qh-nav')!;
     const originalMarkup = [breadcrumbs.outerHTML, originalNav.outerHTML];
-    assert.equal(f.navigation()?.tagName, 'SPAN');
-    assert.equal(f.navigation()?.parentElement, f.document.querySelector('.qh-navbar'));
-    assert.equal(f.navigation()?.previousElementSibling, breadcrumbs);
-    assert.equal(f.navigation()?.nextElementSibling, originalNav);
+    assert.equal(f.navigation()?.tagName, 'LI');
+    assert.equal(f.navigation()?.parentElement, originalNav);
     f.integration.reconcile();
     f.integration.reconcile();
     assert.equal(f.document.querySelectorAll('[data-betterquest="navigation"]').length, 1);
     f.button()!.click();
     assert.equal(f.panel(), null);
     assert.equal(f.button()!.disabled, false);
-    assert.equal(f.button()!.hasAttribute('aria-haspopup'), false);
+    assert.equal(f.button()!.getAttribute('aria-haspopup'), 'dialog');
     assert.equal(f.button()!.getAttribute('aria-expanded'), 'true');
     assert.equal(f.document.querySelector('input')?.value, 'unchanged');
     assert.equal(f.document.querySelector('main')?.hasAttribute('style'), false);
     assert.equal(f.document.querySelector('style'), null);
-    assert.deepEqual([breadcrumbs.outerHTML, originalNav.outerHTML], originalMarkup);
+    const navCopy = originalNav.cloneNode(true) as Element; navCopy.querySelector('[data-betterquest]')!.remove();
+    assert.deepEqual([breadcrumbs.outerHTML, navCopy.outerHTML], originalMarkup);
     assert.equal(f.document.querySelector('.qh-navbar')?.hasAttribute('style'), false);
   } finally { f.cleanup(); }
 });
@@ -66,7 +65,7 @@ test('DOM replacement and late navigation insertion remount exactly one button',
     await pause();
     assert.equal(f.document.querySelectorAll('[data-betterquest="navigation"]').length, 1);
     assert.ok(f.button());
-    assert.equal(f.navigation()?.nextElementSibling, f.document.querySelector('.qh-nav'));
+    assert.equal(f.navigation()?.parentElement, f.document.querySelector('.qh-nav'));
     f.document.querySelector('.qh-navbar')!.remove();
     await pause();
     assert.equal(f.navigation(), null);
@@ -94,8 +93,7 @@ test('incomplete navbar waits for the authenticated structure instead of appendi
     assert.equal(f.navigation(), null);
     f.document.querySelector('.qh-navbar')!.insertAdjacentHTML('beforeend', '<ul class="qh-nav"></ul>');
     await pause();
-    assert.equal(f.navigation()?.previousElementSibling, f.document.querySelector('.qh-breadcrumbs'));
-    assert.equal(f.navigation()?.nextElementSibling, f.document.querySelector('.qh-nav'));
+    assert.equal(f.navigation()?.parentElement, f.document.querySelector('.qh-nav'));
   } finally { f.cleanup(); }
 });
 
