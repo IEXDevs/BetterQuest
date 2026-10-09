@@ -10,10 +10,12 @@ export interface FeatureDefinition {
   locate(document: Document): Element | null;
   mount(root: Element): MountedFeature;
   attributeFilter?: string[];
+  /** Redraws can clear only an injected action cell without other row changes. */
+  observeOwnedRemovals?: boolean;
 }
 
 /** Observes only a verified feature root; never polls or patches Quest functions. */
-export function observeScoped(root: Element, callback: () => void, attributeFilter?: string[]): () => void {
+export function observeScoped(root: Element, callback: () => void, attributeFilter?: string[], observeOwnedRemovals = false): () => void {
   const view = root.ownerDocument.defaultView!;
   let timer: number | undefined;
   const observer = new view.MutationObserver(records => {
@@ -21,6 +23,7 @@ export function observeScoped(root: Element, callback: () => void, attributeFilt
       const target = record.target.nodeType === 1 ? record.target as Element : record.target.parentElement;
       if (target?.closest('[data-betterquest]')) return false;
       const nodes = [...record.addedNodes, ...record.removedNodes];
+      if (observeOwnedRemovals && record.removedNodes.length) return true;
       return record.type !== 'childList' || nodes.length === 0 || nodes.some(n => n.nodeType !== 1 || !(n as Element).matches('[data-betterquest]'));
     });
     if (!relevant) return;
@@ -79,7 +82,7 @@ export function createFeatureRuntime(document: Document, definitions: FeatureDef
         try {
           const feature = definition.mount(root);
           const abort = new AbortController();
-          active.set(definition.name, { root, feature, abort, stop: observeScoped(root, () => refresh(definition.name), definition.attributeFilter) });
+          active.set(definition.name, { root, feature, abort, stop: observeScoped(root, () => refresh(definition.name), definition.attributeFilter, definition.observeOwnedRemovals) });
           refresh(definition.name);
         } catch (error) { errors.set(definition.name, error instanceof Error ? error.message : 'Feature mount failed.'); }
       }

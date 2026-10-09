@@ -232,7 +232,7 @@ test('unknown deadlines sort last; inline errors are visible and do not mutate s
   finally { view.dispose(); dom.window.close(); }
 });
 
-test('full integration mounts automatically, navbar focuses it, and original Quest content is preserved', async () => {
+test('full integration keeps the automatic summary while navbar opens Saved Questions', async () => {
   const dom = page(); const f = store();
   const original = dom.window.document.querySelector('#target')!.outerHTML;
   const integration = startIntegration(dom.window.document, dom.window as unknown as Window, { run: f.run, subscribe: f.subscribe });
@@ -242,7 +242,8 @@ test('full integration mounts automatically, navbar focuses it, and original Que
     const section = dom.window.document.querySelector<HTMLElement>('[data-betterquest="assignment-section"]')!;
     assert.equal(section.shadowRoot!.querySelectorAll('.row').length, 1);
     button.click();
-    assert.equal(section.shadowRoot!.activeElement, section.shadowRoot!.querySelector('h2'));
+    const saved = dom.window.document.querySelector('[data-betterquest="saved-questions"]')!;
+    assert.equal(saved.shadowRoot!.activeElement, saved.shadowRoot!.querySelector('h2'));
     assert.equal(dom.window.document.querySelector('[data-betterquest="panel"]'), null);
     const targetCopy = dom.window.document.querySelector('#target')!.cloneNode(true) as Element;
     targetCopy.querySelector('[data-betterquest="assignment-section"]')!.remove();

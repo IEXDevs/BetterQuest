@@ -1,6 +1,6 @@
 # BetterQuest
 
-Manifest V3 Chrome extension: a compact **Upcoming Assignments** summary appears automatically inside the first empty course-info column after **Meets**. It uses assignments collected locally from pages you visit. The blue navbar button is a shortcut to the summary. Other V1 feature integrations remain disabled.
+Manifest V3 Chrome extension: **Upcoming Assignments** appears in the empty course-info column after Meets. Response-table questions have local bookmark icons; **BetterQuest** in the navbar opens Saved Questions inline. PDF enhancement, study capture, and dark mode integrations remain disabled.
 
 ## Setup
 
@@ -19,7 +19,7 @@ Navigation detection is isolated in `src/content/navigation.ts` and uses the aut
 
 The controller maintains one button per document and remounts it when the selected container is replaced or inserted later. DOM observation is debounced and ignores extension-owned changes. Native navigation events, browser history events, and page restoration reconcile the mount; normal refreshes initialize it anew. No History API patching or URL polling.
 
-The navbar button and inline section use Shadow DOM. The extension does not restyle Quest, modify existing controls, lock scrolling, or trap focus. The button scrolls to and focuses the inline section; it does not open an overlay. On pages without a verified placement it remains visible but disabled, with a hint to visit a course. The service worker handles the existing typed handshake and validated local-data commands.
+The navbar button and feature controls use Shadow DOM. BetterQuest opens a grouped **Saved Questions** section in normal page flow immediately after the verified navbar. Close/Escape hides it and returns focus to the button. An **Upcoming** shortcut is available when the course summary exists. There is no floating sidebar, extension popup, or standalone dashboard.
 
 ## Assignment tracker
 
@@ -37,6 +37,16 @@ Student-homepage placement is deferred. No homepage selectors were invented. See
 
 Course identity currently uses the unique number in the verified course heading (`58735` in the fixture); assignment identity uses the exact `courseuserassignment_…` link value within that course. Internal course/term ID mapping and semester rollover still require additional markup. Missing course identity disables collection instead of guessing it.
 
+## Question bookmarks
+
+Visit the course's **Assignments** page first so its metadata is cached. On a response-table page, BetterQuest reads the assignment ID from `instance-table-courseuserassignment_…` and question IDs from `tr.instanceitempart[data-id="cuaip_…"]`. An outlined bookmark icon appears in the empty final cell; click to save it and click the filled icon to remove it. Native responses, history controls, status, points, hidden inputs, and submissions are left unchanged.
+
+Open **BetterQuest** for Saved Questions, grouped by course and assignment. Each saved item identifies its question number and links to the original cached assignment URL. Remove actions keep the row icons in sync. Data persists locally in this Chrome profile; no new dependencies, permissions, or services were added.
+
+The response fragment contains no course or assignment title, so labels come from the existing cache. Missing/ambiguous context disables row controls until the course list is visited. Assignment type is not inferred: metadata-only bookmarks permit cached `unknown` types without relabeling them as homework; known assessments remain excluded. Historical study eligibility is unchanged.
+
+DataTables clones/recycled rows and attribute-only ID changes are reconciled without duplicate icons. Occupied action cells are skipped. Bookmark content includes **no response values, history, correctness, question points, prompt text, or solutions**. Prompt text stays null and no question anchor is invented. No PDF text extraction or exact PDF-page navigation is attempted.
+
 ## Structure and validation
 
 ```text
@@ -49,9 +59,10 @@ src/shared/messages.ts      Typed handshake and URL guard
 src/shared/models.ts        Course/assignment/question/storage/export models
 src/shared/client.ts        Validated worker client and change notifications
 src/storage/                Local repository and serialized command reducer
-src/adapters/quest/          Enabled assignment parser; other adapters disabled
+src/adapters/quest/          Enabled assignment/response-table adapters
 src/adapters/quest/assignment-placement.ts  Verified empty course-info column
 src/features/assignments/   Existing cache/freshness, inline section, view model
+src/features/bookmarks/     Existing service, row icons, grouped Saved Questions
 src/features/               Assignments, bookmarks, PDF, study export, theme
 docs/                       Architecture, JSON schema, integration checklist
 public/manifest.json        Student-page matching only
@@ -62,8 +73,8 @@ npm test
 npm run build
 ```
 
-Tests cover the supplied authenticated assignment HTML, navbar/panel, dynamic table groups, grades/statuses, timezone-safe deadlines, multi-course caching, coverage, local persistence, worker messaging, and the other feature foundations. The assignment fixture preserves the supplied rows and scripts with instructor contact details redacted; scripts are never executed. Other fixtures are synthetic contracts. Chrome APIs are mocked at the test boundary. No tests authenticate, scrape, or contact Quest.
+Regression fixtures include the supplied authenticated assignment HTML and response-table HTML. Focused bookmarking tests cover source IDs, persistence, filled icons, missing metadata, forms/submission isolation, cloned/recycled rows, grouped links, removal synchronization, and cleanup. Chrome APIs are mocked at the test boundary; live Chrome visual checks remain manual. No tests authenticate, scrape, or contact Quest.
 
-The only API permission is `storage`, used for personal data in this Chrome profile. No broad host permissions, external services, remote assets, crawling, or assessment automation. Reload the extension and refresh Quest after rebuilding. No commits were created. Only assignment-focused tests were run for the course-info column integration.
+The only API permission is `storage`, used for personal data in this Chrome profile. No broad host permissions, external services, remote assets, crawling, or assessment automation. Reload the extension and refresh Quest after rebuilding. No commits were created. Only bookmarking-focused tests and the build were run for this change.
 
-Read the [architecture and feature status](docs/ARCHITECTURE.md), [authenticated integration checklist](docs/INTEGRATION_CHECKLIST.md), and [study export schema](docs/study-export.schema.json). The assignment parser is fixture-verified; exercise it in your live Chrome session after reloading the extension. Question bookmarking, PDF controls, study capture, and dark mode still require their own inspected DOM.
+Read the [architecture](docs/ARCHITECTURE.md), [integration checklist](docs/INTEGRATION_CHECKLIST.md), and [study export schema](docs/study-export.schema.json). Assignment extraction and response-table bookmarking are fixture-verified; check rendering in your Chrome session after reload. Slide-mode bookmarking, PDF controls, study capture, and dark mode still need their own inspected DOM.

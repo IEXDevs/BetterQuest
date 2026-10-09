@@ -4,6 +4,9 @@ import { isStudentPage } from '../shared/messages';
 import { startPageFeatures } from './features';
 import type { Subscribe } from '../features/assignments/section';
 import { execute, subscribeLocal, type Execute } from '../shared/client';
+import { BookmarkService } from '../features/bookmarks/service';
+import { createSavedQuestionsView } from '../features/bookmarks/saved-view';
+import { findSavedQuestionsNavbar } from '../adapters/quest/saved-questions-placement';
 
 export interface Integration { reconcile: () => void; dispose: () => void }
 
@@ -12,11 +15,14 @@ export function startIntegration(document: Document, window: Window, options: { 
   let disposed = false;
   let scheduled: number | null = null;
   let navigation: ReturnType<typeof createNavigationButton> | null = null;
+  let savedView: ReturnType<typeof createSavedQuestionsView> | undefined;
+  let lastUrl = window.location.href;
   const features = startPageFeatures(document, window, options.run || execute, options.subscribe || subscribeLocal);
 
   // Remove orphaned hosts from a previous injection, without touching Quest nodes.
-  document.querySelectorAll('[data-betterquest="navigation"], [data-betterquest="panel"]').forEach(node => node.remove());
+  document.querySelectorAll('[data-betterquest="navigation"], [data-betterquest="panel"], [data-betterquest="saved-questions"]').forEach(node => node.remove());
   function unmount() {
+    savedView?.close(false);
     navigation?.host.remove();
     navigation = null;
   }
@@ -25,24 +31,36 @@ export function startIntegration(document: Document, window: Window, options: { 
     if (disposed) return;
     features.reconcile();
     const nextUrl = window.location.href;
+    if (nextUrl !== lastUrl) { savedView?.close(false); lastUrl = nextUrl; }
     if (!isStudentPage(nextUrl)) { unmount(); return; }
     const target = findNavigation(document);
     if (!target) { unmount(); return; }
 
     if (!navigation) {
       navigation = createNavigationButton(document, false, () => {
-        features.focusAssignments();
+        const navbar = findSavedQuestionsNavbar(document);
+        if (!navbar) return;
+        if (!savedView) savedView = createSavedQuestionsView(
+          document, new BookmarkService(options.run || execute), options.subscribe || subscribeLocal,
+          restoreFocus => {
+            navigation?.button.setAttribute('aria-expanded', 'false');
+            if (restoreFocus && navigation?.host.isConnected) navigation.button.focus();
+          }, () => features.focusAssignments(),
+        );
+        if (savedView.isOpen()) savedView.close();
+        else { savedView.open(navbar, features.hasAssignmentSection()); navigation?.button.setAttribute('aria-expanded', 'true'); }
       });
       navigation.button.removeAttribute('aria-haspopup');
-      navigation.button.removeAttribute('aria-expanded');
-      navigation.button.setAttribute('aria-label', 'Go to Upcoming Assignments');
+      navigation.button.setAttribute('aria-expanded', 'false');
+      navigation.button.setAttribute('aria-label', 'Show Saved Questions');
     }
     if (navigation.host.parentElement !== target.navbar || navigation.host.nextSibling !== target.before) {
       target.navbar.insertBefore(navigation.host, target.before);
     }
-    const available = features.hasAssignmentSection();
-    navigation.button.disabled = !available;
-    navigation.button.title = available ? 'Jump to the inline assignment section' : 'Visit a Quest course page to view assignments.';
+    const navbar = findSavedQuestionsNavbar(document);
+    navigation.button.disabled = !navbar;
+    navigation.button.title = 'Saved Questions · stored on this device';
+    if (navbar && savedView?.isOpen()) savedView.position(navbar);
   }
 
   function schedule() {
@@ -78,6 +96,7 @@ export function startIntegration(document: Document, window: Window, options: { 
       disposed = true;
       observer.disconnect();
       features.dispose();
+      savedView?.dispose();
       if (scheduled !== null) window.clearTimeout(scheduled);
       window.removeEventListener('popstate', schedule);
       window.removeEventListener('hashchange', schedule);

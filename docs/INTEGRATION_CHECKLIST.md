@@ -1,6 +1,6 @@
 # Authenticated Quest inspection checklist
 
-The navbar and course assignment fragment have been supplied and integrated. Assignment collection is enabled and regression-tested against `tests/fixtures/quest-assignments.html`. The other four feature adapters remain disabled (`null`). Inspect additional layouts in your authenticated Chrome session; provide sanitized element snippets and relevant computed styles. Do not include names, EIDs, cookies, tokens, answers you submitted, or unreleased material.
+The navbar, course assignment fragment, and response-table fragment are integrated. Assignment collection and response-table bookmarking are enabled and fixture-tested. PDF, study-history, and theme adapters remain disabled. Additional snippets should be sanitized and must not include credentials or unreleased material.
 
 ## Implement first: assignment tracker
 
@@ -33,14 +33,15 @@ Until this is supplied, BetterQuest mounts only at the verified course-page slot
 
 ## Question bookmarking
 
-- [ ] Homework content root in each supported mode: slide, classic HTML, and classic PDF with response table.
-- [ ] Stable native question ID or assignment-scoped question source ID; determine whether display order is randomized and whether it differs from the ID.
-- [ ] Course/assignment identity relations on that page.
-- [ ] A safe control insertion slot beside each question, outside submit forms/answer inputs. Provide its relationship to the question root.
-- [ ] Verified native question anchors, slide URLs/query parameters, and any supported navigation behavior. If there is no exact native link, retain the assignment URL.
-- [ ] How question roots and controls change when advancing slides or receiving async content.
+- [x] Classic response root: `.dataTables_scrollBody > table[id="instance-table-courseuserassignment_…"]`. Other/slide layouts remain unverified.
+- [x] Stable question source ID: `tr.instanceitempart[data-id="cuaip_…"]`, independent of position and displayed number.
+- [x] Assignment ID from the table, matched to course/title metadata in the existing cache. Visit the course Assignments page first.
+- [x] Compact type=button icon in each empty final TD, without changing response/history/status/points cells.
+- [x] Saved links use the original assignment URL and question number. No PDF text or exact page/anchor navigation attempted.
+- [x] Cloning, recycled rows, data-id-only changes and table replacement covered by focused tests; real scroller behavior still needs a live check.
 - [ ] Explicit assessment exclusion evidence; do not infer homework solely from generic CSS classes.
-- [ ] Verify one control per question after repeated rerenders, persistence after reload, direct-link behavior, and that all answer/form markup is unchanged.
+- [ ] Live Chrome: verify one icon per visible row, persistent filled state, grouped Saved Questions links, and remove-state synchronization.
+- [ ] Verify native response/history/submission controls on a non-graded practice page.
 
 ## PDF experience
 
@@ -74,7 +75,7 @@ Until this is supplied, BetterQuest mounts only at the verified course-page slot
 
 ## Shared release checks
 
-- [ ] Reload the extension: confirm the inline section appears automatically, the navbar button jumps to it, and no assignment overlay appears.
+- [ ] Reload: confirm the course summary remains in its empty column and BetterQuest opens/closes Saved Questions inline after the navbar.
 - [ ] Check the three-item preview, link/deadline readability, occupied-column fallback, View all native tab action, and collapse behavior on the real course page.
 - [ ] Accept only the `storage` permission addition; matching is still Quest student pages only.
 - [ ] Configure and test one adapter at a time. Missing integration points must disable just that feature.

@@ -45,9 +45,9 @@ test('one button between breadcrumbs and nav; unverified pages do not open an as
     assert.equal(f.document.querySelectorAll('[data-betterquest="navigation"]').length, 1);
     f.button()!.click();
     assert.equal(f.panel(), null);
-    assert.equal(f.button()!.disabled, true);
+    assert.equal(f.button()!.disabled, false);
     assert.equal(f.button()!.hasAttribute('aria-haspopup'), false);
-    assert.equal(f.button()!.hasAttribute('aria-expanded'), false);
+    assert.equal(f.button()!.getAttribute('aria-expanded'), 'true');
     assert.equal(f.document.querySelector('input')?.value, 'unchanged');
     assert.equal(f.document.querySelector('main')?.hasAttribute('style'), false);
     assert.equal(f.document.querySelector('style'), null);

@@ -8,7 +8,7 @@ export class BookmarkService {
 
   async add(course: Course, assignment: Assignment, question: Question, note = '', now = new Date().toISOString()) {
     const bookmark: Bookmark = { id: question.id, course, assignment, question, note, createdAt: now, updatedAt: now };
-    if (!isBookmark(bookmark) || assignment.kind !== 'homework') throw new Error('A verified homework question is required.');
+    if (!isBookmark(bookmark) || assignment.kind === 'assessment') throw new Error('A valid non-assessment question is required.');
     return this.run({ kind: 'bookmarks:put', bookmark });
   }
 

@@ -7,6 +7,7 @@ import { themeAdapter } from '../adapters/quest/theme';
 import { createFeatureRuntime, type FeatureDefinition } from '../features/lifecycle';
 import { AssignmentTracker } from '../features/assignments/tracker';
 import { createBookmarkControls } from '../features/bookmarks/controls';
+import { BookmarkService } from '../features/bookmarks/service';
 import { createPdfController } from '../features/pdf/controller';
 import { ThemePreferences } from '../features/theme/preferences';
 import { createThemeScope } from '../features/theme/tokens';
@@ -55,11 +56,14 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
   });
   if (questionAdapter) {
     const adapter = questionAdapter;
-    definitions.push({ name: 'bookmarks', locate: doc => adapter.locate(doc), mount: root => {
-      const controls = createBookmarkControls(root);
+    definitions.push({ name: 'bookmarks', locate: doc => adapter.locate(doc),
+      attributeFilter: ['class', 'id', 'data-id', 'data-order'], observeOwnedRemovals: true, mount: root => {
+      const controls = createBookmarkControls(root, new BookmarkService(run));
       return {
         refresh: async context => {
-          const result = adapter.read(root, context);
+          const state = await run({ kind: 'state:read' });
+          if (context.signal.aborted) return;
+          const result = adapter.read(root, context, state.cache);
           if (!context.signal.aborted) await controls.reconcile(result.status === 'ready' ? result.value : []);
         }, dispose: controls.dispose,
       };
@@ -111,13 +115,19 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
     if (result.status !== 'ready') throw new Error(result.reason);
   };
   // Never re-collect assignments in response to the cache write itself.
-  const needsChanges = definitions.some(definition => ['bookmarks', 'theme'].includes(definition.name));
-  const unsubscribe = needsChanges ? subscribeLocal(() => runtime.refresh(['bookmarks', 'theme'])) : () => {};
-  return { reconcile: runtime.reconcile, refreshAssignments,
+  let unsubscribe: (() => void) | undefined;
+  const reconcile = () => {
+    runtime.reconcile();
+    const needsChanges = Boolean(questionAdapter?.locate(document) || themeAdapter?.locate(document));
+    if (needsChanges && !unsubscribe) {
+      try { unsubscribe = subscribe(() => runtime.refresh(['bookmarks', 'theme'])); } catch { /* Other page features remain available during worker reloads. */ }
+    } else if (!needsChanges && unsubscribe) { unsubscribe(); unsubscribe = undefined; }
+  };
+  return { reconcile, refreshAssignments,
     focusAssignments: () => assignmentSection?.focus() || false,
     hasAssignmentSection: () => assignmentSection?.isConnected() || false,
     dispose: () => {
     manualAbort.abort();
-    unsubscribe(); runtime.dispose();
+    unsubscribe?.(); runtime.dispose();
   } };
 }

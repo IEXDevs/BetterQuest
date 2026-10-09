@@ -1,13 +1,13 @@
 # V1 foundations
 
-The working navbar integration is retained. Assignment presentation is a compact summary in the first empty existing `.col` after Meets, inside `#student-course-info-header > .row.text-center`. The former standalone card below course info is removed. The navbar button focuses this summary without forcing the native collapse open. Other feature modules remain foundations for relevant page controls later.
+Assignment presentation remains in the empty course-info column after Meets. Response-table bookmarks are now enabled, and the navbar button opens grouped Saved Questions in normal page flow after the verified navbar. Its Upcoming shortcut still focuses the course summary without forcing the collapse open. PDF enhancement, study capture, and theme adapters remain disabled.
 
 ## Implemented versus disabled
 
 | Feature | Working infrastructure | Awaiting inspected Quest DOM |
 | --- | --- | --- |
 | Assignments | Existing parser/cache/storage reused; next three incomplete assignments in an existing course-info column; linked names/deadlines; native View all; course-only/unscanned note | Verified homepage placement/course discovery, internal course/term IDs, semester rollover, additional layouts and live Chrome testing |
-| Bookmarks | Stable source-based identities; persistent add/update/remove/list/group; native-anchor/source URL navigation; idempotent scoped bookmark controls | Question identities and safe control slots, HTML/slide/PDF mode differences, assessment exclusion evidence |
+| Bookmarks | Verified response-table/row IDs; compact filled/outlined icons; existing persistent service; cloned/recycled row reconciliation; grouped Saved Questions; original assignment links | Slide/other layouts, additional assessment-type evidence, live Chrome visual checks |
 | PDF | Detection adapter contract; capability-gated navigation/zoom/view intent dispatcher; bridge disposal; original-source URLs | Actual link/embed markup, safe controls slot, verified bridge to the document renderer. No controls or replacements are enabled |
 | Study export | Historical-homework validation; explicit save/collect API; JSON export builder/serializer/download; schema; source provenance; extracted/not-extracted counts; answer/solution **availability metadata** | Historical homework eligibility, visible prompt/math/diagram representation, released answer/solution links, existing export insertion slot |
 | Theme | Persistent light/dark/system preferences; system resolution; component-local custom-property tokens; media-query updates and restoration on cleanup | Verified component roots and CSS that consumes the tokens. No existing Quest component is recolored |
@@ -20,11 +20,12 @@ src/
     navigation.ts          Existing authenticated navbar selector/placement
     ui.ts                  Existing scoped navbar button
     integration.ts         Existing navigation lifecycle + feature-host hooks
-    features.ts            Assignment collection; other adapters disabled
+    features.ts            Assignment collection and response-table bookmarking
   adapters/quest/
     assignments.ts         Verified #target/#tabs-elements assignment parser
     assignment-placement.ts Verified empty column after Meets; no fallback card
-    questions.ts           Question bindings/control slots (null until inspected)
+    questions.ts           Verified response-table IDs and empty final slots
+    saved-questions-placement.ts Verified navbar sibling for the inline view
     pdf.ts                 PDF source/document boundary (null until inspected)
     history.ts             Accessible historical homework boundary (null)
     theme.ts               Verified component roots (null)
@@ -34,7 +35,8 @@ src/
     assignments/section.ts Three-item course-info summary and native View all
     assignments/view-model.ts Pure filtering, sorting, deadlines, and coverage
     bookmarks/service.ts   Bookmark CRUD/filter/group/source navigation
-    bookmarks/controls.ts  Optional Shadow-DOM controls in verified slots
+    bookmarks/controls.ts  Compact SVG icons and source-ID reconciliation
+    bookmarks/saved-view.ts Grouped metadata-only Saved Questions view
     pdf/controller.ts      Verified bridge capabilities and operation bounds
     pdf/controls.ts        UI intent/availability contract; no new viewer
     study/export.ts        Explicit historical collection + portable JSON
@@ -57,6 +59,8 @@ tests/
   background.test.ts        Real worker module with mocked Chrome boundary
   fixtures/                Explicitly synthetic contract markup and records
     quest-assignments.html  Supplied Quest fragment, contact details redacted
+    quest-responses.html    Supplied response table with stable row IDs
+  bookmarks.test.ts         Focused row/storage/view/rerender regressions
 docs/
   study-export.schema.json  Portable JSON Schema, draft 2020-12
   INTEGRATION_CHECKLIST.md   Authenticated inspection needed before enabling
@@ -82,9 +86,19 @@ Presentation is independent of collection. A dedicated placement adapter uses th
 
 View all uses the supplied `#student-elements-a` tab and `#tabs-elements` target. It invokes the native tab's click/loading behavior rather than changing classes, replacing tables, or opening another extension UI. The summary is a child of the existing collapse and is hidden/shown by Quest's existing behavior. Mounting and navbar focus do not force it open. Replacing the row within the same root repositions the single existing host into the new empty column; it does not append duplicate widgets or columns.
 
-The student homepage has no placement adapter because its HTML is still unknown. The navbar shortcut is disabled where no verified inline section exists. It does not create an overlay fallback. See the integration checklist for the required homepage samples.
+The student homepage still has no assignment-summary placement adapter. Saved Questions can be opened at the verified navbar sibling position without guessing a homepage content selector. It is an inline user-opened view, not an overlay or separate extension page.
 
-Records and messages are runtime-validated. Unknown record fields are rejected, preventing accidental persistence/export of response fields or arbitrary adapter payloads. Course/assignment/question references must agree. Historical study records require `kind: homework` and explicit `historical: true`. The model has answer/solution availability and source URLs, not answer/solution text or submitted response values.
+Records and messages are runtime-validated. Unknown fields are rejected, preventing accidental persistence of response fields. Parent references must agree. Historical study records still require verified historical homework. Metadata-only bookmarks permit unknown assignment types without changing their type or enabling study capture; known assessments are rejected. Answer/solution fields remain availability/source metadata, never response values or answer text.
+
+## Response-table bookmarking
+
+The verified root is `.dataTables_scrollBody`, containing a direct table with ID `instance-table-courseuserassignment_…`, avoiding cloned scroll headers. That assignment source ID resolves an existing cached record and its course. Missing/ambiguous cache context returns unavailable; no placeholder course/title is invented.
+
+Rows are `tr.instanceitempart[data-id="cuaip_…"]`. Stable IDs use the existing course/assignment namespace plus the row source ID. Only the first cell's displayed question number is read; response, status, history, and points cells and hidden-input values are not used for bookmark content. The supplied six-column table has a blank final header and empty final cells for icons. Occupied cells and malformed rows are skipped.
+
+Controls use type=button, aria-pressed, and filled SVG feedback after persistence. Shadow events do not reach delegated response actions. Verified final TD slots may be inside a native form without submitting it; arbitrary form slots remain rejected. Reconciliation removes clones and detached controls, watches row/table ID changes, and moves existing hosts into replacement slots. A click captures its binding before a pending write so row recycling cannot change the question being saved.
+
+Saved Questions uses BookmarkService grouping/removal and worker storage. It displays course and assignment titles, question-number links, and optional existing notes. Every new response bookmark links to the original cached assignment URL, with anchor=null. Prompt text remains null/not-extracted; answer/solution availability stays unknown. No PDF text, exact page, or artificial anchor is generated. View subscriptions run only while open; row subscriptions run only while response containers exist. Cleanup removes owned nodes/listeners without changing native table cells.
 
 ## Plugging in a feature
 
@@ -92,7 +106,7 @@ Records and messages are runtime-validated. Unknown record fields are rejected, 
 2. Implement the dedicated adapter's `locate` and `read` functions with verified selectors. Replace only that adapter's `null` configuration. Keep parsing of Quest markup inside the adapter.
 3. Return an `Extraction<T>`: `unsupported` means no integration is configured, `unavailable` means a configured root/data is missing, and `ready` carries actual validated records. `ready` does not imply a question's prompt was extracted; inspect its `prompt.status` and the export counts.
 4. Compose the feature in `src/content/features.ts`. It mounts only when a verified root exists. `createFeatureRuntime` owns per-root observers and AbortControllers; root replacement, route changes, and extension reinjection dispose old controls/listeners. No feature adds a global DOM observer or polling loop.
-5. Place small feature controls in verified page slots, outside response forms, using extension-owned markers/Shadow DOM. Never alter the navbar, original document URLs, answer inputs, or submission events.
+5. Place controls in verified slots using owned markers/Shadow DOM. Response icons use blank final TD cells and type=button even inside native forms; other form slots stay excluded. Never change native response values, source URLs, or submission handlers.
 6. Use services with `Execute` injection for unit tests, and the shared client in Chrome. Change subscriptions refresh bookmark/theme consumers only; assignment cache writes do not recursively trigger new cache collection.
 
 Assignment and question adapters use synchronous DOM reads at present. Asynchronous PDF/history work can use the `PageContext.signal` contract; never apply a late result after cancellation. Study collection remains explicitly user-triggered through `StudyService.collect`; it is not part of automatic page refresh. PDF controls remain disabled until a real `PdfBridge` declares support and passes integration tests.
@@ -101,6 +115,6 @@ Theme scopes only set `--bq-*` custom properties on explicit component roots. Th
 
 ## Validation boundary
 
-Only assignment-focused tests are run for this column integration: the supplied parser fixture, three-item preview, occupied/missing slots, native View all, collapse preservation, rerenders, duplicate prevention, and preserved columns/content. Synthetic model data exists only in test fixtures and is never imported into the extension UI. Live rendering still needs checking in the authenticated Chrome session.
+Only bookmarking-focused tests and the TypeScript/extension build are run for this change. The supplied response fixture covers persistence, icon states, cloning/recycling, grouped links, cleanup, and unchanged original form/cell markup. Live Chrome rendering still needs checking in the authenticated session. Synthetic data is confined to tests and never imported into the extension UI.
 
 The JSON Schema describes the portable export shape. Runtime validators additionally enforce stable identities, parent references, historical eligibility, and accurate extraction counts. Exported text is plain text; math/diagrams require future explicit representations. No empty prompt is represented as successfully extracted. Source URLs and collection timestamps remain in `sources` even when prompt text is unavailable.

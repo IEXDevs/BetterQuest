@@ -1,4 +1,4 @@
-import type { Assignment, AssignmentSnapshot, Course, Extraction, Question, StudyRecord } from './models';
+import type { Assignment, AssignmentSnapshot, Course, Extraction, LocalState, Question, StudyRecord } from './models';
 
 export interface PageContext { url: string; observedAt: string; signal: AbortSignal }
 export interface AssignmentAdapter {
@@ -9,12 +9,15 @@ export interface QuestionBinding {
   course: Course;
   assignment: Assignment;
   question: Question;
-  /** Verified insertion slot, outside answer inputs and submit controls. */
+  /** Verified insertion slot, outside answer inputs and submit controls; a
+   * blank response cell may be inside Quest's form but uses type=button. */
   controlSlot: HTMLElement;
+  /** Verified empty final response-table cell; buttons remain type=button. */
+  slotKind?: 'response-cell';
 }
 export interface QuestionAdapter {
   locate(document: Document): Element | null;
-  read(root: Element, context: PageContext): Extraction<QuestionBinding[]>;
+  read(root: Element, context: PageContext, cache?: LocalState['cache']): Extraction<QuestionBinding[]>;
 }
 export interface PdfDocument {
   id: string;

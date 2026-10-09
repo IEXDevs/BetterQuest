@@ -57,7 +57,7 @@ export function isSnapshot(value: unknown): value is AssignmentSnapshot {
 }
 
 export function isBookmark(value: unknown): value is Bookmark {
-  return object(value) && only(value, ['id', 'course', 'assignment', 'question', 'note', 'createdAt', 'updatedAt']) && isCourse(value.course) && isAssignment(value.assignment) && value.assignment.kind === 'homework' && isQuestion(value.question) &&
+  return object(value) && only(value, ['id', 'course', 'assignment', 'question', 'note', 'createdAt', 'updatedAt']) && isCourse(value.course) && isAssignment(value.assignment) && value.assignment.kind !== 'assessment' && isQuestion(value.question) &&
     value.id === value.question.id && linked(value.course, value.assignment, value.question) &&
     string(value.note, 10000) && timestamp(value.createdAt) && timestamp(value.updatedAt);
 }
