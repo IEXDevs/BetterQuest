@@ -1,12 +1,12 @@
 # V1 foundations
 
-The working navbar integration is retained. Assignment presentation is now a compact, automatically visible section inside the verified course page, before `#panel-tabs`. The navbar button jumps to this section instead of opening a floating panel. There is no popup, standalone dashboard, PDF viewer, or automatic Quest theming. Other feature modules remain foundations for adding relevant page controls later.
+The working navbar integration is retained. Assignment presentation is a compact summary in the first empty existing `.col` after Meets, inside `#student-course-info-header > .row.text-center`. The former standalone card below course info is removed. The navbar button focuses this summary without forcing the native collapse open. Other feature modules remain foundations for relevant page controls later.
 
 ## Implemented versus disabled
 
 | Feature | Working infrastructure | Awaiting inspected Quest DOM |
 | --- | --- | --- |
-| Assignments | Existing parser/cache/storage reused; automatic inline To Do section; completed-work view; this-course/all-visited scope; four-row paging; concise source links/deadlines/status; coverage and refresh | Verified homepage placement/course discovery, internal course/term IDs, semester rollover, additional layouts and live Chrome testing |
+| Assignments | Existing parser/cache/storage reused; next three incomplete assignments in an existing course-info column; linked names/deadlines; native View all; course-only/unscanned note | Verified homepage placement/course discovery, internal course/term IDs, semester rollover, additional layouts and live Chrome testing |
 | Bookmarks | Stable source-based identities; persistent add/update/remove/list/group; native-anchor/source URL navigation; idempotent scoped bookmark controls | Question identities and safe control slots, HTML/slide/PDF mode differences, assessment exclusion evidence |
 | PDF | Detection adapter contract; capability-gated navigation/zoom/view intent dispatcher; bridge disposal; original-source URLs | Actual link/embed markup, safe controls slot, verified bridge to the document renderer. No controls or replacements are enabled |
 | Study export | Historical-homework validation; explicit save/collect API; JSON export builder/serializer/download; schema; source provenance; extracted/not-extracted counts; answer/solution **availability metadata** | Historical homework eligibility, visible prompt/math/diagram representation, released answer/solution links, existing export insertion slot |
@@ -23,7 +23,7 @@ src/
     features.ts            Assignment collection; other adapters disabled
   adapters/quest/
     assignments.ts         Verified #target/#tabs-elements assignment parser
-    assignment-placement.ts Verified course-page slot; no homepage fallback
+    assignment-placement.ts Verified empty column after Meets; no fallback card
     questions.ts           Question bindings/control slots (null until inspected)
     pdf.ts                 PDF source/document boundary (null until inspected)
     history.ts             Accessible historical homework boundary (null)
@@ -31,7 +31,7 @@ src/
   features/
     lifecycle.ts           Scoped observers, root replacement, abort/dispose
     assignments/tracker.ts Cache, freshness, refresh orchestration
-    assignments/section.ts Automatic compact inline To Do/completed section
+    assignments/section.ts Three-item course-info summary and native View all
     assignments/view-model.ts Pure filtering, sorting, deadlines, and coverage
     bookmarks/service.ts   Bookmark CRUD/filter/group/source navigation
     bookmarks/controls.ts  Optional Shadow-DOM controls in verified slots
@@ -76,9 +76,11 @@ Cache snapshots are scoped to observed source pages. They accumulate known cours
 
 The enabled parser observes the verified `#target` container and reads all groups in `#tabs-elements`. It maps columns by actual headings so DataTables-hidden columns do not shift fields. Unix `data-order` seconds are authoritative. The visible dates provide raw labels and Central timezone context; a text fallback accepts only valid full English CDT/CST dates. Accessible `Completed status` and `Grade` labels avoid double-reading decorative icons/visible numbers. Empty DataTables placeholder rows are not assignments. Processing indicators with active display prevent an observed-course marker until loading ends. DOM refreshes with unchanged extracted data do not write the cache again.
 
-`scannedCourseIds` marks recognized table observations; it is optional for old snapshots. A detected heading without a table is a known unscanned course. Legacy snapshots without this evidence do not imply a successful scan. The inline section's coverage disclosure labels these states and explains that other courses have not been scanned; no full course inventory is inferred. Cache notifications update the section without recollecting tables. Refresh awaits the existing page collector before rendering. Subscriptions and nodes are disposed when the verified page root/route is replaced.
+`scannedCourseIds` marks recognized table observations; it is optional for old snapshots. A detected heading without a table is a known unscanned course. Legacy snapshots without this evidence do not imply a successful scan. The compact summary shows Course data only or Not scanned yet; its tooltip states that other courses are not automatically scanned. Cache notifications update the summary without recollecting tables. Subscriptions and nodes are disposed when the verified page root/route is replaced.
 
-Presentation is independent of collection. A dedicated placement adapter requires the supplied `#target` course heading and direct `#panel-tabs`/`#info-tab-data` children. The new section is inserted before the tabs; original nodes are not moved or restyled. It uses inherited typography, a restrained teal accent matching Quest's tabs, and Shadow-DOM-scoped styles. Four-row pagination prevents a giant list. Default scope is this course, default view is incomplete work; users can switch to all visited courses or completed work. No grades/raw record dumps appear in the To Do section. Unknown completion/deadlines remain explicit.
+Presentation is independent of collection. A dedicated placement adapter uses the verified course-info row, identifies the Meets column by its native `.qlabel`, and finds the first empty direct `.col` after it. Whitespace/comments and the extension's own existing host do not make a column occupied. Native content does: occupied columns are skipped and missing slots disable injection. The host has no card class, border, background, or layout overrides on Quest elements. Scoped typography/link styles show up to three known incomplete assignments for the current course. Unknown status is not treated as proof of incompletion; unparseable deadlines remain explicit.
+
+View all uses the supplied `#student-elements-a` tab and `#tabs-elements` target. It invokes the native tab's click/loading behavior rather than changing classes, replacing tables, or opening another extension UI. The summary is a child of the existing collapse and is hidden/shown by Quest's existing behavior. Mounting and navbar focus do not force it open. Replacing the row within the same root repositions the single existing host into the new empty column; it does not append duplicate widgets or columns.
 
 The student homepage has no placement adapter because its HTML is still unknown. The navbar shortcut is disabled where no verified inline section exists. It does not create an overlay fallback. See the integration checklist for the required homepage samples.
 
@@ -99,6 +101,6 @@ Theme scopes only set `--bq-*` custom properties on explicit component roots. Th
 
 ## Validation boundary
 
-Existing regression sources were updated for the new inline presentation, but no tests were run for this redesign per the user's instruction. Earlier parser/storage validation does not establish that this UI has been tested. Synthetic model data exists only in test fixtures and is never imported into the extension UI. Live rendering and additional page layouts still need checking in the authenticated Chrome session.
+Only assignment-focused tests are run for this column integration: the supplied parser fixture, three-item preview, occupied/missing slots, native View all, collapse preservation, rerenders, duplicate prevention, and preserved columns/content. Synthetic model data exists only in test fixtures and is never imported into the extension UI. Live rendering still needs checking in the authenticated Chrome session.
 
 The JSON Schema describes the portable export shape. Runtime validators additionally enforce stable identities, parent references, historical eligibility, and accurate extraction counts. Exported text is plain text; math/diagrams require future explicit representations. No empty prompt is represented as successfully extracted. Source URLs and collection timestamps remain in `sources` even when prompt text is unavailable.

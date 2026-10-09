@@ -192,7 +192,7 @@ test('visited courses aggregate persistently and rescans deduplicate by stable a
   } finally { first.window.close(); second.window.close(); }
 });
 
-test('inline section defaults to incomplete work, separates completed work, and updates locally', async () => {
+test('course-info summary shows the next three incomplete assignments in the first empty column', async () => {
   const dom = page(); const f = store(); const tracker = new AssignmentTracker(f.run);
   await tracker.cache(snapshot(dom));
   const root = dom.window.document.querySelector('#target')!;
@@ -203,13 +203,17 @@ test('inline section defaults to incomplete work, separates completed work, and 
     await view.refresh(snapshot(dom).courses[0]);
     assert.equal(body.querySelectorAll('.row').length, 1);
     assert.match(body.querySelector('.row a')!.textContent!, /Section 12.5/);
-    assert.match(body.querySelector('.coverage p')!.textContent!, /Other courses are not yet scanned/);
-    assert.equal(host.nextElementSibling?.id, 'panel-tabs');
-    const completed = body.querySelectorAll<HTMLButtonElement>('.filters button')[1];
-    completed.click(); assert.equal(body.querySelectorAll('.row').length, 4);
-    const data = snapshot(dom); data.assignments.at(-1)!.completion = 'completed';
+    assert.match(body.querySelector<HTMLElement>('.note')!.title, /Other courses are not yet scanned/);
+    const columns = root.querySelectorAll('#student-course-info-header > .row.text-center > .col');
+    assert.equal(host.parentElement, columns[2]);
+    assert.equal(host.classList.contains('card'), false);
+    const data = snapshot(dom);
+    data.assignments.slice(0, 4).forEach(a => { a.completion = 'not-completed'; });
     await tracker.cache(data); await pause();
-    assert.equal(completed.textContent, 'Completed (10)');
+    assert.equal(body.querySelectorAll('.row').length, 3);
+    assert.deepEqual([...body.querySelectorAll('.assignment-link')].map(a => a.textContent), ['Section 10.1', 'Section 10.4', 'Section 10.5']);
+    assert.equal(body.querySelectorAll('.deadline').length, 3);
+    assert.equal(body.querySelector('.view-all')?.getAttribute('href'), '#tabs-elements');
     assert.equal(f.listeners.size, 1);
     assert.equal(host.querySelector('style'), null);
   } finally { view.dispose(); dom.window.close(); }
@@ -261,19 +265,24 @@ test('legacy records without optional scan/grade fields remain readable and do n
   } finally { dom.window.close(); }
 });
 
-test('manual inline refresh awaits page collection even without live notifications', async () => {
+test('View all delegates to Quest native assignment tab without changing collapse or columns', async () => {
   const dom = page(); const f = store(); const tracker = new AssignmentTracker(f.run);
   await tracker.cache(snapshot(dom));
   const root = dom.window.document.querySelector('#target')!;
-  const view = createAssignmentSection(root, f.run, () => () => {}, async () => {
-    await new Promise(resolve => setTimeout(resolve, 30));
-    await tracker.cache(snapshot(dom));
-  });
+  const view = createAssignmentSection(root, f.run, () => () => {});
   try {
     await view.refresh(snapshot(dom).courses[0]);
     const body = root.querySelector('[data-betterquest="assignment-section"]')!.shadowRoot!;
-    dom.window.document.querySelector('#instances-table-eh3769540 tbody tr:last-child a')!.textContent = 'Updated assignment';
-    body.querySelector<HTMLButtonElement>('.refresh')!.click(); await pause();
-    assert.match(body.querySelector('.row a')!.textContent!, /Updated assignment/);
+    const info = root.querySelector('#student-course-info-header')!;
+    const before = info.className;
+    const columns = [...info.querySelectorAll('.row.text-center > .col')];
+    let clicked = 0;
+    const tab = root.querySelector('#student-elements-a')!;
+    tab.addEventListener('click', event => { event.preventDefault(); clicked++; });
+    body.querySelector<HTMLAnchorElement>('.view-all')!.click();
+    assert.equal(clicked, 1);
+    assert.equal(info.className, before);
+    assert.deepEqual([...info.querySelectorAll('.row.text-center > .col')], columns);
+    assert.equal(root.querySelectorAll('[data-betterquest="assignment-section"]').length, 1);
   } finally { view.dispose(); dom.window.close(); }
 });

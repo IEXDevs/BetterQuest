@@ -1,6 +1,6 @@
 # BetterQuest
 
-Manifest V3 Chrome extension: a compact **Upcoming Assignments** section enhances Quest course pages directly. It appears automatically above the existing course tabs, using assignments collected locally from pages you visit. The blue navbar button is a shortcut to the section. Other V1 feature integrations remain disabled.
+Manifest V3 Chrome extension: a compact **Upcoming Assignments** summary appears automatically inside the first empty course-info column after **Meets**. It uses assignments collected locally from pages you visit. The blue navbar button is a shortcut to the summary. Other V1 feature integrations remain disabled.
 
 ## Setup
 
@@ -23,15 +23,15 @@ The navbar button and inline section use Shadow DOM. The extension does not rest
 
 ## Assignment tracker
 
-Visit each course's **Assignments** tab and let the tables load. BetterQuest reads all `instances-table-eh…` groups under `#tabs-elements`, including dynamically inserted rows. The automatic section is placed before the verified `#panel-tabs` element inside `#target`, beneath the course information card. Quest's existing tabs and assignment tables remain in place.
+Visit each course's **Assignments** tab and let the tables load. BetterQuest reads all `instances-table-eh…` groups under `#tabs-elements`, including dynamically inserted rows. The summary uses the verified `#student-course-info-header > .row.text-center` structure: it finds **Meets**, then chooses the first empty existing `.col` after it. Occupied columns are left untouched, and no standalone card is inserted below the course information.
 
-**To Do** is the default view: explicitly incomplete work is prioritized, then entries with unknown completion, ordered by deadline. Overdue work is labeled and unknown deadlines stay last. **Completed** work has its own view, with recent deadlines first. Each row shows the course, assignment link, concise deadline, and actual completion status. Four rows are shown per page so the enhancement stays compact.
+The summary shows up to **three known incomplete assignments** for the current course, ordered by deadline, with a linked name and concise deadline. Overdue work is labeled and unknown deadlines stay last. Unknown completion status is not presented as definite incompletion. **View all** activates Quest's own Assignments tab and scrolls to the native table, where the rest of the work and completed assignments remain available.
 
-The section defaults to **This course**. Choose **All visited courses** to see aggregated cached work without leaving Quest. **Refresh** re-reads the current course page before updating the section; it does not fetch other courses or submit anything. Grades continue to be extracted and stored but are not added to this compact To Do view.
+The summary stays within the existing course-info collapse, so Quest controls its visibility naturally. BetterQuest never forces it open or changes Instructor/Meets content, column classes, or native table behavior. The same cache continues to aggregate courses as they are visited; no extraction/storage logic was rebuilt. Grades remain stored but are not displayed in this compact summary.
 
 Deadlines use Quest's Unix `data-order` timestamps, with the original displayed label and Central timezone retained. A strict CDT/CST text fallback is available when a timestamp is absent. Unparseable deadlines are shown as unknown and sorted last. Completion comes from Quest's accessible status labels, independently of grades: **Not completed** does not mean **Not started**.
 
-Coverage is deliberately limited: expand **Coverage** to see observed courses and known courses labeled **Not scanned yet**. The note explains that other courses must be visited. The supplied fragment does not include a full course list, so BetterQuest cannot name or count every unvisited course. An observed table is not an account-wide sync guarantee; cached rows remain until updated and may be stale.
+Coverage stays limited: the summary notes **Course data only**, or **Not scanned yet** while the current course tables are unobserved. Its tooltip explains that other courses are not automatically scanned and cached work may be stale. The supplied fragment does not include a full course list, so BetterQuest cannot name or count every unvisited course. An observed table is not an account-wide sync guarantee.
 
 Student-homepage placement is deferred. No homepage selectors were invented. See the [homepage DOM requirements](docs/INTEGRATION_CHECKLIST.md#student-homepage-placement-still-needed) for the exact markup needed to add the same compact section there.
 
@@ -50,7 +50,7 @@ src/shared/models.ts        Course/assignment/question/storage/export models
 src/shared/client.ts        Validated worker client and change notifications
 src/storage/                Local repository and serialized command reducer
 src/adapters/quest/          Enabled assignment parser; other adapters disabled
-src/adapters/quest/assignment-placement.ts  Verified inline course-page slot
+src/adapters/quest/assignment-placement.ts  Verified empty course-info column
 src/features/assignments/   Existing cache/freshness, inline section, view model
 src/features/               Assignments, bookmarks, PDF, study export, theme
 docs/                       Architecture, JSON schema, integration checklist
@@ -64,6 +64,6 @@ npm run build
 
 Tests cover the supplied authenticated assignment HTML, navbar/panel, dynamic table groups, grades/statuses, timezone-safe deadlines, multi-course caching, coverage, local persistence, worker messaging, and the other feature foundations. The assignment fixture preserves the supplied rows and scripts with instructor contact details redacted; scripts are never executed. Other fixtures are synthetic contracts. Chrome APIs are mocked at the test boundary. No tests authenticate, scrape, or contact Quest.
 
-The only API permission is `storage`, used for personal data in this Chrome profile. No broad host permissions, external services, remote assets, crawling, or assessment automation. Reload the extension and refresh Quest after rebuilding. Changes are left unstaged and uncommitted. Tests were not run for the inline UI redesign, as requested.
+The only API permission is `storage`, used for personal data in this Chrome profile. No broad host permissions, external services, remote assets, crawling, or assessment automation. Reload the extension and refresh Quest after rebuilding. No commits were created. Only assignment-focused tests were run for the course-info column integration.
 
 Read the [architecture and feature status](docs/ARCHITECTURE.md), [authenticated integration checklist](docs/INTEGRATION_CHECKLIST.md), and [study export schema](docs/study-export.schema.json). The assignment parser is fixture-verified; exercise it in your live Chrome session after reloading the extension. Question bookmarking, PDF controls, study capture, and dark mode still require their own inspected DOM.

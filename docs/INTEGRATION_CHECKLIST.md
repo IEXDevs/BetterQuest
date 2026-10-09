@@ -4,7 +4,7 @@ The navbar and course assignment fragment have been supplied and integrated. Ass
 
 ## Implement first: assignment tracker
 
-The tracker is enabled. The supplied course heading, assignment rows/groups, machine timestamps, completion/grade labels, and instance links are reused unchanged. Its compact section now appears automatically inside the course page, before the existing tabs, with To Do/completed views and this-course/all-visited scope. Remaining verification includes the homepage/course list and internal course/term mapping; the supplied fragment alone cannot prove full course coverage. The redesigned UI has not had tests run, per request.
+The tracker is enabled. Its parser/cache are reused unchanged. The summary now uses the verified course-info row's first empty column after Meets and shows up to three incomplete assignments with native View all. Remaining verification includes the homepage/course list and internal course/term mapping; the supplied fragment alone cannot prove full course coverage. Only assignment-focused tests are run for this placement update.
 
 - [ ] Homepage course-list root and one course card/row, including its source ID and exact course URL.
 - [ ] Course identity on an assignment page, including IDs and links in the existing breadcrumb/heading.
@@ -14,7 +14,7 @@ The tracker is enabled. The supplied course heading, assignment rows/groups, mac
 - [x] Completion checkmark and accessible Completed/Not completed labels, separate from grades. No inference about partial progress or exhausted tries.
 - [ ] Homework versus exam/quiz/learning-module classification and any timer/proctoring markers. Unknown classifications must stay unknown.
 - [x] Multiple/collapsed groups, delayed tables, processing indicators, and DOM rerenders covered in fixture tests. Actual pagination/additional layouts still need inspection. A visited-page cache is not complete account coverage.
-- [x] Course-page slot: insert before `#target > #panel-tabs`, below the existing course information card. Native tabs and tables are preserved.
+- [x] Course-page slot: `#student-course-info-header > .row.text-center > .col`, first empty column after the native Meets column. Preserve all columns and native collapse behavior; remove the former standalone tracker.
 - [ ] Verified student-homepage placement (requirements below).
 - [ ] Verify the populated tracker cache on two courses, unknown metadata handling, chronological ordering, freshness, and refresh without submitting anything.
 
@@ -75,7 +75,7 @@ Until this is supplied, BetterQuest mounts only at the verified course-page slot
 ## Shared release checks
 
 - [ ] Reload the extension: confirm the inline section appears automatically, the navbar button jumps to it, and no assignment overlay appears.
-- [ ] Check To Do/completed filters, this-course/all-visited scope, pagination, deadline/status labels, and coverage on the real course page.
+- [ ] Check the three-item preview, link/deadline readability, occupied-column fallback, View all native tab action, and collapse behavior on the real course page.
 - [ ] Accept only the `storage` permission addition; matching is still Quest student pages only.
 - [ ] Configure and test one adapter at a time. Missing integration points must disable just that feature.
 - [ ] Verify persistence in Chrome, multiple-tab updates, worker restart, and error handling with no external services.

@@ -42,7 +42,7 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
     name: 'assignment-section',
     locate: doc => findAssignmentSectionSlot(doc)?.root || null,
     mount: root => {
-      const section = createAssignmentSection(root, run, subscribe, () => refreshAssignments());
+      const section = createAssignmentSection(root, run, subscribe);
       assignmentSection = section;
       return {
         refresh: async context => {
