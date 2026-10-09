@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Privacy policy for the BetterQuest Chrome extension: Quest page access, local storage, and deletion.">
+  <title>Privacy Policy · BetterQuest</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #243b53; background: #f5f8fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; line-height: 1.7; }
+    main { max-width: 780px; margin: 48px auto; padding: 32px; background: #fff; border: 1px solid #dce5ee; border-radius: 14px; }
+    header { border-bottom: 1px solid #dce5ee; padding-bottom: 20px; }
+    .brand { color: #1769b5; font-weight: 700; margin: 0; }
+    h1 { font-size: 2rem; line-height: 1.2; margin: 12px 0; }
+    h2 { font-size: 1.15rem; margin: 28px 0 8px; }
+    p, ul { margin: 8px 0; }
+    ul { padding-left: 24px; }
+    .muted { color: #52667a; font-size: .9rem; }
+    a { color: #1769b5; overflow-wrap: anywhere; }
+    a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+    code { font-size: .9em; overflow-wrap: anywhere; }
+    footer { margin-top: 28px; border-top: 1px solid #dce5ee; padding-top: 16px; }
+    @media (max-width: 600px) { main { margin: 16px; padding: 24px 20px; } }
+    @media (prefers-color-scheme: dark) {
+      :root { color: #e0e9f2; background: #14202d; }
+      main { background: #1d2e40; border-color: #385066; }
+      header, footer { border-color: #385066; }
+      .brand, a { color: #88c5ff; }
+      .muted { color: #bacbdc; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="brand">BetterQuest</p>
+      <h1>Privacy Policy</h1>
+      <p class="muted">Last updated: <time datetime="2026-10-09">October 9, 2026</time></p>
+      <p>This policy covers the BetterQuest Chrome extension, which adds assignment tracking, question bookmarks, and theme preferences to UT Austin's Quest student pages. BetterQuest is an independent project, not an official UT Austin or Quest service.</p>
+    </header>
+
+    <section aria-labelledby="access">
+      <h2 id="access">Quest page access and permissions</h2>
+      <p>BetterQuest runs on <code>https://quest.cns.utexas.edu/student</code> and its subpages. Its content script reads supported page elements in your existing Quest session to provide the features below. It does not sign in for you, request your password, or collect login credentials, authentication cookies, or session tokens.</p>
+      <p>The extension requests the <code>storage</code> API permission to remember data locally. Its content-script page access is limited to those Quest student URLs; it does not request access to all websites, your browser history, cookies, or the downloads API.</p>
+    </section>
+
+    <section aria-labelledby="data">
+      <h2 id="data">Information accessed and stored</h2>
+      <ul>
+        <li><strong>Course and assignment metadata:</strong> course names, identifiers and links; assignment names, identifiers and links; assignment groups; start dates, deadlines and timezone labels; completion status; and available assignment grade labels or percentages.</li>
+        <li><strong>Cache metadata:</strong> visited Quest source-page URLs, observation and refresh timestamps, and identifiers indicating which courses and assignments have been observed. This is a limited Quest cache, not general browsing-history collection.</li>
+        <li><strong>Saved questions:</strong> question identifiers and numbers, the original assignment link, associated course/assignment metadata, and saved/updated timestamps. The storage model also supports bookmark notes, if supplied.</li>
+        <li><strong>Preferences:</strong> light/dark/system theme and assignment-tracking/bookmark feature switches.</li>
+      </ul>
+      <p>Assignments are collected from supported pages you visit, not by crawling all your courses. Bookmarks are saved when you choose to save them. The current question integration does not extract PDF text, question prompts, submitted answers, solutions, response history, correctness, or question points. PDF enhancement and historical study capture/export are not enabled in the current interface.</p>
+      <p>This information is used to show your observed assignments and progress, link back to saved questions, and apply your preferences. BetterQuest does not use it for advertising, profiling unrelated to these features, or sale.</p>
+    </section>
+
+    <section aria-labelledby="storage">
+      <h2 id="storage">Local storage and sharing</h2>
+      <p>Data is stored in <code>chrome.storage.local</code> in your Chrome profile, under <code>betterquest.local.v1</code>. BetterQuest does not use Chrome's sync storage, upload this data to a developer server, or send it to analytics, advertising, or AI services. There are no external API calls or remotely loaded services in the extension's current implementation.</p>
+      <p>The background service worker manages storage and exchanges data with BetterQuest's content scripts through local Chrome extension messages. BetterQuest does not add its own encryption to stored data; protection of your browser profile and device depends on Chrome and your operating system.</p>
+      <p>Following an assignment link opens Quest normally. Quest's own requests and handling of your account are governed by Quest and UT Austin, not this policy.</p>
+    </section>
+
+    <section aria-labelledby="deletion">
+      <h2 id="deletion">Retention, controls, and deletion</h2>
+      <p>Cached assignments, bookmarks, and preferences persist across browser sessions and extension updates. There is no automatic expiration of cached records.</p>
+      <ul>
+        <li>Remove a bookmark using its filled bookmark icon or the Remove action in Saved Questions.</li>
+        <li>Disable Assignment tracker or Question bookmarks in BetterQuest's settings to stop that feature's collection or controls. Disabling a feature does not delete previously stored data.</li>
+        <li>To delete all BetterQuest extension data, remove BetterQuest from <code>chrome://extensions</code>. Chrome clears the extension's local storage when it is uninstalled. Disabling the extension, clearing browsing history, or clearing Quest's website data is not the same as deleting extension storage.</li>
+      </ul>
+      <p>Deleting a bookmark does not delete its assignment from the assignment cache. BetterQuest does not change or delete records on Quest. Any separately saved files or browser-profile backups must be deleted separately; extension removal does not erase those copies. Because the developer does not receive your local cache, the developer cannot remotely retrieve or delete it.</p>
+    </section>
+
+    <section aria-labelledby="website">
+      <h2 id="website">Policy hosting and contacting us</h2>
+      <p>This policy page is a static page intended for GitHub Pages hosting. It contains no analytics, forms, cookies, external fonts, or scripts. When hosted there, GitHub may process normal website request information, including your IP address, under its <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">privacy statement</a>. Visiting the policy does not give the host access to BetterQuest's local extension data.</p>
+      <p>For privacy questions, contact the BetterQuest maintainer at <a href="mailto:markord946@gmail.com">markord946@gmail.com</a>. If you email us, your email provider and the recipient's email provider handle your address and the message you choose to send. Do not include passwords, session tokens, or private homework responses. Email correspondence is separate from the extension's local data; contact us to request deletion of correspondence we hold, subject to any necessary legal retention.</p>
+    </section>
+
+    <footer class="muted">We will update this page and its last-updated date when BetterQuest's data practices change.</footer>
+  </main>
+</body>
+</html>

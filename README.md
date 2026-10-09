@@ -2,7 +2,20 @@
 
 Manifest V3 Chrome extension: a global assignment overview enhances `/student/courses`, Upcoming Assignments remains in the empty course-info column after Meets, and response-table questions have local bookmark icons. BetterQuest's native-style navigation item opens settings with assignment/bookmark toggles, persistent dark mode, and Saved Questions. PDF enhancement and study capture remain disabled.
 
-## Setup
+## Privacy policy hosting
+
+The extension-specific [privacy policy](site/privacy/index.html) is a standalone static HTML page. It needs no JavaScript, login, build tool, or new dependencies. The contact address is the maintainer address recorded in this repository's commit authorship.
+
+There was no existing website deployment configuration. `.github/workflows/privacy-pages.yml` publishes only `site/` using GitHub Pages, independently of the Chrome extension build:
+
+1. In the GitHub repository, enable **Settings → Pages → Source: GitHub Actions**. Ensure your repository visibility/plan supports Pages and that the published site is **public**, not access-controlled.
+2. Publish these files to `main` through your normal workflow, or run **Deploy privacy policy** manually after the files are on GitHub. If your default branch differs, update the workflow's branch filter. No commit or push is performed by the local extension build.
+3. After successful deployment, open `https://iexdevs.github.io/BetterQuest/privacy/` in a signed-out/incognito browser. Verify it returns the policy directly, without authentication or an error. If the repository is renamed or a custom domain is configured, use the deployed Pages URL plus `privacy/` instead.
+4. Enter that full HTTPS policy URL in the **Chrome Web Store dashboard's privacy-policy field**, not `manifest.json`. Align the dashboard's data disclosures with the policy, including locally handled educational data and grades.
+
+**Deployment status:** the proposed URL returned HTTP 404 when checked on October 9, 2026. These local changes must be published and Pages configured before that URL is usable for submission. The public repository API also returned 404, so its public visibility and Pages eligibility could not be confirmed anonymously. Do not submit the URL until the signed-out check succeeds.
+
+## Extension setup
 
 Requires Node.js 22+.
 
