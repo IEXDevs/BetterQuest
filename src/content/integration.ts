@@ -1,8 +1,8 @@
 import { findNavigation } from './navigation';
-import { createNavigationButton, createPanel } from './ui';
+import { createNavigationButton } from './ui';
 import { isStudentPage } from '../shared/messages';
 import { startPageFeatures } from './features';
-import { createAssignmentPanel, type Subscribe } from '../features/assignments/panel';
+import type { Subscribe } from '../features/assignments/section';
 import { execute, subscribeLocal, type Execute } from '../shared/client';
 
 export interface Integration { reconcile: () => void; dispose: () => void }
@@ -11,22 +11,12 @@ export interface Integration { reconcile: () => void; dispose: () => void }
 export function startIntegration(document: Document, window: Window, options: { run?: Execute; subscribe?: Subscribe } = {}): Integration {
   let disposed = false;
   let scheduled: number | null = null;
-  let lastUrl = window.location.href;
   let navigation: ReturnType<typeof createNavigationButton> | null = null;
-  const features = startPageFeatures(document, window, options.run || execute);
-  let assignmentView: ReturnType<typeof createAssignmentPanel> | undefined;
+  const features = startPageFeatures(document, window, options.run || execute, options.subscribe || subscribeLocal);
 
   // Remove orphaned hosts from a previous injection, without touching Quest nodes.
   document.querySelectorAll('[data-betterquest="navigation"], [data-betterquest="panel"]').forEach(node => node.remove());
-  const panel = createPanel(document, restoreFocus => {
-    assignmentView?.pause();
-    navigation?.button.setAttribute('aria-expanded', 'false');
-    if (restoreFocus && navigation?.host.isConnected) navigation.button.focus();
-  });
-
   function unmount() {
-    panel.close(false);
-    panel.host.remove();
     navigation?.host.remove();
     navigation = null;
   }
@@ -35,26 +25,24 @@ export function startIntegration(document: Document, window: Window, options: { 
     if (disposed) return;
     features.reconcile();
     const nextUrl = window.location.href;
-    if (nextUrl !== lastUrl) { panel.close(false); lastUrl = nextUrl; }
     if (!isStudentPage(nextUrl)) { unmount(); return; }
     const target = findNavigation(document);
     if (!target) { unmount(); return; }
 
     if (!navigation) {
       navigation = createNavigationButton(document, false, () => {
-        if (!panel.host.isConnected) document.body.append(panel.host);
-        navigation?.button.setAttribute('aria-expanded', 'true');
-        panel.open();
-        if (!assignmentView) assignmentView = createAssignmentPanel(panel.body, options.run || execute, options.subscribe || subscribeLocal, features.refreshAssignments);
-        assignmentView.open();
+        features.focusAssignments();
       });
-      navigation.button.setAttribute('aria-expanded', String(panel.isOpen()));
+      navigation.button.removeAttribute('aria-haspopup');
+      navigation.button.removeAttribute('aria-expanded');
+      navigation.button.setAttribute('aria-label', 'Go to Upcoming Assignments');
     }
     if (navigation.host.parentElement !== target.navbar || navigation.host.nextSibling !== target.before) {
       target.navbar.insertBefore(navigation.host, target.before);
     }
-    // A removed/replaced body can detach the panel as well as the navigation bar.
-    if (panel.isOpen() && !panel.host.isConnected) document.body.append(panel.host);
+    const available = features.hasAssignmentSection();
+    navigation.button.disabled = !available;
+    navigation.button.title = available ? 'Jump to the inline assignment section' : 'Visit a Quest course page to view assignments.';
   }
 
   function schedule() {
@@ -90,14 +78,12 @@ export function startIntegration(document: Document, window: Window, options: { 
       disposed = true;
       observer.disconnect();
       features.dispose();
-      assignmentView?.dispose();
       if (scheduled !== null) window.clearTimeout(scheduled);
       window.removeEventListener('popstate', schedule);
       window.removeEventListener('hashchange', schedule);
       window.removeEventListener('pageshow', schedule);
       browserNavigation?.removeEventListener('navigatesuccess', schedule);
       unmount();
-      panel.dispose();
     },
   };
 }

@@ -1,12 +1,12 @@
 # V1 foundations
 
-The existing navbar integration and non-modal panel are retained. The panel now holds a simple read-only assignment list. There is no new popup, standalone dashboard, PDF viewer, or automatic Quest theming. Other feature modules remain foundations for adding relevant page controls later.
+The working navbar integration is retained. Assignment presentation is now a compact, automatically visible section inside the verified course page, before `#panel-tabs`. The navbar button jumps to this section instead of opening a floating panel. There is no popup, standalone dashboard, PDF viewer, or automatic Quest theming. Other feature modules remain foundations for adding relevant page controls later.
 
 ## Implemented versus disabled
 
 | Feature | Working infrastructure | Awaiting inspected Quest DOM |
 | --- | --- | --- |
-| Assignments | Supplied-HTML parser for all course assignment groups; machine timestamps/strict CDT/CST fallback; explicit completion and grades; multi-course cache; simple deadline-sorted panel; scan coverage and manual refresh | Full course-list discovery, internal course/term IDs, semester rollover, additional layouts and live Chrome testing |
+| Assignments | Existing parser/cache/storage reused; automatic inline To Do section; completed-work view; this-course/all-visited scope; four-row paging; concise source links/deadlines/status; coverage and refresh | Verified homepage placement/course discovery, internal course/term IDs, semester rollover, additional layouts and live Chrome testing |
 | Bookmarks | Stable source-based identities; persistent add/update/remove/list/group; native-anchor/source URL navigation; idempotent scoped bookmark controls | Question identities and safe control slots, HTML/slide/PDF mode differences, assessment exclusion evidence |
 | PDF | Detection adapter contract; capability-gated navigation/zoom/view intent dispatcher; bridge disposal; original-source URLs | Actual link/embed markup, safe controls slot, verified bridge to the document renderer. No controls or replacements are enabled |
 | Study export | Historical-homework validation; explicit save/collect API; JSON export builder/serializer/download; schema; source provenance; extracted/not-extracted counts; answer/solution **availability metadata** | Historical homework eligibility, visible prompt/math/diagram representation, released answer/solution links, existing export insertion slot |
@@ -18,11 +18,12 @@ The existing navbar integration and non-modal panel are retained. The panel now 
 src/
   content/
     navigation.ts          Existing authenticated navbar selector/placement
-    ui.ts                  Existing navbar button and panel shell
+    ui.ts                  Existing scoped navbar button
     integration.ts         Existing navigation lifecycle + feature-host hooks
     features.ts            Assignment collection; other adapters disabled
   adapters/quest/
     assignments.ts         Verified #target/#tabs-elements assignment parser
+    assignment-placement.ts Verified course-page slot; no homepage fallback
     questions.ts           Question bindings/control slots (null until inspected)
     pdf.ts                 PDF source/document boundary (null until inspected)
     history.ts             Accessible historical homework boundary (null)
@@ -30,7 +31,8 @@ src/
   features/
     lifecycle.ts           Scoped observers, root replacement, abort/dispose
     assignments/tracker.ts Cache, freshness, refresh orchestration
-    assignments/panel.ts   Read-only list and honest course coverage
+    assignments/section.ts Automatic compact inline To Do/completed section
+    assignments/view-model.ts Pure filtering, sorting, deadlines, and coverage
     bookmarks/service.ts   Bookmark CRUD/filter/group/source navigation
     bookmarks/controls.ts  Optional Shadow-DOM controls in verified slots
     pdf/controller.ts      Verified bridge capabilities and operation bounds
@@ -50,7 +52,7 @@ src/
     repository.ts          Serialized storage queue + Chrome backend
   background/index.ts      Authorized messages and subscriber notifications
 tests/
-  integration.test.ts       Existing navbar/panel regressions
+  integration.test.ts       Navbar and lifecycle regressions
   foundations.test.ts       Business logic, lifecycle, fixtures, serialization
   background.test.ts        Real worker module with mocked Chrome boundary
   fixtures/                Explicitly synthetic contract markup and records
@@ -74,7 +76,11 @@ Cache snapshots are scoped to observed source pages. They accumulate known cours
 
 The enabled parser observes the verified `#target` container and reads all groups in `#tabs-elements`. It maps columns by actual headings so DataTables-hidden columns do not shift fields. Unix `data-order` seconds are authoritative. The visible dates provide raw labels and Central timezone context; a text fallback accepts only valid full English CDT/CST dates. Accessible `Completed status` and `Grade` labels avoid double-reading decorative icons/visible numbers. Empty DataTables placeholder rows are not assignments. Processing indicators with active display prevent an observed-course marker until loading ends. DOM refreshes with unchanged extracted data do not write the cache again.
 
-`scannedCourseIds` marks recognized table observations; it is optional for old snapshots. A detected heading without a table is a known unscanned course. Legacy snapshots without this evidence do not imply a successful scan. The panel labels these states and warns that other courses have not been scanned; no full course inventory is inferred. Automatic cache notifications update an open panel without recollecting tables. Its manual Refresh explicitly awaits the current page read before rendering, and unsubscribes when closed.
+`scannedCourseIds` marks recognized table observations; it is optional for old snapshots. A detected heading without a table is a known unscanned course. Legacy snapshots without this evidence do not imply a successful scan. The inline section's coverage disclosure labels these states and explains that other courses have not been scanned; no full course inventory is inferred. Cache notifications update the section without recollecting tables. Refresh awaits the existing page collector before rendering. Subscriptions and nodes are disposed when the verified page root/route is replaced.
+
+Presentation is independent of collection. A dedicated placement adapter requires the supplied `#target` course heading and direct `#panel-tabs`/`#info-tab-data` children. The new section is inserted before the tabs; original nodes are not moved or restyled. It uses inherited typography, a restrained teal accent matching Quest's tabs, and Shadow-DOM-scoped styles. Four-row pagination prevents a giant list. Default scope is this course, default view is incomplete work; users can switch to all visited courses or completed work. No grades/raw record dumps appear in the To Do section. Unknown completion/deadlines remain explicit.
+
+The student homepage has no placement adapter because its HTML is still unknown. The navbar shortcut is disabled where no verified inline section exists. It does not create an overlay fallback. See the integration checklist for the required homepage samples.
 
 Records and messages are runtime-validated. Unknown record fields are rejected, preventing accidental persistence/export of response fields or arbitrary adapter payloads. Course/assignment/question references must agree. Historical study records require `kind: homework` and explicit `historical: true`. The model has answer/solution availability and source URLs, not answer/solution text or submitted response values.
 
@@ -89,10 +95,10 @@ Records and messages are runtime-validated. Unknown record fields are rejected, 
 
 Assignment and question adapters use synchronous DOM reads at present. Asynchronous PDF/history work can use the `PageContext.signal` contract; never apply a late result after cancellation. Study collection remains explicitly user-triggered through `StudyService.collect`; it is not part of automatic page refresh. PDF controls remain disabled until a real `PdfBridge` declares support and passes integration tests.
 
-Theme scopes only set `--bq-*` custom properties on explicit component roots. They reject `body`/`documentElement`, avoid global CSS/filters, and restore overwritten custom properties on disposal. The existing navbar/button/panel styling is unchanged. A future verified component stylesheet must consume the tokens before Quest dark mode has any visual effect.
+Theme scopes only set `--bq-*` custom properties on explicit component roots. They reject `body`/`documentElement`, avoid global CSS/filters, and restore overwritten custom properties on disposal. A future verified component stylesheet must consume the tokens before Quest dark mode has any visual effect.
 
 ## Validation boundary
 
-Tests exercise the supplied real assignment fragment, storage/repository behavior, the real worker handler with mocked Chrome APIs, feature lifecycle, optional bookmark controls, PDF capability contracts, JSON downloads, and theme scopes. They do not authenticate, scrape, or contact Quest. Synthetic model data exists only in tests; it is never imported into the extension UI. The parser leaves original table/form markup unchanged. Live Chrome persistence, actual rendering, and additional page layouts should still be tested in your authenticated session.
+Existing regression sources were updated for the new inline presentation, but no tests were run for this redesign per the user's instruction. Earlier parser/storage validation does not establish that this UI has been tested. Synthetic model data exists only in test fixtures and is never imported into the extension UI. Live rendering and additional page layouts still need checking in the authenticated Chrome session.
 
 The JSON Schema describes the portable export shape. Runtime validators additionally enforce stable identities, parent references, historical eligibility, and accurate extraction counts. Exported text is plain text; math/diagrams require future explicit representations. No empty prompt is represented as successfully extracted. Source URLs and collection timestamps remain in `sources` even when prompt text is unavailable.

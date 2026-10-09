@@ -6,7 +6,8 @@ import { assignmentAdapter, readAssignments, readDeadline } from '../src/adapter
 import { startPageFeatures } from '../src/content/features';
 import { startIntegration } from '../src/content/integration';
 import { AssignmentTracker } from '../src/features/assignments/tracker';
-import { assignmentPanelData, createAssignmentPanel } from '../src/features/assignments/panel';
+import { assignmentPanelData } from '../src/features/assignments/view-model';
+import { createAssignmentSection } from '../src/features/assignments/section';
 import { LocalRepository } from '../src/storage/repository';
 import { emptyState, type AssignmentSnapshot, type LocalState } from '../src/shared/models';
 import { isSnapshot } from '../src/shared/validation';
@@ -191,49 +192,57 @@ test('visited courses aggregate persistently and rescans deduplicate by stable a
   } finally { first.window.close(); second.window.close(); }
 });
 
-test('existing panel displays real cached rows by deadline, grades, coverage, and live updates', async () => {
+test('inline section defaults to incomplete work, separates completed work, and updates locally', async () => {
   const dom = page(); const f = store(); const tracker = new AssignmentTracker(f.run);
   await tracker.cache(snapshot(dom));
-  const host = dom.window.document.createElement('div'); host.dataset.betterquest = 'panel';
-  const shadow = host.attachShadow({ mode: 'open' }); const body = dom.window.document.createElement('div'); shadow.append(body); dom.window.document.body.append(host);
-  const view = createAssignmentPanel(body, f.run, f.subscribe);
+  const root = dom.window.document.querySelector('#target')!;
+  const view = createAssignmentSection(root, f.run, f.subscribe);
+  const host = root.querySelector<HTMLElement>('[data-betterquest="assignment-section"]')!;
+  const body = host.shadowRoot!;
   try {
-    view.open(); await pause();
-    assert.equal(body.querySelectorAll('.bq-assignments li').length, 10);
-    assert.deepEqual([...body.querySelectorAll('.bq-assignments a')].slice(0, 3).map(a => a.textContent), ['Section 10.1', 'Section 10.2', 'Section 10.3']);
-    assert.match(body.textContent!, /Other courses are not yet scanned/);
-    assert.match(body.textContent!, /not a full account sync/);
-    assert.match(body.textContent!, /Not completed · Grade: Not available/);
-    const data = snapshot(dom); data.assignments[0].grade = { percent: 88, label: '88 percent' };
-    await tracker.cache(data); await pause(); assert.match(body.textContent!, /Grade: 88%/);
-    view.pause(); assert.equal(f.listeners.size, 0); view.open(); await pause(); assert.equal(f.listeners.size, 1);
-    assert.equal(host.querySelector('style'), null); // All panel styles stay inside its shadow root.
+    await view.refresh(snapshot(dom).courses[0]);
+    assert.equal(body.querySelectorAll('.row').length, 1);
+    assert.match(body.querySelector('.row a')!.textContent!, /Section 12.5/);
+    assert.match(body.querySelector('.coverage p')!.textContent!, /Other courses are not yet scanned/);
+    assert.equal(host.nextElementSibling?.id, 'panel-tabs');
+    const completed = body.querySelectorAll<HTMLButtonElement>('.filters button')[1];
+    completed.click(); assert.equal(body.querySelectorAll('.row').length, 4);
+    const data = snapshot(dom); data.assignments.at(-1)!.completion = 'completed';
+    await tracker.cache(data); await pause();
+    assert.equal(completed.textContent, 'Completed (10)');
+    assert.equal(f.listeners.size, 1);
+    assert.equal(host.querySelector('style'), null);
   } finally { view.dispose(); dom.window.close(); }
 });
 
-test('unknown deadlines sort last; panel errors are visible and do not mutate state', async () => {
+test('unknown deadlines sort last; inline errors are visible and do not mutate state', async () => {
   const dom = page(); const f = store(); const data = snapshot(dom);
   data.assignments[0].deadline.iso = null; await new AssignmentTracker(f.run).cache(data);
   assert.equal(assignmentPanelData((await f.run({ kind: 'state:read' })).cache).assignments.at(-1)?.title, 'Section 10.1');
-  const container = dom.window.document.createElement('div');
-  const view = createAssignmentPanel(container, async () => { throw new Error('Storage fixture failed'); }, () => () => {});
-  try { view.open(); await pause(); assert.equal(container.querySelector('[role="alert"]')?.textContent, 'Storage fixture failed'); }
+  const root = dom.window.document.querySelector('#target')!;
+  const view = createAssignmentSection(root, async () => { throw new Error('Storage fixture failed'); }, () => () => {});
+  try {
+    await view.refresh(data.courses[0]);
+    assert.equal(root.querySelector('[data-betterquest="assignment-section"]')!.shadowRoot!.querySelector('[role="alert"]')?.textContent, 'Storage fixture failed');
+  }
   finally { view.dispose(); dom.window.close(); }
 });
 
-test('full integration retains navbar/panel close behavior and leaves Quest target unchanged', async () => {
+test('full integration mounts automatically, navbar focuses it, and original Quest content is preserved', async () => {
   const dom = page(); const f = store();
   const original = dom.window.document.querySelector('#target')!.outerHTML;
   const integration = startIntegration(dom.window.document, dom.window as unknown as Window, { run: f.run, subscribe: f.subscribe });
   try {
     await pause();
     const button = dom.window.document.querySelector('[data-betterquest="navigation"]')!.shadowRoot!.querySelector<HTMLButtonElement>('button')!;
-    button.click(); await pause();
-    const panel = dom.window.document.querySelector<HTMLElement>('[data-betterquest="panel"]')!;
-    assert.equal(panel.shadowRoot!.querySelectorAll('.bq-assignments li').length, 10);
-    panel.shadowRoot!.querySelector<HTMLButtonElement>('header button')!.click();
-    assert.equal(panel.hidden, true); assert.equal(f.listeners.size, 0);
-    assert.equal(dom.window.document.querySelector('#target')!.outerHTML, original);
+    const section = dom.window.document.querySelector<HTMLElement>('[data-betterquest="assignment-section"]')!;
+    assert.equal(section.shadowRoot!.querySelectorAll('.row').length, 1);
+    button.click();
+    assert.equal(section.shadowRoot!.activeElement, section.shadowRoot!.querySelector('h2'));
+    assert.equal(dom.window.document.querySelector('[data-betterquest="panel"]'), null);
+    const targetCopy = dom.window.document.querySelector('#target')!.cloneNode(true) as Element;
+    targetCopy.querySelector('[data-betterquest="assignment-section"]')!.remove();
+    assert.equal(targetCopy.outerHTML, original);
     assert.equal(dom.window.document.querySelectorAll('[data-betterquest="navigation"]').length, 1);
   } finally { integration.dispose(); dom.window.close(); }
 });
@@ -252,18 +261,19 @@ test('legacy records without optional scan/grade fields remain readable and do n
   } finally { dom.window.close(); }
 });
 
-test('manual panel refresh awaits page collection even without live notifications', async () => {
+test('manual inline refresh awaits page collection even without live notifications', async () => {
   const dom = page(); const f = store(); const tracker = new AssignmentTracker(f.run);
   await tracker.cache(snapshot(dom));
-  const body = dom.window.document.createElement('div');
-  const view = createAssignmentPanel(body, f.run, () => () => {}, async () => {
+  const root = dom.window.document.querySelector('#target')!;
+  const view = createAssignmentSection(root, f.run, () => () => {}, async () => {
     await new Promise(resolve => setTimeout(resolve, 30));
     await tracker.cache(snapshot(dom));
   });
   try {
-    view.open(); await pause();
-    dom.window.document.querySelector('#instances-table-eh3769540 tbody tr:first-child td:nth-child(6) .sr-only')!.textContent = 'Grade: 77 percent';
-    body.querySelector<HTMLButtonElement>('button')!.click(); await pause();
-    assert.match(body.textContent!, /Grade: 77%/);
+    await view.refresh(snapshot(dom).courses[0]);
+    const body = root.querySelector('[data-betterquest="assignment-section"]')!.shadowRoot!;
+    dom.window.document.querySelector('#instances-table-eh3769540 tbody tr:last-child a')!.textContent = 'Updated assignment';
+    body.querySelector<HTMLButtonElement>('.refresh')!.click(); await pause();
+    assert.match(body.querySelector('.row a')!.textContent!, /Updated assignment/);
   } finally { view.dispose(); dom.window.close(); }
 });

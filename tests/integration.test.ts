@@ -30,7 +30,7 @@ test('single selector: missing navigation is a no-op, without fallback injection
   } finally { f.cleanup(); }
 });
 
-test('one button between breadcrumbs and nav; assignment panel opens, closes, and restores focus', () => {
+test('one button between breadcrumbs and nav; unverified pages do not open an assignment overlay', () => {
   const f = setup();
   try {
     const breadcrumbs = f.document.querySelector('.qh-breadcrumbs')!;
@@ -44,14 +44,10 @@ test('one button between breadcrumbs and nav; assignment panel opens, closes, an
     f.integration.reconcile();
     assert.equal(f.document.querySelectorAll('[data-betterquest="navigation"]').length, 1);
     f.button()!.click();
-    const p = f.panel()!;
-    assert.equal(p.hidden, false);
-    assert.equal(p.shadowRoot!.querySelector('.body h3')!.textContent, 'Assignments');
-    assert.equal(f.button()!.getAttribute('aria-expanded'), 'true');
-    p.shadowRoot!.querySelector<HTMLButtonElement>('button')!.click();
-    assert.equal(p.hidden, true);
-    assert.equal(f.button()!.getAttribute('aria-expanded'), 'false');
-    assert.equal(f.root()?.activeElement, f.button());
+    assert.equal(f.panel(), null);
+    assert.equal(f.button()!.disabled, true);
+    assert.equal(f.button()!.hasAttribute('aria-haspopup'), false);
+    assert.equal(f.button()!.hasAttribute('aria-expanded'), false);
     assert.equal(f.document.querySelector('input')?.value, 'unchanged');
     assert.equal(f.document.querySelector('main')?.hasAttribute('style'), false);
     assert.equal(f.document.querySelector('style'), null);
@@ -78,7 +74,7 @@ test('DOM replacement and late navigation insertion remount exactly one button',
   } finally { f.cleanup(); }
 });
 
-test('nav-list rerender repositions the existing button without duplicates or losing the panel', async () => {
+test('nav-list rerender repositions the existing button without duplicates or an overlay', async () => {
   const f = setup();
   try {
     const originalButton = f.navigation();
@@ -87,7 +83,7 @@ test('nav-list rerender repositions the existing button without duplicates or lo
     await pause();
     assert.equal(f.navigation(), originalButton);
     assert.equal(f.navigation()?.nextElementSibling, f.document.querySelector('.qh-nav'));
-    assert.equal(f.panel()?.hidden, false);
+    assert.equal(f.panel(), null);
     assert.equal(f.document.querySelectorAll('[data-betterquest="navigation"]').length, 1);
   } finally { f.cleanup(); }
 });
@@ -117,14 +113,14 @@ test('reinjection cleans stale hosts; lifecycle disposal removes nodes and liste
   } finally { next?.dispose(); f.cleanup(); }
 });
 
-test('route changes close the panel and leaving student scope removes integration', async () => {
+test('student route changes retain one navbar button and leaving scope removes integration', async () => {
   const f = setup();
   try {
     f.button()!.click();
     f.dom.window.history.pushState({}, '', '/student/course');
     f.dom.window.dispatchEvent(new f.dom.window.PopStateEvent('popstate'));
     await pause();
-    assert.equal(f.panel()?.hidden, true);
+    assert.equal(f.panel(), null);
     assert.equal(f.document.querySelectorAll('[data-betterquest="navigation"]').length, 1);
     f.dom.window.history.pushState({}, '', '/instructor/');
     f.dom.window.dispatchEvent(new f.dom.window.PopStateEvent('popstate'));
@@ -133,16 +129,13 @@ test('route changes close the panel and leaving student scope removes integratio
   } finally { f.cleanup(); }
 });
 
-test('escape closes only the BetterQuest panel, not page-level dialogs', () => {
+test('navbar no longer creates a floating panel or handles page-level Escape', () => {
   const f = setup();
   try {
     f.button()!.click();
     f.document.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    assert.equal(f.panel()?.hidden, false);
-    f.panel()!.shadowRoot!.querySelector('button')!.dispatchEvent(
-      new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-    );
-    assert.equal(f.panel()?.hidden, true);
+    assert.equal(f.panel(), null);
+    assert.equal(f.document.querySelectorAll('[data-betterquest="navigation"]').length, 1);
   } finally { f.cleanup(); }
 });
 

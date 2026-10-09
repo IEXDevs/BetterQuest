@@ -70,7 +70,7 @@ function groupFor(root: Element, table: Element): NonNullable<Assignment['group'
   return { id, label: clean(title?.textContent) || null };
 }
 
-function parseCourse(root: Element, context: PageContext): Course | null {
+export function readCourseIdentity(root: Element, context: PageContext): Course | null {
   const title = clean(root.querySelector(ASSIGNMENT_SELECTORS.title)?.textContent);
   const unique = title.match(/\((\d+)\)\s*$/)?.[1];
   if (!unique) return null;
@@ -83,7 +83,7 @@ function parseCourse(root: Element, context: PageContext): Course | null {
 
 export function parseAssignmentPage(root: Element, context: PageContext): Extraction<AssignmentSnapshot> {
   if (context.signal.aborted) return { status: 'unavailable', reason: 'Assignment collection cancelled.' };
-  const course = parseCourse(root, context);
+  const course = readCourseIdentity(root, context);
   if (!course) return { status: 'unavailable', reason: 'Verified course title/unique number is missing.' };
   const assignments = new Map<string, Assignment>();
   const tab = root.querySelector(ASSIGNMENT_SELECTORS.tab);

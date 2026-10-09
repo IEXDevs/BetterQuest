@@ -1,4 +1,6 @@
-import { assignmentAdapter } from '../adapters/quest/assignments';
+import { assignmentAdapter, readCourseIdentity } from '../adapters/quest/assignments';
+import { findAssignmentSectionSlot } from '../adapters/quest/assignment-placement';
+import { createAssignmentSection, type Subscribe } from '../features/assignments/section';
 import { questionAdapter } from '../adapters/quest/questions';
 import { pdfAdapter } from '../adapters/quest/pdf';
 import { themeAdapter } from '../adapters/quest/theme';
@@ -11,8 +13,9 @@ import { createThemeScope } from '../features/theme/tokens';
 import { execute, subscribeLocal, type Execute } from '../shared/client';
 
 /** Composition point: null adapters create no controls, observers, RPCs, or CSS. */
-export function startPageFeatures(document: Document, window: Window, run: Execute = execute) {
+export function startPageFeatures(document: Document, window: Window, run: Execute = execute, subscribe: Subscribe = subscribeLocal) {
   const definitions: FeatureDefinition[] = [];
+  let assignmentSection: ReturnType<typeof createAssignmentSection> | undefined;
   if (assignmentAdapter) {
     const adapter = assignmentAdapter;
     const tracker = new AssignmentTracker(run);
@@ -35,6 +38,21 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       },
     });
   }
+  definitions.push({
+    name: 'assignment-section',
+    locate: doc => findAssignmentSectionSlot(doc)?.root || null,
+    mount: root => {
+      const section = createAssignmentSection(root, run, subscribe, () => refreshAssignments());
+      assignmentSection = section;
+      return {
+        refresh: async context => {
+          const course = readCourseIdentity(root, context);
+          if (course && !context.signal.aborted) await section.refresh(course);
+        },
+        dispose: () => { section.dispose(); if (assignmentSection === section) assignmentSection = undefined; },
+      };
+    },
+  });
   if (questionAdapter) {
     const adapter = questionAdapter;
     definitions.push({ name: 'bookmarks', locate: doc => adapter.locate(doc), mount: root => {
@@ -95,7 +113,10 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
   // Never re-collect assignments in response to the cache write itself.
   const needsChanges = definitions.some(definition => ['bookmarks', 'theme'].includes(definition.name));
   const unsubscribe = needsChanges ? subscribeLocal(() => runtime.refresh(['bookmarks', 'theme'])) : () => {};
-  return { reconcile: runtime.reconcile, refreshAssignments, dispose: () => {
+  return { reconcile: runtime.reconcile, refreshAssignments,
+    focusAssignments: () => assignmentSection?.focus() || false,
+    hasAssignmentSection: () => assignmentSection?.isConnected() || false,
+    dispose: () => {
     manualAbort.abort();
     unsubscribe(); runtime.dispose();
   } };

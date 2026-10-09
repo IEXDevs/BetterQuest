@@ -4,7 +4,7 @@ The navbar and course assignment fragment have been supplied and integrated. Ass
 
 ## Implement first: assignment tracker
 
-The tracker is now enabled. The supplied course heading, assignment rows/groups, machine timestamps, completion/grade labels, and instance links are implemented. The panel aggregates observed courses without changing homework inputs. Remaining verification below includes the account course list and internal course/term mapping; the supplied fragment alone cannot prove full course coverage.
+The tracker is enabled. The supplied course heading, assignment rows/groups, machine timestamps, completion/grade labels, and instance links are reused unchanged. Its compact section now appears automatically inside the course page, before the existing tabs, with To Do/completed views and this-course/all-visited scope. Remaining verification includes the homepage/course list and internal course/term mapping; the supplied fragment alone cannot prove full course coverage. The redesigned UI has not had tests run, per request.
 
 - [ ] Homepage course-list root and one course card/row, including its source ID and exact course URL.
 - [ ] Course identity on an assignment page, including IDs and links in the existing breadcrumb/heading.
@@ -14,8 +14,22 @@ The tracker is now enabled. The supplied course heading, assignment rows/groups,
 - [x] Completion checkmark and accessible Completed/Not completed labels, separate from grades. No inference about partial progress or exhausted tries.
 - [ ] Homework versus exam/quiz/learning-module classification and any timer/proctoring markers. Unknown classifications must stay unknown.
 - [x] Multiple/collapsed groups, delayed tables, processing indicators, and DOM rerenders covered in fixture tests. Actual pagination/additional layouts still need inspection. A visited-page cache is not complete account coverage.
-- [ ] A safe existing homepage/course slot for a compact upcoming-work summary; do not introduce a standalone dashboard.
+- [x] Course-page slot: insert before `#target > #panel-tabs`, below the existing course information card. Native tabs and tables are preserved.
+- [ ] Verified student-homepage placement (requirements below).
 - [ ] Verify the populated tracker cache on two courses, unknown metadata handling, chronological ordering, freshness, and refresh without submitting anything.
+
+## Student homepage placement still needed
+
+Supply sanitized HTML from the **student homepage**, not a course page:
+
+- [ ] The main content wrapper and its direct children, including the page heading and any welcome/announcements area.
+- [ ] The existing course-list/card/table wrapper, including the exact insertion location where a compact upcoming-work section should sit.
+- [ ] One complete course entry and link, including course unique/internal ID and semester/term evidence, with personal information removed.
+- [ ] Existing To Do, announcements, or upcoming-work markup, if any, so the extension can complement rather than duplicate it.
+- [ ] Loading placeholders, empty states, and pagination/collapsed group markup; indicate which container is replaced during async navigation.
+- [ ] Relevant layout classes and surrounding grid/columns. A screenshot alone cannot verify selectors or a safe parent/sibling relationship.
+
+Until this is supplied, BetterQuest mounts only at the verified course-page slot. It does not choose a generic homepage `main`/`body`/navbar fallback or invent a list of unvisited courses.
 
 ## Question bookmarking
 
@@ -60,7 +74,8 @@ The tracker is now enabled. The supplied course heading, assignment rows/groups,
 
 ## Shared release checks
 
-- [ ] Reload the extension and verify the existing blue navbar button and closeable assignment panel still work.
+- [ ] Reload the extension: confirm the inline section appears automatically, the navbar button jumps to it, and no assignment overlay appears.
+- [ ] Check To Do/completed filters, this-course/all-visited scope, pagination, deadline/status labels, and coverage on the real course page.
 - [ ] Accept only the `storage` permission addition; matching is still Quest student pages only.
 - [ ] Configure and test one adapter at a time. Missing integration points must disable just that feature.
 - [ ] Verify persistence in Chrome, multiple-tab updates, worker restart, and error handling with no external services.
