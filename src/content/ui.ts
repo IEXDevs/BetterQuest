@@ -48,6 +48,7 @@ export function createNavigationButton(document: Document, list: boolean, onOpen
 
 export interface Panel {
   host: HTMLElement;
+  body: HTMLElement;
   open: () => void;
   close: (restoreFocus?: boolean) => void;
   isOpen: () => boolean;
@@ -77,7 +78,7 @@ export function createPanel(document: Document, onClose: (restoreFocus: boolean)
     button:hover { background: #eff5ff; color: #2563eb; }
     button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
     svg { width: 16px; height: 16px; }
-    .body { min-height: 200px; }
+    .body { min-height: 200px; max-height: min(640px, calc(100vh - 160px)); overflow-y:auto; }
     @media (max-width: 480px) { :host { inset: 80px 16px auto auto !important; } }
   `;
   const dialog = document.createElement('section');
@@ -99,6 +100,7 @@ export function createPanel(document: Document, onClose: (restoreFocus: boolean)
   root.append(style, dialog);
   return {
     host,
+    body: dialog.querySelector<HTMLElement>('.body')!,
     open: () => { host.hidden = false; closeButton.focus(); },
     close,
     isOpen: () => !host.hidden,

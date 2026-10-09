@@ -48,6 +48,7 @@ export function applyCommand(state: LocalState, command: Command): LocalState {
       next.cache.pages = [...next.cache.pages.filter(page => page.sourceUrl !== snapshot.sourceUrl), {
         sourceUrl: snapshot.sourceUrl, observedAt: snapshot.observedAt,
         courseIds: snapshot.courses.map(c => c.id), assignmentIds: snapshot.assignments.map(a => a.id),
+        ...(snapshot.scannedCourseIds === undefined ? {} : { scannedCourseIds: snapshot.scannedCourseIds }),
       }];
       break;
     }

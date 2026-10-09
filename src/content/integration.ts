@@ -2,20 +2,24 @@ import { findNavigation } from './navigation';
 import { createNavigationButton, createPanel } from './ui';
 import { isStudentPage } from '../shared/messages';
 import { startPageFeatures } from './features';
+import { createAssignmentPanel, type Subscribe } from '../features/assignments/panel';
+import { execute, subscribeLocal, type Execute } from '../shared/client';
 
 export interface Integration { reconcile: () => void; dispose: () => void }
 
 /** One controller owns all injected nodes and listeners for this document. */
-export function startIntegration(document: Document, window: Window): Integration {
+export function startIntegration(document: Document, window: Window, options: { run?: Execute; subscribe?: Subscribe } = {}): Integration {
   let disposed = false;
   let scheduled: number | null = null;
   let lastUrl = window.location.href;
   let navigation: ReturnType<typeof createNavigationButton> | null = null;
-  const features = startPageFeatures(document, window);
+  const features = startPageFeatures(document, window, options.run || execute);
+  let assignmentView: ReturnType<typeof createAssignmentPanel> | undefined;
 
   // Remove orphaned hosts from a previous injection, without touching Quest nodes.
   document.querySelectorAll('[data-betterquest="navigation"], [data-betterquest="panel"]').forEach(node => node.remove());
   const panel = createPanel(document, restoreFocus => {
+    assignmentView?.pause();
     navigation?.button.setAttribute('aria-expanded', 'false');
     if (restoreFocus && navigation?.host.isConnected) navigation.button.focus();
   });
@@ -41,6 +45,8 @@ export function startIntegration(document: Document, window: Window): Integratio
         if (!panel.host.isConnected) document.body.append(panel.host);
         navigation?.button.setAttribute('aria-expanded', 'true');
         panel.open();
+        if (!assignmentView) assignmentView = createAssignmentPanel(panel.body, options.run || execute, options.subscribe || subscribeLocal, features.refreshAssignments);
+        assignmentView.open();
       });
       navigation.button.setAttribute('aria-expanded', String(panel.isOpen()));
     }
@@ -84,6 +90,7 @@ export function startIntegration(document: Document, window: Window): Integratio
       disposed = true;
       observer.disconnect();
       features.dispose();
+      assignmentView?.dispose();
       if (scheduled !== null) window.clearTimeout(scheduled);
       window.removeEventListener('popstate', schedule);
       window.removeEventListener('hashchange', schedule);

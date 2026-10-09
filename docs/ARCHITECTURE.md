@@ -1,12 +1,12 @@
 # V1 foundations
 
-The existing navbar integration and empty non-modal panel are retained. There is no new popup, dashboard, assignment view, PDF viewer, or automatic Quest theming. The feature modules are foundations for adding small controls on the relevant Quest pages later.
+The existing navbar integration and non-modal panel are retained. The panel now holds a simple read-only assignment list. There is no new popup, standalone dashboard, PDF viewer, or automatic Quest theming. Other feature modules remain foundations for adding relevant page controls later.
 
 ## Implemented versus disabled
 
 | Feature | Working infrastructure | Awaiting inspected Quest DOM |
 | --- | --- | --- |
-| Assignments | Course/assignment models; timestamp/raw-label/timezone deadlines; explicit completion states; multi-course local cache; page freshness and refresh invalidation; protection against late snapshots | Course discovery, assignment rows/links/IDs, date interpretation, completion markers, existing homepage/course insertion slots |
+| Assignments | Supplied-HTML parser for all course assignment groups; machine timestamps/strict CDT/CST fallback; explicit completion and grades; multi-course cache; simple deadline-sorted panel; scan coverage and manual refresh | Full course-list discovery, internal course/term IDs, semester rollover, additional layouts and live Chrome testing |
 | Bookmarks | Stable source-based identities; persistent add/update/remove/list/group; native-anchor/source URL navigation; idempotent scoped bookmark controls | Question identities and safe control slots, HTML/slide/PDF mode differences, assessment exclusion evidence |
 | PDF | Detection adapter contract; capability-gated navigation/zoom/view intent dispatcher; bridge disposal; original-source URLs | Actual link/embed markup, safe controls slot, verified bridge to the document renderer. No controls or replacements are enabled |
 | Study export | Historical-homework validation; explicit save/collect API; JSON export builder/serializer/download; schema; source provenance; extracted/not-extracted counts; answer/solution **availability metadata** | Historical homework eligibility, visible prompt/math/diagram representation, released answer/solution links, existing export insertion slot |
@@ -18,11 +18,11 @@ The existing navbar integration and empty non-modal panel are retained. There is
 src/
   content/
     navigation.ts          Existing authenticated navbar selector/placement
-    ui.ts                  Existing navbar button and empty panel
+    ui.ts                  Existing navbar button and panel shell
     integration.ts         Existing navigation lifecycle + feature-host hooks
-    features.ts            Optional adapter composition; all disabled by default
+    features.ts            Assignment collection; other adapters disabled
   adapters/quest/
-    assignments.ts         Assignment root/read boundary (null until inspected)
+    assignments.ts         Verified #target/#tabs-elements assignment parser
     questions.ts           Question bindings/control slots (null until inspected)
     pdf.ts                 PDF source/document boundary (null until inspected)
     history.ts             Accessible historical homework boundary (null)
@@ -30,6 +30,7 @@ src/
   features/
     lifecycle.ts           Scoped observers, root replacement, abort/dispose
     assignments/tracker.ts Cache, freshness, refresh orchestration
+    assignments/panel.ts   Read-only list and honest course coverage
     bookmarks/service.ts   Bookmark CRUD/filter/group/source navigation
     bookmarks/controls.ts  Optional Shadow-DOM controls in verified slots
     pdf/controller.ts      Verified bridge capabilities and operation bounds
@@ -53,6 +54,7 @@ tests/
   foundations.test.ts       Business logic, lifecycle, fixtures, serialization
   background.test.ts        Real worker module with mocked Chrome boundary
   fixtures/                Explicitly synthetic contract markup and records
+    quest-assignments.html  Supplied Quest fragment, contact details redacted
 docs/
   study-export.schema.json  Portable JSON Schema, draft 2020-12
   INTEGRATION_CHECKLIST.md   Authenticated inspection needed before enabling
@@ -66,9 +68,13 @@ All data lives in `chrome.storage.local` under `betterquest.local.v1`. The servi
 
 The state schema is versioned, but only version 1 is supported; a future migration must be explicit and tested. There is no import, reset, student-account identification, or cross-device sync workflow yet. Different Quest users in one Chrome profile would share extension-local data; use separate profiles for now.
 
-IDs are constructed from **verified Quest source identifiers**, namespaced by their parent course/assignment. Titles, question positions, and displayed question numbers are not identities. Missing IDs disable the relevant collection/control. Unknown metadata remains unknown: an unparsed due label is kept with `iso: null`; an unknown completion status does not become completed because a grade exists.
+IDs are constructed from **verified Quest source identifiers**, namespaced by their parent course/assignment. The assignment parser uses the course heading's unique number and the linked `courseuserassignment_…` instance value. Internal course IDs/term mapping are not present in this fragment and still need inspection. Titles, question positions, and displayed question numbers are not identities. Missing IDs disable the relevant collection/control. Unknown metadata remains unknown: an unparsed due label is kept with `iso: null`; a grade does not imply completion. Optional grade, start-date, group, completion-label, and observed-course fields preserve compatibility with earlier stored records.
 
 Cache snapshots are scoped to observed source pages. They accumulate known courses/assignments instead of pretending to represent an entire account. Refresh requests invalidate freshness; they do not fetch unseen courses. Newer observations win over late asynchronous snapshots. Omitted assignments remain cached until a future explicit stale-record/removal policy is implemented.
+
+The enabled parser observes the verified `#target` container and reads all groups in `#tabs-elements`. It maps columns by actual headings so DataTables-hidden columns do not shift fields. Unix `data-order` seconds are authoritative. The visible dates provide raw labels and Central timezone context; a text fallback accepts only valid full English CDT/CST dates. Accessible `Completed status` and `Grade` labels avoid double-reading decorative icons/visible numbers. Empty DataTables placeholder rows are not assignments. Processing indicators with active display prevent an observed-course marker until loading ends. DOM refreshes with unchanged extracted data do not write the cache again.
+
+`scannedCourseIds` marks recognized table observations; it is optional for old snapshots. A detected heading without a table is a known unscanned course. Legacy snapshots without this evidence do not imply a successful scan. The panel labels these states and warns that other courses have not been scanned; no full course inventory is inferred. Automatic cache notifications update an open panel without recollecting tables. Its manual Refresh explicitly awaits the current page read before rendering, and unsubscribes when closed.
 
 Records and messages are runtime-validated. Unknown record fields are rejected, preventing accidental persistence/export of response fields or arbitrary adapter payloads. Course/assignment/question references must agree. Historical study records require `kind: homework` and explicit `historical: true`. The model has answer/solution availability and source URLs, not answer/solution text or submitted response values.
 
@@ -87,6 +93,6 @@ Theme scopes only set `--bq-*` custom properties on explicit component roots. Th
 
 ## Validation boundary
 
-Tests exercise storage/repository behavior, the real worker handler with mocked Chrome APIs, feature lifecycle, explicit fixture adapters, optional bookmark controls, PDF capability contracts, JSON downloads, and theme scopes. They do not authenticate, scrape, or contact Quest. Synthetic model data exists only in tests; it is never imported into the extension UI. Live Chrome persistence and actual DOM integration should be tested in your authenticated session after each adapter is configured.
+Tests exercise the supplied real assignment fragment, storage/repository behavior, the real worker handler with mocked Chrome APIs, feature lifecycle, optional bookmark controls, PDF capability contracts, JSON downloads, and theme scopes. They do not authenticate, scrape, or contact Quest. Synthetic model data exists only in tests; it is never imported into the extension UI. The parser leaves original table/form markup unchanged. Live Chrome persistence, actual rendering, and additional page layouts should still be tested in your authenticated session.
 
 The JSON Schema describes the portable export shape. Runtime validators additionally enforce stable identities, parent references, historical eligibility, and accurate extraction counts. Exported text is plain text; math/diagrams require future explicit representations. No empty prompt is represented as successfully extracted. Source URLs and collection timestamps remain in `sources` even when prompt text is unavailable.

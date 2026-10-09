@@ -105,8 +105,9 @@ test('refresh invalidation has real freshness semantics and does not fetch unsee
 test('unset DOM adapters explicitly report unsupported and collect nothing', async () => {
   const dom = page(); const f = repository(); const tracker = new AssignmentTracker(command => f.repo.execute(command));
   try {
-    for (const read of [readAssignments, readQuestions, readDocuments, readHistory]) assert.equal(read(dom.window.document, context()).status, 'unsupported');
-    assert.equal((await tracker.refreshPage(dom.window.document, context())).status, 'unsupported');
+    for (const read of [readQuestions, readDocuments, readHistory]) assert.equal(read(dom.window.document, context()).status, 'unsupported');
+    assert.equal(readAssignments(dom.window.document, context(), null).status, 'unsupported');
+    assert.equal((await tracker.refreshPage(dom.window.document, context())).status, 'unavailable');
     assert.equal(f.writes(), 0);
   } finally { dom.window.close(); }
 });

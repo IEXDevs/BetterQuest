@@ -38,7 +38,11 @@
       "properties": {
         "id": { "type": "string" }, "sourceId": { "type": "string", "minLength": 1, "maxLength": 2000 }, "courseId": { "type": "string" },
         "title": { "type": "string", "maxLength": 500 }, "url": { "$ref": "#/$defs/url" }, "deadline": { "$ref": "#/$defs/deadline" },
-        "completion": { "enum": ["unknown", "not-started", "in-progress", "completed"] }, "kind": { "const": "homework" }, "historical": { "const": true }
+        "completion": { "enum": ["unknown", "not-started", "not-completed", "in-progress", "completed"] }, "kind": { "const": "homework" }, "historical": { "const": true },
+        "grade": { "type": "object", "additionalProperties": false, "required": ["percent", "label"], "properties": { "percent": { "type": ["number", "null"] }, "label": { "type": ["string", "null"], "maxLength": 500 } } },
+        "start": { "$ref": "#/$defs/deadline" },
+        "group": { "type": "object", "additionalProperties": false, "required": ["id", "label"], "properties": { "id": { "type": "string", "maxLength": 2000 }, "label": { "type": ["string", "null"], "maxLength": 500 } } },
+        "completionLabel": { "type": ["string", "null"], "maxLength": 500 }
       }
     },
     "material": {

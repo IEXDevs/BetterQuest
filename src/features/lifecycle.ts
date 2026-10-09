@@ -9,10 +9,11 @@ export interface FeatureDefinition {
   name: string;
   locate(document: Document): Element | null;
   mount(root: Element): MountedFeature;
+  attributeFilter?: string[];
 }
 
 /** Observes only a verified feature root; never polls or patches Quest functions. */
-export function observeScoped(root: Element, callback: () => void): () => void {
+export function observeScoped(root: Element, callback: () => void, attributeFilter?: string[]): () => void {
   const view = root.ownerDocument.defaultView!;
   let timer: number | undefined;
   const observer = new view.MutationObserver(records => {
@@ -28,7 +29,7 @@ export function observeScoped(root: Element, callback: () => void): () => void {
   });
   observer.observe(root, {
     childList: true, subtree: true, characterData: true, attributes: true,
-    attributeFilter: ['class', 'href', 'src', 'hidden', 'aria-hidden', 'datetime'],
+    attributeFilter: attributeFilter || ['class', 'href', 'src', 'hidden', 'aria-hidden', 'datetime', 'data-order'],
   });
   return () => { observer.disconnect(); if (timer !== undefined) view.clearTimeout(timer); };
 }
@@ -78,7 +79,7 @@ export function createFeatureRuntime(document: Document, definitions: FeatureDef
         try {
           const feature = definition.mount(root);
           const abort = new AbortController();
-          active.set(definition.name, { root, feature, abort, stop: observeScoped(root, () => refresh(definition.name)) });
+          active.set(definition.name, { root, feature, abort, stop: observeScoped(root, () => refresh(definition.name), definition.attributeFilter) });
           refresh(definition.name);
         } catch (error) { errors.set(definition.name, error instanceof Error ? error.message : 'Feature mount failed.'); }
       }

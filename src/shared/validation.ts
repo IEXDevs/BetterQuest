@@ -19,11 +19,15 @@ export function isCourse(value: unknown): value is Course {
 
 export function isAssignment(value: unknown): value is Assignment {
   if (!object(value) || !string(value.sourceId) || !value.sourceId.trim() || !string(value.courseId, 4000) || !object(value.deadline)) return false;
-  return only(value, ['id', 'sourceId', 'courseId', 'title', 'url', 'deadline', 'completion', 'kind', 'historical']) &&
+  return only(value, ['id', 'sourceId', 'courseId', 'title', 'url', 'deadline', 'completion', 'kind', 'historical', 'grade', 'start', 'group', 'completionLabel']) &&
     only(value.deadline, ['iso', 'label', 'timeZone']) && value.id === assignmentId(value.courseId, value.sourceId) && string(value.title, 500) && url(value.url) &&
     (value.deadline.iso === null || timestamp(value.deadline.iso)) && nullableString(value.deadline.label, 500) && nullableString(value.deadline.timeZone, 100) &&
-    typeof value.completion === 'string' && ['unknown', 'not-started', 'in-progress', 'completed'].includes(value.completion) &&
-    typeof value.kind === 'string' && ['homework', 'assessment', 'unknown'].includes(value.kind) && (value.historical === null || typeof value.historical === 'boolean');
+    typeof value.completion === 'string' && ['unknown', 'not-started', 'not-completed', 'in-progress', 'completed'].includes(value.completion) &&
+    typeof value.kind === 'string' && ['homework', 'assessment', 'unknown'].includes(value.kind) && (value.historical === null || typeof value.historical === 'boolean') &&
+    (value.grade === undefined || (object(value.grade) && only(value.grade, ['percent', 'label']) && (value.grade.percent === null || (typeof value.grade.percent === 'number' && Number.isFinite(value.grade.percent))) && nullableString(value.grade.label, 500))) &&
+    (value.start === undefined || (object(value.start) && only(value.start, ['iso', 'label', 'timeZone']) && (value.start.iso === null || timestamp(value.start.iso)) && nullableString(value.start.label, 500) && nullableString(value.start.timeZone, 100))) &&
+    (value.group === undefined || (object(value.group) && only(value.group, ['id', 'label']) && string(value.group.id) && nullableString(value.group.label, 500))) &&
+    (value.completionLabel === undefined || nullableString(value.completionLabel, 500));
 }
 
 function material(value: unknown): boolean {
@@ -46,9 +50,10 @@ export function linked(course: Course, assignment: Assignment, question?: Questi
 }
 
 export function isSnapshot(value: unknown): value is AssignmentSnapshot {
-  return object(value) && only(value, ['sourceUrl', 'observedAt', 'courses', 'assignments']) && url(value.sourceUrl) && timestamp(value.observedAt) &&
+  return object(value) && only(value, ['sourceUrl', 'observedAt', 'courses', 'assignments', 'scannedCourseIds']) && url(value.sourceUrl) && timestamp(value.observedAt) &&
     array(value.courses, isCourse) && array(value.assignments, isAssignment) && unique(value.courses) && unique(value.assignments) &&
-    value.assignments.every(assignment => (value.courses as Course[]).some(course => course.id === assignment.courseId));
+    value.assignments.every(assignment => (value.courses as Course[]).some(course => course.id === assignment.courseId)) &&
+    (value.scannedCourseIds === undefined || (array(value.scannedCourseIds, (v): v is string => string(v, 4000)) && value.scannedCourseIds.every(id => (value.courses as Course[]).some(c => c.id === id))));
 }
 
 export function isBookmark(value: unknown): value is Bookmark {
@@ -65,8 +70,9 @@ export function isStudyRecord(value: unknown): value is StudyRecord {
 }
 
 function isCachedPage(value: unknown): value is CachedPage {
-  return object(value) && only(value, ['sourceUrl', 'observedAt', 'courseIds', 'assignmentIds']) && url(value.sourceUrl) && timestamp(value.observedAt) &&
-    array(value.courseIds, (v): v is string => string(v, 4000)) && array(value.assignmentIds, (v): v is string => string(v, 6000));
+  return object(value) && only(value, ['sourceUrl', 'observedAt', 'courseIds', 'assignmentIds', 'scannedCourseIds']) && url(value.sourceUrl) && timestamp(value.observedAt) &&
+    array(value.courseIds, (v): v is string => string(v, 4000)) && array(value.assignmentIds, (v): v is string => string(v, 6000)) &&
+    (value.scannedCourseIds === undefined || (array(value.scannedCourseIds, (v): v is string => string(v, 4000)) && value.scannedCourseIds.every(id => (value.courseIds as string[]).includes(id))));
 }
 
 export function isLocalState(value: unknown): value is LocalState {

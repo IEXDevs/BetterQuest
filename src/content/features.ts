@@ -8,17 +8,32 @@ import { createBookmarkControls } from '../features/bookmarks/controls';
 import { createPdfController } from '../features/pdf/controller';
 import { ThemePreferences } from '../features/theme/preferences';
 import { createThemeScope } from '../features/theme/tokens';
-import { subscribeLocal } from '../shared/client';
+import { execute, subscribeLocal, type Execute } from '../shared/client';
 
 /** Composition point: null adapters create no controls, observers, RPCs, or CSS. */
-export function startPageFeatures(document: Document, window: Window) {
+export function startPageFeatures(document: Document, window: Window, run: Execute = execute) {
   const definitions: FeatureDefinition[] = [];
   if (assignmentAdapter) {
     const adapter = assignmentAdapter;
-    const tracker = new AssignmentTracker();
-    definitions.push({ name: 'assignments', locate: doc => adapter.locate(doc), mount: () => ({
-      refresh: async context => { await tracker.refreshPage(document, context, adapter); }, dispose() {},
-    }) });
+    const tracker = new AssignmentTracker(run);
+    definitions.push({ name: 'assignments', locate: doc => adapter.locate(doc),
+      attributeFilter: ['class', 'href', 'data-order', 'style'],
+      mount: () => {
+        let fingerprint = '';
+        return {
+          refresh: async context => {
+            const root = adapter.locate(document);
+            if (!root) return;
+            const result = adapter.read(root, context);
+            if (result.status !== 'ready' || context.signal.aborted) return;
+            const signature = JSON.stringify({ ...result.value, observedAt: '' });
+            if (signature === fingerprint) return;
+            await tracker.cache(result.value);
+            if (!context.signal.aborted) fingerprint = signature;
+          }, dispose() {},
+        };
+      },
+    });
   }
   if (questionAdapter) {
     const adapter = questionAdapter;
@@ -70,8 +85,18 @@ export function startPageFeatures(document: Document, window: Window) {
   }
   // Historical collection/export stays explicitly user-triggered through StudyService.
   const runtime = createFeatureRuntime(document, definitions);
+  const manualAbort = new AbortController();
+  const refreshAssignments = async () => {
+    const result = await new AssignmentTracker(run).refreshPage(document, {
+      url: document.URL, observedAt: new Date().toISOString(), signal: manualAbort.signal,
+    }, assignmentAdapter);
+    if (result.status !== 'ready') throw new Error(result.reason);
+  };
   // Never re-collect assignments in response to the cache write itself.
   const needsChanges = definitions.some(definition => ['bookmarks', 'theme'].includes(definition.name));
   const unsubscribe = needsChanges ? subscribeLocal(() => runtime.refresh(['bookmarks', 'theme'])) : () => {};
-  return { reconcile: runtime.reconcile, dispose: () => { unsubscribe(); runtime.dispose(); } };
+  return { reconcile: runtime.reconcile, refreshAssignments, dispose: () => {
+    manualAbort.abort();
+    unsubscribe(); runtime.dispose();
+  } };
 }

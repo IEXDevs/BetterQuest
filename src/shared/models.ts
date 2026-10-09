@@ -2,7 +2,7 @@ export type CourseId = string;
 export type AssignmentId = string;
 export type QuestionId = string;
 export type ThemePreference = 'light' | 'dark' | 'system';
-export type CompletionStatus = 'unknown' | 'not-started' | 'in-progress' | 'completed';
+export type CompletionStatus = 'unknown' | 'not-started' | 'not-completed' | 'in-progress' | 'completed';
 
 export interface Course {
   id: CourseId;
@@ -29,6 +29,11 @@ export interface Assignment {
   kind: 'homework' | 'assessment' | 'unknown';
   /** Explicit adapter evidence of historical homework, not guessed from a score. */
   historical: boolean | null;
+  /** Optional additions preserve compatibility with existing cached records. */
+  grade?: { percent: number | null; label: string | null };
+  start?: Deadline;
+  group?: { id: string; label: string | null };
+  completionLabel?: string | null;
 }
 
 export interface AvailableMaterial {
@@ -61,6 +66,8 @@ export interface AssignmentSnapshot {
   observedAt: string;
   courses: Course[];
   assignments: Assignment[];
+  /** Evidence of recognized table observations, not an account-wide sync claim. */
+  scannedCourseIds?: CourseId[];
 }
 
 export interface CachedPage {
@@ -68,6 +75,7 @@ export interface CachedPage {
   observedAt: string;
   courseIds: CourseId[];
   assignmentIds: AssignmentId[];
+  scannedCourseIds?: CourseId[];
 }
 
 export interface Bookmark {

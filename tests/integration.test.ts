@@ -30,7 +30,7 @@ test('single selector: missing navigation is a no-op, without fallback injection
   } finally { f.cleanup(); }
 });
 
-test('one button between breadcrumbs and nav; empty panel opens, closes, and restores focus', () => {
+test('one button between breadcrumbs and nav; assignment panel opens, closes, and restores focus', () => {
   const f = setup();
   try {
     const breadcrumbs = f.document.querySelector('.qh-breadcrumbs')!;
@@ -46,7 +46,7 @@ test('one button between breadcrumbs and nav; empty panel opens, closes, and res
     f.button()!.click();
     const p = f.panel()!;
     assert.equal(p.hidden, false);
-    assert.equal(p.shadowRoot!.querySelector('.body')!.childElementCount, 0);
+    assert.equal(p.shadowRoot!.querySelector('.body h3')!.textContent, 'Assignments');
     assert.equal(f.button()!.getAttribute('aria-expanded'), 'true');
     p.shadowRoot!.querySelector<HTMLButtonElement>('button')!.click();
     assert.equal(p.hidden, true);

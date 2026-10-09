@@ -1,19 +1,19 @@
 # Authenticated Quest inspection checklist
 
-Only the navbar structure has been supplied and integrated: `.qh-navbar > .qh-breadcrumbs`, followed by `.qh-nav`. All five feature adapters are disabled (`null`). Inspect in your authenticated Chrome session; provide sanitized element snippets and relevant computed styles. Do not include names, EIDs, cookies, tokens, answers you submitted, or unreleased material.
+The navbar and course assignment fragment have been supplied and integrated. Assignment collection is enabled and regression-tested against `tests/fixtures/quest-assignments.html`. The other four feature adapters remain disabled (`null`). Inspect additional layouts in your authenticated Chrome session; provide sanitized element snippets and relevant computed styles. Do not include names, EIDs, cookies, tokens, answers you submitted, or unreleased material.
 
 ## Implement first: assignment tracker
 
-The tracker should be the first feature enabled. It establishes course/assignment identities and deadline/status normalization that bookmarking and study export depend on, and can initially enhance existing pages without touching homework inputs.
+The tracker is now enabled. The supplied course heading, assignment rows/groups, machine timestamps, completion/grade labels, and instance links are implemented. The panel aggregates observed courses without changing homework inputs. Remaining verification below includes the account course list and internal course/term mapping; the supplied fragment alone cannot prove full course coverage.
 
 - [ ] Homepage course-list root and one course card/row, including its source ID and exact course URL.
 - [ ] Course identity on an assignment page, including IDs and links in the existing breadcrumb/heading.
-- [ ] Assignment table root and header markup; one complete row each for not-started, partially complete, completed, unavailable, and past-due homework.
+- [x] Assignment table/group roots and header markup, completed rows, and a not-completed row with unavailable grade. Additional partial/unavailable layouts still need inspection.
 - [ ] Exact source assignment IDs. Confirm whether public assignment IDs and student-instance IDs differ; document the mapping rather than merging them by title.
-- [ ] Assignment name/link, release/start date, due date, timezone label, and machine-readable attributes if present. The screenshot's Central Time label is useful evidence, but actual row parsing still needs markup.
-- [ ] Completion checkmark/icon markup and its accessible label. Distinguish completion from score, grade availability, and exhausted tries.
+- [x] Assignment name/link, start date, due date, Central timezone label, and Unix `data-order` attributes.
+- [x] Completion checkmark and accessible Completed/Not completed labels, separate from grades. No inference about partial progress or exhausted tries.
 - [ ] Homework versus exam/quiz/learning-module classification and any timer/proctoring markers. Unknown classifications must stay unknown.
-- [ ] Pagination, collapsed groups, async loading, and DOM replacement behavior. A visited-page cache is not complete account coverage.
+- [x] Multiple/collapsed groups, delayed tables, processing indicators, and DOM rerenders covered in fixture tests. Actual pagination/additional layouts still need inspection. A visited-page cache is not complete account coverage.
 - [ ] A safe existing homepage/course slot for a compact upcoming-work summary; do not introduce a standalone dashboard.
 - [ ] Verify the populated tracker cache on two courses, unknown metadata handling, chronological ordering, freshness, and refresh without submitting anything.
 
@@ -60,7 +60,7 @@ The tracker should be the first feature enabled. It establishes course/assignmen
 
 ## Shared release checks
 
-- [ ] Reload the extension and verify the existing blue navbar button and empty closeable panel still work.
+- [ ] Reload the extension and verify the existing blue navbar button and closeable assignment panel still work.
 - [ ] Accept only the `storage` permission addition; matching is still Quest student pages only.
 - [ ] Configure and test one adapter at a time. Missing integration points must disable just that feature.
 - [ ] Verify persistence in Chrome, multiple-tab updates, worker restart, and error handling with no external services.
