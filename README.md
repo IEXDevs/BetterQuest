@@ -11,7 +11,7 @@ The extension-specific [privacy policy](site/privacy/index.html) is a standalone
 There was no existing website deployment configuration. `.github/workflows/privacy-pages.yml` publishes only `site/` using GitHub Pages, independently of the Chrome extension build:
 
 1. In the GitHub repository, enable **Settings → Pages → Source: GitHub Actions**. Ensure your repository visibility/plan supports Pages and that the published site is **public**, not access-controlled.
-2. Publish these files to `main` through your normal workflow, or run **Deploy privacy policy** manually after the files are on GitHub. If your default branch differs, update the workflow's branch filter. No commit or push is performed by the local extension build.
+2. Publish these files to `main` through your, normal workflow, or run **Deploy privacy policy** manually after the files are on GitHub. If your default branch differs, update the workflow's branch filter. No commit or push is performed by the local extension build.
 3. After successful deployment, open `https://iexdevs.github.io/BetterQuest/privacy/` in a signed-out/incognito browser. Verify it returns the policy directly, without authentication or an error. If the repository is renamed or a custom domain is configured, use the deployed Pages URL plus `privacy/` instead.
 4. Enter that full HTTPS policy URL in the **Chrome Web Store dashboard's privacy-policy field**, not `manifest.json`. Align the dashboard's data disclosures with the policy, including locally handled educational data and grades.
 
