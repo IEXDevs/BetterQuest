@@ -89,9 +89,7 @@ export function createCourseArtwork(root: Element) {
     const animationsDisabled = isAnimationsDisabled();
     if (animationsDisabled) host.setAttribute('data-animations', 'disabled');
 
-    const bgType = item.departmentCode === 'M'
-      ? 'ripple'
-      : item.departmentCode === 'BIO'
+    const bgType = item.departmentCode === 'M' || item.departmentCode === 'BIO'
       ? 'ether'
       : item.departmentCode === 'CH' || item.departmentCode === 'CS'
       ? 'pixel'
@@ -108,7 +106,7 @@ export function createCourseArtwork(root: Element) {
         height: 96px;
         align-items: flex-end;
         overflow: hidden;
-        border-radius: 20px;
+        border-radius: 10px;
         background: #09090d;
         box-shadow: 0 10px 26px color-mix(in srgb, ${deep} 35%, transparent), inset 0 0 0 1px rgba(255, 255, 255, 0.16);
         color: white;
@@ -135,43 +133,14 @@ export function createCourseArtwork(root: Element) {
         pointer-events: none;
         z-index: 1;
       }
-      .is-ripple .art-bg {
-        background: #090314;
-      }
-      .ripple-grid-mesh {
-        position: absolute;
-        inset: -20%;
-        width: 140%;
-        height: 140%;
-        background-image:
-          linear-gradient(to right, rgba(168, 85, 247, 0.25) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(168, 85, 247, 0.25) 1px, transparent 1px);
-        background-size: 14px 14px;
-        animation: bq-grid-drift 8s ease-in-out infinite alternate;
-      }
-      .ripple-rings {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .ripple-ring {
-        position: absolute;
-        border-radius: 50%;
-        border: 1.5px solid rgba(192, 132, 252, 0.7);
-        box-shadow: 0 0 14px rgba(168, 85, 247, 0.65), inset 0 0 8px rgba(168, 85, 247, 0.35);
-        animation: bq-ripple-wave 3.6s cubic-bezier(0.1, 0.7, 0.3, 1) infinite;
-      }
-      .ripple-ring:nth-child(2) { animation-delay: 1.2s; }
-      .ripple-ring:nth-child(3) { animation-delay: 2.4s; }
-      .ripple-center-glow {
-        position: absolute;
-        inset: 15%;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(168, 85, 247, 0.65) 0%, rgba(124, 58, 237, 0.25) 45%, transparent 70%);
+      .is-ether .art-bg {
+        background:
+          radial-gradient(circle at 30% 25%, rgba(168, 85, 247, 0.65) 0%, transparent 50%),
+          radial-gradient(circle at 75% 70%, rgba(124, 58, 237, 0.55) 0%, transparent 55%),
+          radial-gradient(circle at 50% 85%, rgba(192, 132, 252, 0.45) 0%, transparent 45%),
+          linear-gradient(135deg, #0f051d 0%, #1a082e 100%);
         filter: blur(10px);
-        animation: bq-center-pulse 2.8s ease-in-out infinite alternate;
+        animation: bq-ether-drift 10s ease-in-out infinite alternate;
       }
       .is-swirl .art-bg {
         background:
@@ -227,33 +196,10 @@ export function createCourseArtwork(root: Element) {
         text-overflow: ellipsis;
         color: rgba(255, 255, 255, 0.9);
       }
-      @keyframes bq-ripple-wave {
-        0% {
-          width: 8px;
-          height: 8px;
-          opacity: 0.95;
-          transform: scale(0.4);
-          border-color: #f3e8ff;
-        }
-        50% {
-          opacity: 0.65;
-          border-color: #c084fc;
-        }
-        100% {
-          width: 140px;
-          height: 140px;
-          opacity: 0;
-          transform: scale(1.6);
-          border-color: #7c3aed;
-        }
-      }
-      @keyframes bq-center-pulse {
-        0% { transform: scale(0.85); opacity: 0.5; }
-        100% { transform: scale(1.2); opacity: 0.9; }
-      }
-      @keyframes bq-grid-drift {
-        0% { transform: translate(0, 0); }
-        100% { transform: translate(-7px, -7px); }
+      @keyframes bq-ether-drift {
+        0% { transform: scale(1) rotate(0deg); }
+        50% { transform: scale(1.12) rotate(6deg); }
+        100% { transform: scale(0.96) rotate(-4deg); }
       }
       @keyframes bq-swirl {
         from { transform: rotate(0deg) scale(1); }
@@ -279,16 +225,7 @@ export function createCourseArtwork(root: Element) {
     `;
     const art = document.createElement('span'); art.className = `art is-${bgType}${animationsDisabled ? ' is-disabled' : ''}`;
     const artBg = document.createElement('span'); artBg.className = 'art-bg';
-    if (bgType === 'ripple') {
-      const mesh = document.createElement('span'); mesh.className = 'ripple-grid-mesh';
-      const centerGlow = document.createElement('span'); centerGlow.className = 'ripple-center-glow';
-      const rings = document.createElement('span'); rings.className = 'ripple-rings';
-      const r1 = document.createElement('span'); r1.className = 'ripple-ring';
-      const r2 = document.createElement('span'); r2.className = 'ripple-ring';
-      const r3 = document.createElement('span'); r3.className = 'ripple-ring';
-      rings.append(r1, r2, r3);
-      artBg.append(mesh, centerGlow, rings);
-    }
+
     const vignette = document.createElement('span'); vignette.className = 'vignette';
     const copy = document.createElement('span'); copy.className = 'copy';
     const department = document.createElement('span'); department.className = 'department'; department.textContent = item.departmentCode;

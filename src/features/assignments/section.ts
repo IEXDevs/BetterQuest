@@ -18,23 +18,29 @@ export function createAssignmentSection(root: Element, run: Execute = execute, s
   shadow.addEventListener('click', event => event.stopPropagation());
   const style = document.createElement('style');
   style.textContent = `
-    :host { display:block; color:inherit; font-family:inherit; scroll-margin-top:84px; }
+    :host { display:block; color:inherit; font-family:inherit; scroll-margin-top:84px; width:100%; }
     * { box-sizing:border-box; }
-    section { font:inherit; font-size:13px; line-height:1.4; text-align:left; }
-    h2 { font:inherit; font-size:14px; font-weight:500; margin:0 0 6px; color:var(--bq-text,#42576a); }
-    h2:focus-visible,a:focus-visible { outline:2px solid var(--bq-accent,#168d83); outline-offset:3px; }
-    ul { list-style:none; margin:0; padding:0; }
-    li { padding:4px 0; }
-    .assignment-link { display:block; color:var(--bq-accent,#227ab0); text-decoration:none; overflow:hidden;
-      white-space:nowrap; text-overflow:ellipsis; font-weight:500; }
-    a:hover { text-decoration:underline; }
-    .deadline { display:block; color:var(--bq-muted,#748491); font-size:11px; margin-top:1px; }
-    .overdue { color:var(--bq-warning,#a96645); }
-    .footer { display:flex; align-items:center; flex-wrap:wrap; gap:4px 9px; margin-top:7px; font-size:11px; }
-    .view-all { color:var(--bq-accent,#227ab0); text-decoration:none; white-space:nowrap; }
-    .note { color:var(--bq-muted,#84909a); font-size:10px; }
-    .empty,.error { margin:5px 0; color:var(--bq-muted,#748491); font-size:12px; }
-    .error { color:var(--bq-warning,#a3453c); }
+    section { font:inherit; font-size:13px; line-height:1.4; text-align:left; width:100%; }
+    h2 { font:inherit; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 10px; color:var(--bq-muted,#64748b); line-height:1.2; }
+    h2:focus-visible,a:focus-visible { outline:2px solid var(--bq-accent,#0284c7); outline-offset:3px; }
+    ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+    li { padding:0 0 8px; border-bottom:1px solid var(--bq-border, rgba(148,163,184,0.18)); }
+    li:last-child { border-bottom:none; padding-bottom:2px; }
+    .assignment-link { display:block; color:var(--bq-accent,#0284c7); text-decoration:none; overflow:hidden;
+      white-space:nowrap; text-overflow:ellipsis; font-size:13.5px; font-weight:600; line-height:1.3; transition:color .15s ease; }
+    a.assignment-link:hover { color:#38bdf8; text-decoration:underline; }
+    .deadline { display:inline-flex; align-items:center; color:var(--bq-muted,#64748b); font-size:11.5px; font-weight:500; white-space:nowrap; }
+    .overdue { color:var(--bq-warning,#ef4444); font-weight:600; }
+    .meta-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:4px; }
+    .section-mark-btn { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border:1px solid var(--bq-border,#cbd7e3); border-radius:5px; background:var(--bq-surface,#fff); color:var(--bq-muted,#64748b); font:600 11px/1.2 inherit; cursor:pointer; transition:all .18s ease; flex-shrink:0; }
+    .section-mark-btn:hover { border-color:var(--bq-good,#10b981); color:var(--bq-good,#10b981); background:rgba(16,185,129,0.06); }
+    .section-mark-btn svg { width:11px; height:11px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+    .footer { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px 12px; margin-top:10px; padding-top:8px; border-top:1px solid var(--bq-border, rgba(148,163,184,0.18)); font-size:11.5px; }
+    .view-all { color:var(--bq-accent,#0284c7); text-decoration:none; font-weight:600; white-space:nowrap; }
+    .view-all:hover { text-decoration:underline; }
+    .note { color:var(--bq-muted,#94a3b8); font-size:10.5px; }
+    .empty,.error { margin:6px 0; color:var(--bq-muted,#64748b); font-size:12.5px; }
+    .error { color:var(--bq-warning,#ef4444); }
   `;
   const section = document.createElement('section');
   section.setAttribute('aria-labelledby', 'bq-upcoming-title');
@@ -85,7 +91,25 @@ export function createAssignmentSection(root: Element, run: Execute = execute, s
         if (assignment.deadline.iso) deadline.dateTime = assignment.deadline.iso;
         deadline.textContent = (due.overdue ? 'Overdue · ' : '') + due.date + ' · ' + due.time;
         deadline.title = assignment.deadline.label || assignment.deadline.iso || 'No deadline listed';
-        row.append(link, deadline); list.append(row);
+        const metaRow = document.createElement('div');
+        metaRow.className = 'meta-row';
+        const markBtn = document.createElement('button');
+        markBtn.type = 'button';
+        markBtn.className = 'section-mark-btn';
+        markBtn.title = 'Mark complete';
+        markBtn.setAttribute('aria-label', `Mark ${assignment.title} complete`);
+        markBtn.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/></svg><span>Mark done</span>';
+        markBtn.onclick = async (e) => {
+          e.preventDefault(); e.stopPropagation();
+          markBtn.disabled = true;
+          try {
+            await run({ kind: 'assignment:completion:set', assignmentId: assignment.id, completed: true });
+          } catch {
+            markBtn.disabled = false;
+          }
+        };
+        metaRow.append(deadline, markBtn);
+        row.append(link, metaRow); list.append(row);
       }
       result.append(list);
     }

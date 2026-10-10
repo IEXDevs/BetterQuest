@@ -5,6 +5,11 @@ import { startPageFeatures } from '../src/content/features';
 import { createPdfAssessmentWorkspace } from '../src/features/assessment/workspace';
 import { createSettingsMenu } from '../src/features/settings/menu';
 import { LocalRepository } from '../src/storage/repository';
+import { createQuestTheme } from '../src/features/theme/quest';
+import { detectPageCategory } from '../src/adapters/quest/theme';
+import { readAssessmentMetrics } from '../src/adapters/quest/assessment';
+import { formatMeetingTime, createMeetingTimesEnhancer } from '../src/features/courses/meeting-times';
+import { enhanceCourseInfoCard, collapseCourseCategoriesByDefault } from '../src/features/courses/details-enhancer';
 import type { Execute } from '../src/shared/client';
 import type { LocalState } from '../src/shared/models';
 
@@ -21,6 +26,20 @@ function prepare(dom: JSDOM) {
 }
 
 const pause = () => new Promise(resolve => setTimeout(resolve, 180));
+
+test('missing assessment metrics are reported as unavailable instead of fabricated values', () => {
+  const dom = new JSDOM('<html><body><div id="target"></div></body></html>');
+  try {
+    const root = dom.window.document.querySelector<HTMLElement>('#target')!;
+    assert.deepEqual(readAssessmentMetrics(dom.window.document, root, null), {
+      score: 'Not available',
+      classAverage: 'Not available',
+      standardDeviation: 'Not available',
+    });
+  } finally {
+    dom.window.close();
+  }
+});
 
 test('homepage course art is derived from the department code and leaves native course data intact', async () => {
   const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><div id="main-content"><div id="courses-table-div">
@@ -108,7 +127,25 @@ test('PDF assessment workspace synchronizes answer chips with native controls wi
     assert.ok(host);
     assert.match(host.shadowRoot!.querySelector('.progress-copy')!.textContent!, /1 of 2 submitted/);
     assert.match(host.shadowRoot!.querySelector('.points')!.textContent!, /40 \/ 200 points/);
+    assert.equal(host.shadowRoot!.querySelector('.class-avg')!.textContent, 'Not available');
+    assert.equal(host.shadowRoot!.querySelector('.std-dev')!.textContent, 'Not available');
+
+    const basicModeBtn = host.shadowRoot!.querySelector<HTMLButtonElement>('.mode-btn[data-mode="basic"]')!;
+    assert.ok(basicModeBtn);
+    assert.equal(basicModeBtn.textContent, 'Basic View');
+    basicModeBtn.click();
+    assert.equal(dom.window.document.querySelector('#target')?.getAttribute('data-betterquest-pdf-mode'), 'basic');
+    assert.equal(host.dataset.layout, 'sidebar');
+
+    const bqModeBtn = host.shadowRoot!.querySelector<HTMLButtonElement>('.mode-btn[data-mode="betterquest"]')!;
+    assert.ok(bqModeBtn);
+    assert.equal(bqModeBtn.textContent, 'BetterQuest View');
+    bqModeBtn.click();
+    assert.equal(dom.window.document.querySelector('#target')?.getAttribute('data-betterquest-pdf-mode'), 'betterquest');
+    assert.equal(host.dataset.layout, 'bottom');
+
     const first = host.shadowRoot!.querySelector<HTMLElement>('[data-question-id="cuaip_1"]')!;
+    assert.ok(first.querySelector('.question-bottom'), 'Choices and submit must be wrapped in question-bottom for 2-column layout');
     const choice = first.querySelector<HTMLButtonElement>('button[data-value="2"]')!;
     choice.click();
     assert.equal(dom.window.document.querySelector<HTMLSelectElement>('tr[data-id="cuaip_1"] select')!.value, '2');
@@ -129,9 +166,11 @@ test('interactive PDF choices delegate into the matching native Quest selector w
   });
   prepare(dom);
   let choose: ((question: number, option: number) => void) | undefined;
+  let submit: ((question: number) => void) | undefined;
   let submitted = 0; dom.window.document.querySelector('button')!.addEventListener('click', () => submitted++);
-  const fakeFactory = (container: HTMLElement, options: { optionMaximums: ReadonlyMap<number, number>; onChoose: (question: number, option: number) => void }) => {
+  const fakeFactory = (container: HTMLElement, options: { optionMaximums: ReadonlyMap<number, number>; onChoose: (question: number, option: number) => void; onSubmit?: (question: number) => void }) => {
     choose = options.onChoose;
+    submit = options.onSubmit;
     assert.deepEqual([...options.optionMaximums], [[1, 3]]);
     const element = dom.window.document.createElement('section'); container.append(element);
     return { element, ready: Promise.resolve(true), setSelected() {}, dispose() { element.remove(); } };
@@ -142,11 +181,45 @@ test('interactive PDF choices delegate into the matching native Quest selector w
   try {
     workspace.reconcile(); await Promise.resolve(); await Promise.resolve();
     assert.equal(typeof choose, 'function');
+    assert.equal(typeof submit, 'function');
     choose!(1, 2); await Promise.resolve();
     assert.equal(dom.window.document.querySelector<HTMLSelectElement>('select')!.value, '2');
     assert.equal(submitted, 0);
     assert.equal(dom.window.document.querySelector<HTMLIFrameElement>('iframe')!.hidden, true);
+    submit!(1);
+    assert.equal(submitted, 1);
   } finally { workspace.dispose(); dom.window.close(); }
+});
+
+test('PDF Confirm delegates to the native form exactly once', async () => {
+  const dom = new JSDOM(`<html><body><div id="target"><div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF" src="/student/images/download_pdf?instance=courseuserassignment_1"></iframe></div></div>
+    <form><div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody><tr data-id="cuaip_1"><td>1.</td><td><select aria-label="Select your response"><option value=""></option><option value="1" selected>1</option></select></td><td></td><td class="previous">0 / 2</td><td></td><td><button type="submit" aria-label="Submit response">Submit</button></td></tr></tbody></table></div></form>
+  </div></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
+  prepare(dom);
+  let confirm: ((question: number) => void) | undefined;
+  let submissions = 0;
+  dom.window.document.querySelector('form')!.addEventListener('submit', event => {
+    event.preventDefault();
+    submissions += 1;
+  });
+  const fakeFactory = (container: HTMLElement, options: { onSubmit?: (question: number) => void }) => {
+    confirm = options.onSubmit;
+    const element = dom.window.document.createElement('section');
+    container.append(element);
+    return { element, ready: Promise.resolve(true), setSelected() {}, dispose() { element.remove(); } };
+  };
+  const workspace = (createPdfAssessmentWorkspace as unknown as (root: HTMLElement, options: { createPdfViewer: typeof fakeFactory }) => ReturnType<typeof createPdfAssessmentWorkspace>)(
+    dom.window.document.querySelector<HTMLElement>('#target')!, { createPdfViewer: fakeFactory },
+  );
+  try {
+    workspace.reconcile();
+    await Promise.resolve();
+    confirm!(1);
+    assert.equal(submissions, 1);
+  } finally {
+    workspace.dispose();
+    dom.window.close();
+  }
 });
 
 test('PDF assessment workspace fails closed for disabled choices and hidden native submits', async () => {
@@ -179,9 +252,64 @@ test('PDF assessment workspace fails closed for disabled choices and hidden nati
   } finally { features.dispose(); dom.window.close(); }
 });
 
-test('Slides answer equations stay dark on their light paper surface and reveal submit after selection', async () => {
+test('PDF assessment workspace mounts when PDF is provided as a problem_pdf link without a pre-existing iframe', async () => {
   const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target">
+    <p>Due date 10/14/26 11:59 PM</p>
+    <a href="https://quest.cns.utexas.edu/student/images/problem_pdf?instance=courseuserassignment_319766936">PDF w/o expl</a>
+    <div id="view-responses-table-id"><table id="instance-table-courseuserassignment_319766936"><tbody>
+      <tr data-id="cuaip_1"><td>1.</td><td><select aria-label="Select your response"><option value="">- select -</option><option value="1">1</option><option value="2">2</option></select></td><td></td><td class="previous">0 / 2</td><td></td><td><button aria-label="Submit response">Submit</button></td></tr>
+    </tbody></table></div>
+    <div id="tally-div">0 out of 200 points (0%)</div>
+    <p>Class Average 85.08 points / 42.54%</p>
+    <p>Standard Deviation 68.65</p>
+  </div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_319766936', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store(); const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    const host = dom.window.document.querySelector<HTMLElement>('[data-betterquest="assessment-rail"]');
+    assert.ok(host, 'Assessment rail must mount even when PDF is linked via problem_pdf anchor');
+    const shadow = host.shadowRoot!;
+    const fullscreenBtn = shadow.querySelector<HTMLButtonElement>('.fullscreen-btn')!;
+    assert.ok(fullscreenBtn, 'Full screen button must exist');
+    assert.match(shadow.querySelector('.points')!.textContent!, /0 out of 200 points|0 \/ 200 points/);
+    assert.match(shadow.querySelector('.class-avg')!.textContent!, /85.08 points \/ 42.54%/);
+    assert.match(shadow.querySelector('.std-dev')!.textContent!, /68.65/);
+    const pdfFrame = dom.window.document.querySelector<HTMLElement>('#pdf-frame');
+    assert.ok(pdfFrame, 'Synthesized PDF frame must be injected');
+    const iframe = pdfFrame.querySelector<HTMLIFrameElement>('iframe');
+    assert.ok(iframe);
+    assert.match(iframe.src, /problem_pdf/);
+
+    // Verify raw native stats are suppressed from the page
+    const tally = dom.window.document.querySelector<HTMLElement>('#tally-div');
+    assert.equal(tally?.getAttribute('data-betterquest-native-stats'), 'true');
+    assert.equal(tally?.style.display, 'none');
+
+    const avgP = [...dom.window.document.querySelectorAll('p')].find(p => /Class Average/i.test(p.textContent || ''));
+    assert.ok(avgP);
+    assert.equal(avgP.getAttribute('data-betterquest-native-stats'), 'true');
+    assert.equal(avgP.style.display, 'none');
+
+    const targetEl = dom.window.document.querySelector<HTMLElement>('#target');
+    assert.equal(targetEl?.hasAttribute('data-betterquest-native-stats'), false, '#target must never be suppressed');
+
+    // Verify fullscreen mode toggles state and eliminates rail
+    fullscreenBtn.click();
+    assert.equal(targetEl?.getAttribute('data-betterquest-fullscreen'), 'true');
+    assert.match(fullscreenBtn.textContent!, /Exit full screen/);
+
+    // Press Escape to exit fullscreen
+    dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(targetEl?.hasAttribute('data-betterquest-fullscreen'), false);
+    assert.match(fullscreenBtn.textContent!, /Full screen/);
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('Slides answer equations and black question images stay on a light paper surface in dark mode', async () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content" data-betterquest-theme="dark" style="--bq-surface:#182434;--bq-text:#e7eef8"><div id="target">
     <div id="presentation-div"><div class="row instanceitempart"><div class="bg-light col" id="form-cuaip_1">
+      <img class="question-image" alt="Question diagram" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='30'%3E%3Ctext y='20' fill='black'%3EQuestion%3C/text%3E%3C/svg%3E">
       <div class="custom-control"><input id="radio-cuaip_1-1" type="radio" name="response_cuaip_1" value="1"><label class="custom-control-label" for="radio-cuaip_1-1"><mjx-container>choice one</mjx-container></label></div>
       <div class="custom-control"><input id="radio-cuaip_1-2" type="radio" name="response_cuaip_1" value="2"><label class="custom-control-label" for="radio-cuaip_1-2"><mjx-container>choice two</mjx-container></label></div>
     </div><button class="submit-btn" type="submit">Submit</button></div></div>
@@ -197,6 +325,9 @@ test('Slides answer equations stay dark on their light paper surface and reveal 
     const radio = dom.window.document.querySelector<HTMLInputElement>('#radio-cuaip_1-2')!;
     radio.checked = true; radio.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
     assert.equal(question.getAttribute('data-betterquest-question-ready'), 'true');
+    assert.equal(dom.window.getComputedStyle(question).backgroundColor, 'rgb(255, 255, 255)');
+    assert.equal(dom.window.getComputedStyle(question).color, 'rgb(24, 37, 58)');
+    assert.equal(dom.window.getComputedStyle(dom.window.document.querySelector('.question-image')!).filter, 'none');
     assert.equal(dom.window.getComputedStyle(dom.window.document.querySelector('mjx-container')!).color, 'rgb(24, 37, 58)');
   } finally { features.dispose(); dom.window.close(); }
 });
@@ -223,7 +354,7 @@ test('Slides reveal only the selected question submit and preserve natively hidd
   } finally { features.dispose(); dom.window.close(); }
 });
 
-test('moving from options to suboptions keeps modal open and debounces for at least 2 seconds on cursor leave', async () => {
+test('moving from options to suboptions keeps modal open and debounces for around 500ms on cursor leave', async () => {
   const dom = new JSDOM(`<html><body><div id="nav-host"></div></body></html>`, { pretendToBeVisual: true });
   prepare(dom);
   const f = store();
@@ -262,15 +393,15 @@ test('moving from options to suboptions keeps modal open and debounces for at le
     // 4. Move cursor off flyout entirely into empty space
     flyout.dispatchEvent(new dom.window.Event('pointerleave'));
 
-    // After 1000ms (1 second), the modal and flyout MUST STILL BE OPEN
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    assert.equal(menuHost.hidden, false, 'Modal should remain open after 1 second');
-    assert.equal(flyout.hidden, false, 'Flyout should remain open after 1 second');
+    // After 250ms, the modal and flyout MUST STILL BE OPEN
+    await new Promise(resolve => setTimeout(resolve, 250));
+    assert.equal(menuHost.hidden, false, 'Modal should remain open during 500ms debounce window');
+    assert.equal(flyout.hidden, false, 'Flyout should remain open during 500ms debounce window');
 
-    // After 2100ms total (> 2 seconds), both modal and flyout disappear
-    await new Promise(resolve => setTimeout(resolve, 1200));
-    assert.equal(menuHost.hidden, true, 'Modal should disappear after 2 seconds without cursor');
-    assert.equal(flyout.hidden, true, 'Flyout should disappear after 2 seconds without cursor');
+    // After 600ms total (> 500ms), both modal and flyout disappear
+    await new Promise(resolve => setTimeout(resolve, 350));
+    assert.equal(menuHost.hidden, true, 'Modal should disappear after 500ms without cursor');
+    assert.equal(flyout.hidden, true, 'Flyout should disappear after 500ms without cursor');
   } finally {
     menu.dispose();
     dom.window.close();
@@ -332,3 +463,349 @@ test('BetterQuest and Quest Settings are completely separate menus without linke
   }
 });
 
+test('feature:set successfully updates assignments and bookmarks features in repository', async () => {
+  const dom = new JSDOM('<html><body></body></html>', { pretendToBeVisual: true });
+  prepare(dom);
+  const f = store();
+  const res1 = await f.run({ kind: 'feature:set', feature: 'assignments', enabled: false });
+  assert.equal(res1.preferences.features?.assignments, false);
+  assert.equal(res1.preferences.features?.bookmarks, true);
+  assert.equal(res1.preferences.features?.animations, true);
+
+  const res2 = await f.run({ kind: 'feature:set', feature: 'bookmarks', enabled: false });
+  assert.equal(res2.preferences.features?.assignments, false);
+  assert.equal(res2.preferences.features?.bookmarks, false);
+  assert.equal(res2.preferences.features?.animations, true);
+
+  const res3 = await f.run({ kind: 'feature:set', feature: 'animations', enabled: false });
+  assert.equal(res3.preferences.features?.assignments, false);
+  assert.equal(res3.preferences.features?.bookmarks, false);
+  assert.equal(res3.preferences.features?.animations, false);
+
+  const res4 = await f.run({ kind: 'feature:set', feature: 'assignments', enabled: true });
+  assert.equal(res4.preferences.features?.assignments, true);
+  assert.equal(res4.preferences.features?.bookmarks, false);
+  assert.equal(res4.preferences.features?.animations, false);
+});
+
+test('grades and review pages make all text white in dark mode and black in light mode', async () => {
+  const dom = new JSDOM(`<html><body id="body-id" class="mdb-skin">
+    <div id="quest-nav-header-div"></div>
+    <div id="main-content">
+      <ul class="nav nav-tabs md-tabs" id="panel-tabs">
+        <li class="nav-item"><a id="student-elements-a" class="nav-link" href="#tabs-elements">Assignments</a></li>
+        <li class="nav-item"><a id="student-grades-a" class="nav-link active" href="#tabs-grades">Grades</a></li>
+        <li class="nav-item"><a id="student-review-a" class="nav-link" href="#tabs-review">Review</a></li>
+      </ul>
+      <div class="tab-content card" id="info-tab-data">
+        <div id="tabs-grades" class="tab-pane fade show active">
+          <table id="grades-table" class="table">
+            <thead><tr><th>Assignment</th><th>Grade</th></tr></thead>
+            <tbody><tr><td><a href="#hw1">Homework 1</a></td><td><span class="score">95%</span></td></tr></tbody>
+          </table>
+        </div>
+        <div id="tabs-review" class="tab-pane fade">
+          <table id="review-table" class="table">
+            <thead><tr><th>Review Item</th></tr></thead>
+            <tbody><tr><td>Review 1</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </body></html>`, { url: 'https://quest.cns.utexas.edu/student/courses/show?course=123', pretendToBeVisual: true });
+  prepare(dom);
+
+  const theme = createQuestTheme(dom.window.document, dom.window as unknown as Window);
+  try {
+    // 1. Dark Mode
+    theme.update('dark');
+    theme.reconcile();
+    const main = dom.window.document.querySelector<HTMLElement>('#main-content')!;
+    const body = dom.window.document.querySelector<HTMLElement>('#body-id')!;
+    assert.equal(main.getAttribute('data-betterquest-theme'), 'dark');
+    assert.equal(main.getAttribute('data-betterquest-page'), 'grades');
+    assert.equal(body.getAttribute('data-betterquest-page'), 'grades');
+
+    // 2. Light Mode
+    theme.update('light');
+    theme.reconcile();
+    assert.equal(main.getAttribute('data-betterquest-theme'), 'light');
+    assert.equal(main.getAttribute('data-betterquest-page'), 'grades');
+
+    // Verify QUEST_DARK_STYLES contains the white/black rules
+    const styleEl = dom.window.document.querySelector<HTMLStyleElement>('[data-betterquest="theme-styles"]');
+    assert.ok(styleEl);
+    assert.match(styleEl.textContent!, /GRADES & REVIEW PAGES — DARK MODE: ALL TEXT WHITE/);
+    assert.match(styleEl.textContent!, /GRADES & REVIEW PAGES — LIGHT MODE: ALL TEXT BLACK/);
+    assert.match(styleEl.textContent!, /#tabs-grades/);
+    assert.match(styleEl.textContent!, /#tabs-review/);
+  } finally {
+    theme.dispose();
+    dom.window.close();
+  }
+});
+
+test('detectPageCategory recognizes grades and review from urls, active tabs, and assessment headers', () => {
+  const dom1 = new JSDOM('<html><body><div id="tabs-grades" class="tab-pane active"></div></body></html>', {
+    url: 'https://quest.cns.utexas.edu/student/courses/show?course=54321',
+  });
+  assert.equal(detectPageCategory(dom1.window.document), 'grades');
+
+  const dom2 = new JSDOM('<html><body><h1>ASSESSMENT — Review</h1></body></html>', {
+    url: 'https://quest.cns.utexas.edu/student/instances/show?instance=123',
+  });
+  assert.equal(detectPageCategory(dom2.window.document), 'review');
+
+  const dom3 = new JSDOM('<html><body><h1>Homework 1</h1></body></html>', {
+    url: 'https://quest.cns.utexas.edu/student/instances/show?instance=123',
+  });
+  assert.equal(detectPageCategory(dom3.window.document), null);
+});
+
+test('formatMeetingTime converts TTH 330-500 to Tuesday/Thursday 3:30 - 5:00', () => {
+  const result = formatMeetingTime('TTH 330-500');
+  assert.ok(result);
+  assert.equal(result.days, 'Tuesday/Thursday');
+  assert.equal(result.time, '3:30 - 5:00');
+  assert.equal(result.formatted, 'Tuesday/Thursday 3:30 - 5:00');
+
+  const mwf = formatMeetingTime('MWF 1000-1100');
+  assert.equal(mwf?.formatted, 'Monday/Wednesday/Friday 10:00 - 11:00');
+
+  const mw = formatMeetingTime('MW 100-230');
+  assert.equal(mw?.formatted, 'Monday/Wednesday 1:00 - 2:30');
+
+  const th = formatMeetingTime('TH 330-500');
+  assert.equal(th?.formatted, 'Thursday 3:30 - 5:00');
+});
+
+test('createMeetingTimesEnhancer formats meeting time cell in courses table and cleans up on dispose', () => {
+  const dom = new JSDOM(`<html><body>
+    <table id="courses-table">
+      <thead>
+        <tr>
+          <th>Course</th>
+          <th>Name</th>
+          <th>Unique</th>
+          <th>Instructor</th>
+          <th>Meeting Time</th>
+          <th>Next Quest Assignment Due</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>M 408C</td>
+          <td>DIFFEREN AND INTEGRAL CALCULUS</td>
+          <td>58360</td>
+          <td>Reyes</td>
+          <td>TTH 330-500</td>
+          <td>10/14/2026 at 11:59pm</td>
+        </tr>
+      </tbody>
+    </table>
+  </body></html>`);
+
+  const table = dom.window.document.querySelector<HTMLTableElement>('#courses-table')!;
+  const enhancer = createMeetingTimesEnhancer(table);
+
+  const cell = table.querySelector('tbody tr td:nth-child(5)')!;
+  assert.equal(cell.textContent?.trim(), 'Tuesday/Thursday 3:30 - 5:00');
+
+  const badge = cell.querySelector('[data-betterquest="meeting-time"]')!;
+  assert.ok(badge);
+  assert.equal(badge.querySelector('.bq-meeting-days')?.textContent, 'Tuesday/Thursday');
+  assert.equal(badge.querySelector('.bq-meeting-hours')?.textContent, '3:30 - 5:00');
+
+  enhancer.dispose();
+  assert.equal(cell.textContent?.trim(), 'TTH 330-500');
+});
+
+test('enhanceCourseInfoCard formats instructor contact, meeting schedule, and location without deleting columns', () => {
+  const dom = new JSDOM(`<html><body>
+    <div id="target">
+      <div class="card">
+        <div class="card-header text-center">
+          <button type="button" class="btn btn-link" data-toggle="collapse" data-target="#student-course-info-header" aria-expanded="true">
+            <span class="h4">DIFFEREN AND INTEGRAL CALCULUS (58355)</span>
+          </button>
+        </div>
+        <div class="collapse show" id="student-course-info-header">
+          <div class="row text-center">
+            <div class="col">
+              <div class="qlabel">Instructor</div>
+              <div>Nicolas Reyes</div>
+              &nbsp;&nbsp;
+              <a href="mailto:nreyes@math.utexas.edu?subject=Student%20question">contact</a>
+            </div>
+            <div class="col">
+              <div class="qlabel">Meets</div>
+              <div>TTH 330-500</div>
+              <br>in PMA 4.102
+            </div>
+            <div class="col">
+              <div data-betterquest="assignment-section"></div>
+            </div>
+            <div class="col">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body></html>`);
+
+  const root = dom.window.document.querySelector<HTMLElement>('#target')!;
+  enhanceCourseInfoCard(root);
+
+  const columns = [...dom.window.document.querySelectorAll<HTMLElement>('#student-course-info-header > .row > .col')];
+  assert.equal(columns.length, 4, 'Must preserve all 4 native columns in DOM');
+
+  // Instructor column
+  assert.ok(columns[0].classList.contains('bq-col-instructor'));
+  const mailLink = columns[0].querySelector<HTMLAnchorElement>('a[href^="mailto:"]')!;
+  assert.ok(mailLink.classList.contains('bq-contact-btn'));
+  assert.ok(mailLink.querySelector('svg'));
+  assert.match(mailLink.textContent || '', /Email Instructor/i);
+
+  // Meets column
+  assert.ok(columns[1].classList.contains('bq-col-meets'));
+  const time = columns[1].querySelector<HTMLElement>('.bq-meeting-time')!;
+  assert.ok(time);
+  assert.equal(time.querySelector('.bq-meeting-days')?.textContent, 'Tuesday/Thursday');
+  assert.equal(time.querySelector('.bq-meeting-hours')?.textContent, '3:30 - 5:00');
+
+  const loc = columns[1].querySelector<HTMLElement>('.bq-course-location')!;
+  assert.ok(loc);
+  assert.ok(loc.querySelector('svg'));
+  assert.equal(loc.querySelector('span')?.textContent, 'PMA 4.102');
+
+  // Upcoming & Empty columns
+  assert.ok(columns[2].classList.contains('bq-col-upcoming'));
+  assert.ok(columns[3].classList.contains('bq-col-empty'));
+});
+
+test('collapseCourseCategoriesByDefault collapses all assignment categories by default and respects user expansion', () => {
+  const dom = new JSDOM(`<html><body>
+    <div id="target">
+      <div id="tabs-elements">
+        <div class="card-header text-center">
+          <button type="button" class="btn btn-link" data-toggle="collapse" data-target="#header-101" aria-expanded="true">
+            <span class="h4">Homework</span>
+            <i class="material-icons dropdown-icon">remove</i>
+          </button>
+        </div>
+        <div class="collapse show" id="header-101">
+          <table><tr><td>HW 1</td></tr></table>
+        </div>
+
+        <div class="card-header text-center">
+          <button type="button" class="btn btn-link" data-toggle="collapse" data-target="#header-102" aria-expanded="true">
+            <span class="h4">Exams</span>
+            <i class="material-icons dropdown-icon">remove</i>
+          </button>
+        </div>
+        <div class="collapse show" id="header-102">
+          <table><tr><td>Exam 1</td></tr></table>
+        </div>
+      </div>
+    </div>
+  </body></html>`);
+
+  const doc = dom.window.document;
+  collapseCourseCategoriesByDefault(doc);
+
+  const hw = doc.querySelector<HTMLElement>('#header-101')!;
+  const exams = doc.querySelector<HTMLElement>('#header-102')!;
+  const hwBtn = doc.querySelector<HTMLButtonElement>('button[data-target="#header-101"]')!;
+  const examsBtn = doc.querySelector<HTMLButtonElement>('button[data-target="#header-102"]')!;
+
+  // Both categories collapsed by default
+  assert.equal(hw.classList.contains('show'), false);
+  assert.equal(exams.classList.contains('show'), false);
+  assert.equal(hwBtn.getAttribute('aria-expanded'), 'false');
+  assert.equal(examsBtn.getAttribute('aria-expanded'), 'false');
+  assert.ok(hwBtn.classList.contains('collapsed'));
+  assert.ok(examsBtn.classList.contains('collapsed'));
+  assert.equal(hwBtn.querySelector('.material-icons')?.textContent, 'add');
+
+  // Simulate user manually expanding Homework
+  hw.classList.add('show');
+  hwBtn.classList.remove('collapsed');
+  hwBtn.setAttribute('aria-expanded', 'true');
+
+  // Reconcile/run collapse again: user manual choice MUST NOT be overwritten
+  collapseCourseCategoriesByDefault(doc);
+  assert.equal(hw.classList.contains('show'), true, 'User opened category must remain open');
+  assert.equal(hwBtn.getAttribute('aria-expanded'), 'true');
+  assert.equal(exams.classList.contains('show'), false, 'Unopened category stays collapsed');
+});
+
+test('course details facelift integrates with startPageFeatures on course show pages', async () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin">
+    <div id="quest-nav-header-div"></div>
+    <div id="main-content">
+      <div id="target">
+        <div class="card">
+          <div class="card-header text-center">
+            <button type="button" class="btn btn-link" data-toggle="collapse" data-target="#student-course-info-header" aria-expanded="true">
+              <span class="h4">DIFFEREN AND INTEGRAL CALCULUS (58355)</span>
+            </button>
+          </div>
+          <div class="collapse show" id="student-course-info-header">
+            <div class="row text-center">
+              <div class="col">
+                <div class="qlabel">Instructor</div>
+                <div>Nicolas Reyes</div>
+                <a href="mailto:nreyes@math.utexas.edu">contact</a>
+              </div>
+              <div class="col">
+                <div class="qlabel">Meets</div>
+                <div>TTH 330-500</div>
+                <br>in PMA 4.102
+              </div>
+              <div class="col"></div>
+              <div class="col"></div>
+            </div>
+          </div>
+        </div>
+        <div id="tabs-elements">
+          <div class="card-header">
+            <button type="button" class="btn btn-link" data-toggle="collapse" data-target="#header-999" aria-expanded="true">
+              <span class="h4">Assignments Category</span>
+            </button>
+          </div>
+          <div class="collapse show" id="header-999">
+            <table><tr><td>HW 1</td></tr></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body></html>`, {
+    url: 'https://quest.cns.utexas.edu/student/courses/show?course=3491354',
+    pretendToBeVisual: true,
+  });
+  prepare(dom);
+
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile();
+    await pause();
+
+    const info = dom.window.document.querySelector<HTMLElement>('#student-course-info-header')!;
+    assert.ok(info.querySelector('.bq-meeting-time'));
+    assert.equal(info.querySelector('.bq-meeting-days')?.textContent, 'Tuesday/Thursday');
+    assert.equal(info.querySelector('.bq-meeting-hours')?.textContent, '3:30 - 5:00');
+    assert.ok(info.querySelector('.bq-contact-btn'));
+    assert.ok(info.querySelector('.bq-course-location'));
+
+    // Category accordion is collapsed by default
+    const category = dom.window.document.querySelector<HTMLElement>('#header-999')!;
+    assert.equal(category.classList.contains('show'), false);
+    const catBtn = dom.window.document.querySelector<HTMLButtonElement>('button[data-target="#header-999"]')!;
+    assert.equal(catBtn.getAttribute('aria-expanded'), 'false');
+    assert.ok(catBtn.classList.contains('collapsed'));
+  } finally {
+    features.dispose();
+    dom.window.close();
+  }
+});

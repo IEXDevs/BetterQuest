@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { CourseArtBadge, type BackgroundStyle } from './CourseArtBadge';
 
 type CourseId = 'm408c' | 'ch301' | 'phy303k';
@@ -33,7 +33,7 @@ const COURSES: Course[] = [
     id: 'm408c',
     code: 'M 408C',
     department: 'M',
-    bgType: 'ripple',
+    bgType: 'ether',
     name: 'Differential & Integral Calculus',
     unique: '58360',
     count: 3,
@@ -190,6 +190,22 @@ export function InteractiveProductFrame() {
   const [syncStatus, setSyncStatus] = useState('Daily · 4:00 AM');
   const [copiedFeed, setCopiedFeed] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [animSetting, setAnimSetting] = useState(true);
+  const [darkSetting, setDarkSetting] = useState(true);
+  const [upcomingSetting, setUpcomingSetting] = useState(true);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && !target.closest('.frame-menu-wrap')) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleOutside);
+    return () => document.removeEventListener('pointerdown', handleOutside);
+  }, [menuOpen]);
 
   const course = useMemo(
     () => COURSES.find((item) => item.id === activeCourse) ?? COURSES[0],
@@ -279,6 +295,90 @@ export function InteractiveProductFrame() {
             >
               Calendar Feed
             </button>
+          </div>
+
+          <div className="frame-menu-wrap">
+            <button
+              type="button"
+              className={`frame-menu-btn ${menuOpen ? 'is-open' : ''}`}
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-expanded={menuOpen}
+              aria-haspopup="dialog"
+              aria-label="Toggle BetterQuest preview settings"
+            >
+              <span className="frame-menu-btn-label">BetterQuest</span>
+              <svg
+                className="frame-menu-chevron"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+
+            {menuOpen && (
+              <div className="frame-dropdown-popup" role="dialog" aria-label="BetterQuest settings">
+                <div className="dropdown-popup-header">
+                  <strong>BetterQuest</strong>
+                  <span className="dropdown-popup-sub">Fluid settings preview</span>
+                </div>
+                <div className="dropdown-popup-options">
+                  <label className="dropdown-popup-label">
+                    <span>Animations</span>
+                    <input
+                      type="checkbox"
+                      checked={animSetting}
+                      onChange={() => setAnimSetting((v) => !v)}
+                    />
+                  </label>
+                  <label className="dropdown-popup-label">
+                    <span>Dark theme</span>
+                    <input
+                      type="checkbox"
+                      checked={darkSetting}
+                      onChange={() => setDarkSetting((v) => !v)}
+                    />
+                  </label>
+                  <label className="dropdown-popup-label">
+                    <span>Upcoming view</span>
+                    <input
+                      type="checkbox"
+                      checked={upcomingSetting}
+                      onChange={() => setUpcomingSetting((v) => !v)}
+                    />
+                  </label>
+                </div>
+                <div className="dropdown-popup-quick">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSavedOpen((v) => !v);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    {savedOpen ? 'Hide Bookmark' : 'Show Bookmark'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode(viewMode === 'queue' ? 'calendar' : 'queue');
+                      setMenuOpen(false);
+                    }}
+                  >
+                    Switch View
+                  </button>
+                </div>
+                <div className="dropdown-popup-footer">
+                  <span>Saved to this device</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -423,14 +523,24 @@ export function InteractiveProductFrame() {
                             <span className="task-points-badge">{task.points}</span>
                           </div>
                           <div className="task-meta-line">
-                            <span className="task-status-label">{isDone ? 'Completed' : task.status}</span>
+                            <span className={`task-status-label ${isDone ? 'is-done' : ''}`}>
+                              {isDone ? 'Completed (manual)' : task.status}
+                            </span>
                             <span className="meta-sep">•</span>
                             <span className="task-due-time">{task.deadline}</span>
                           </div>
                         </div>
 
                         <div className="task-action-cell">
-                          <span className="task-open-hint">Open Quest ↗</span>
+                          <button
+                            type="button"
+                            className={`task-mark-btn ${isDone ? 'is-done' : ''}`}
+                            onClick={(e) => toggleTask(task.id, e)}
+                            title={isDone ? 'Marked complete. Click to undo.' : 'Mark complete'}
+                            aria-label={isDone ? `Mark ${task.title} incomplete` : `Mark ${task.title} complete`}
+                          >
+                            {isDone ? '✓ Completed' : 'Mark done'}
+                          </button>
                         </div>
                       </div>
                     );

@@ -18,7 +18,16 @@ export function createSavedQuestionsView(document: Document, service: BookmarkSe
     button:hover{background:var(--bq-raised,#eff6ff)}button:disabled{opacity:.5;cursor:wait}
     button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--bq-accent,#2563eb);outline-offset:2px}
     .caption,.empty{color:var(--bq-muted,#71808c);font-size:12px;margin:8px 0}.error{color:var(--bq-warning,#a3453c)}
-    .groups{max-height:420px;overflow:auto;margin-top:12px}details{border-top:1px solid var(--bq-border,#edf1f4);padding:10px 0}summary{cursor:pointer;font-weight:500}
+    .groups{max-height:420px;overflow:auto;margin-top:12px}
+    details{border-top:1px solid var(--bq-border,#edf1f4);padding:10px 0;transition:background .22s cubic-bezier(0.16,1,0.3,1),border-radius .22s ease}
+    details[open]{background:color-mix(in srgb,var(--bq-surface,#fff) 94%,var(--bq-raised,#eff6ff));border-radius:7px;padding:10px 10px}
+    details[open]>*:not(summary){animation:details-fluid-slide .24s cubic-bezier(0.16,1,0.3,1) both}
+    @keyframes details-fluid-slide{0%{opacity:0;transform:translateY(-6px)}100%{opacity:1;transform:translateY(0)}}
+    summary{cursor:pointer;font-weight:650;display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:5px;transition:background .2s cubic-bezier(0.16,1,0.3,1),transform .2s cubic-bezier(0.16,1,0.3,1),color .18s ease;user-select:none;list-style:none}
+    summary::-webkit-details-marker{display:none}
+    summary:hover{background:var(--bq-raised,#eff6ff);color:var(--bq-accent,#227ab0);transform:translateX(3px)}
+    summary::after{content:'›';font-size:19px;line-height:1;display:inline-block;transition:transform .3s cubic-bezier(0.34,1.56,0.64,1);transform:rotate(90deg)}
+    details[open] summary::after{transform:rotate(-90deg);color:var(--bq-accent,#818cf8)}
     h3{font:inherit;font-size:13px;font-weight:600;margin:12px 0 6px}ul{padding:0;margin:0;list-style:none}
     li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0}a{color:var(--bq-accent,#227ab0);text-decoration:none}a:hover{text-decoration:underline}
     .question-note{display:block;color:var(--bq-muted,#71808c);font-size:11px}.remove{font-size:11px}

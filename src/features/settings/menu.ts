@@ -6,6 +6,8 @@ import type { QuestNavigationLink } from '../../content/navigation';
 
 export type MenuView = 'betterquest' | 'quest';
 
+const HOVER_CLOSE_DELAY_MS = 500;
+
 export function createSettingsMenu(
   host: HTMLElement,
   trigger: HTMLButtonElement,
@@ -45,15 +47,16 @@ export function createSettingsMenu(
       position: absolute;
       top: 0;
       overflow: visible;
-      background: color-mix(in srgb, var(--bq-surface, #141c26) 96%, transparent);
+      background: color-mix(in srgb, var(--bq-surface, #0f172a) 94%, transparent);
       color: var(--bq-text, #edf3fb);
-      border: 1px solid var(--bq-border, rgba(255, 255, 255, 0.12));
-      border-radius: 18px;
-      box-shadow: 0 20px 55px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--bq-border, rgba(255, 255, 255, 0.14));
+      border-radius: 11px;
+      box-shadow: 0 28px 70px -10px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.16);
       font: 13px/1.45 ui-rounded, 'Avenir Next', -apple-system, sans-serif;
       text-align: left;
-      animation: menu-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
-      backdrop-filter: blur(20px);
+      animation: menu-fluid-spring 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      backdrop-filter: blur(28px) saturate(190%);
+      will-change: transform, opacity, filter;
     }
     .bq-menu {
       width: 330px;
@@ -71,6 +74,17 @@ export function createSettingsMenu(
       left: auto;
       transform-origin: top right;
     }
+    .menu-dropdown > * {
+      animation: dropdown-child-fade 0.26s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    }
+    .menu-dropdown > *:nth-child(1) { animation-delay: 0.015s; }
+    .menu-dropdown > *:nth-child(2) { animation-delay: 0.035s; }
+    .menu-dropdown > *:nth-child(3) { animation-delay: 0.055s; }
+    .menu-dropdown > *:nth-child(4) { animation-delay: 0.075s; }
+    .menu-dropdown > *:nth-child(5) { animation-delay: 0.095s; }
+    .menu-dropdown > *:nth-child(6) { animation-delay: 0.115s; }
+    .menu-dropdown > *:nth-child(7) { animation-delay: 0.135s; }
+    .menu-dropdown > *:nth-child(8) { animation-delay: 0.155s; }
     h2 {
       font: 800 17px/1.2 ui-rounded, 'Avenir Next', sans-serif;
       letter-spacing: -0.02em;
@@ -95,9 +109,21 @@ export function createSettingsMenu(
       justify-content: space-between;
       align-items: center;
       gap: 14px;
-      padding: 9px 0;
+      padding: 8px 10px;
+      margin: 2px -10px;
+      border-radius: 7px;
       border-bottom: 1px solid var(--bq-border, rgba(255, 255, 255, 0.07));
       cursor: pointer;
+      transition: background 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                  transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                  border-color 0.2s ease;
+    }
+    label:hover {
+      background: rgba(129, 140, 248, 0.08);
+      transform: translateX(3px);
+    }
+    label:active {
+      transform: translateX(1px) scale(0.99);
     }
     small {
       display: block;
@@ -106,17 +132,26 @@ export function createSettingsMenu(
       margin-top: 2px;
     }
     input {
-      accent-color: var(--bq-accent, #f6a24a);
-      width: 16px;
-      height: 16px;
+      accent-color: #818cf8;
+      width: 17px;
+      height: 17px;
       flex: none;
       cursor: pointer;
+      transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  filter 0.2s ease;
+    }
+    input:hover {
+      transform: scale(1.15);
+      filter: drop-shadow(0 2px 6px rgba(129, 140, 248, 0.4));
+    }
+    input:checked {
+      filter: drop-shadow(0 2px 6px rgba(129, 140, 248, 0.45));
     }
     button {
       display: block;
       background: transparent;
       border: 0;
-      color: var(--bq-accent, #f6a24a);
+      color: var(--bq-accent, #38bdf8);
       font: inherit;
       padding: 8px 0;
       cursor: pointer;
@@ -130,23 +165,32 @@ export function createSettingsMenu(
       gap: 8px;
     }
     .quick button {
-      padding: 9px 12px;
+      padding: 10px 14px;
       border: 1px solid var(--bq-border, rgba(255, 255, 255, 0.08));
-      border-radius: 11px;
-      background: var(--bq-raised, rgba(255, 255, 255, 0.06));
+      border-radius: 7px;
+      background: var(--bq-raised, rgba(255, 255, 255, 0.05));
       color: var(--bq-text, #f8fafc);
       font-weight: 700;
       text-decoration: none !important;
-      transition: all 0.15s ease;
+      transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+                  background 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+                  border-color 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+                  box-shadow 0.24s ease;
     }
     .quick button:hover {
-      background: var(--bq-raised, rgba(255, 255, 255, 0.12));
+      transform: translateY(-2px) scale(1.02);
+      background: linear-gradient(135deg, rgba(129, 140, 248, 0.22), rgba(56, 189, 248, 0.12));
+      border-color: rgba(129, 140, 248, 0.45);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
       color: #fff;
+    }
+    .quick button:active {
+      transform: translateY(0) scale(0.97);
     }
     /* Quest links & flyouts */
     .quest-links {
       display: grid;
-      gap: 4px;
+      gap: 5px;
       position: relative;
     }
     .quest-item-wrapper {
@@ -156,61 +200,81 @@ export function createSettingsMenu(
       display: flex;
       align-items: center;
       justify-content: space-between;
-      min-height: 38px;
-      padding: 8px 11px;
-      border-radius: 10px;
+      min-height: 40px;
+      padding: 9px 12px;
+      border-radius: 7px;
       color: var(--bq-text, #f1f5f9);
       text-decoration: none;
       font-weight: 600;
       background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      transition: all 0.15s ease;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                  background 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                  border-color 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                  color 0.18s ease,
+                  box-shadow 0.22s ease;
     }
     .quest-link:hover {
-      background: rgba(255, 255, 255, 0.12);
-      color: var(--bq-accent, #f6a24a);
-      border-color: rgba(246, 162, 74, 0.35);
+      transform: translateX(3px);
+      background: linear-gradient(90deg, rgba(129, 140, 248, 0.18), rgba(56, 189, 248, 0.1));
+      color: #fff;
+      border-color: rgba(129, 140, 248, 0.4);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
     }
     .quest-link.danger { color: #f87171; }
-    .quest-link.danger:hover { color: #fca5a5; border-color: rgba(248, 113, 113, 0.4); }
+    .quest-link.danger:hover {
+      background: rgba(248, 113, 113, 0.15);
+      color: #fca5a5;
+      border-color: rgba(248, 113, 113, 0.4);
+    }
     .quest-item-wrapper.has-flyout > .quest-link::after {
       content: '›';
-      font-size: 16px;
+      font-size: 18px;
       line-height: 1;
-      opacity: 0.6;
+      opacity: 0.55;
       margin-left: auto;
-      transition: all 0.14s ease;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease, color 0.2s ease;
     }
     .quest-item-wrapper.has-flyout:hover > .quest-link::after {
       opacity: 1;
-      color: var(--bq-accent, #f6a24a);
-      transform: translateX(1px);
+      color: #818cf8;
+      transform: translateX(4px) scale(1.2);
     }
     /* Side-opening suboptions */
     .sub-flyout {
       position: absolute;
       top: 0;
-      left: 100%;
-      margin-left: 8px;
-      width: 200px;
+      width: 216px;
       padding: 8px;
-      background: color-mix(in srgb, var(--bq-surface, #141c26) 98%, transparent);
-      border: 1px solid var(--bq-border, rgba(255, 255, 255, 0.16));
-      border-radius: 13px;
-      box-shadow: 0 16px 45px rgba(0, 0, 0, 0.65);
-      backdrop-filter: blur(20px);
+      background: color-mix(in srgb, var(--bq-surface, #0f172a) 95%, transparent);
+      border: 1px solid var(--bq-border, rgba(255, 255, 255, 0.15));
+      border-radius: 9px;
+      box-shadow: 0 24px 60px -8px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(28px) saturate(190%);
       z-index: 1300;
       display: flex;
       flex-direction: column;
       gap: 3px;
-      animation: flyout-in 0.16s ease-out;
+      will-change: transform, opacity, filter;
+    }
+    .sub-flyout.is-right {
+      left: 100%;
+      margin-left: 8px;
+      transform-origin: top left;
+      animation: flyout-fluid-right 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .sub-flyout.is-left {
+      right: 100%;
+      margin-right: 8px;
+      transform-origin: top right;
+      animation: flyout-fluid-left 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
     .sub-flyout::before {
       content: '';
       position: absolute;
-      top: -24px;
-      bottom: -24px;
-      width: 36px;
+      top: -30px;
+      bottom: -30px;
+      width: 44px;
       pointer-events: auto;
     }
     .sub-flyout.is-right::before {
@@ -219,22 +283,34 @@ export function createSettingsMenu(
     .sub-flyout.is-left::before {
       left: 100%;
     }
+    .sub-flyout > .sub-flyout-item {
+      animation: dropdown-child-fade 0.22s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    }
+    .sub-flyout > .sub-flyout-item:nth-child(1) { animation-delay: 0.02s; }
+    .sub-flyout > .sub-flyout-item:nth-child(2) { animation-delay: 0.045s; }
+    .sub-flyout > .sub-flyout-item:nth-child(3) { animation-delay: 0.07s; }
     .sub-flyout-item {
       display: block;
-      padding: 7px 10px;
-      border-radius: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
       color: #e2e8f0;
       text-decoration: none;
-      font-size: 11.5px;
+      font-size: 12px;
       font-weight: 600;
-      transition: all 0.14s ease;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                  background 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                  color 0.18s ease;
     }
     .sub-flyout-item:hover {
-      background: rgba(255, 255, 255, 0.12);
-      color: var(--bq-accent, #f6a24a);
+      transform: translateX(4px);
+      background: linear-gradient(90deg, rgba(129, 140, 248, 0.24), rgba(56, 189, 248, 0.14));
+      color: #fff;
+    }
+    .sub-flyout-item:active {
+      transform: translateX(2px) scale(0.98);
     }
     button:focus-visible, input:focus-visible, .quest-link:focus-visible, .sub-flyout-item:focus-visible {
-      outline: 2px solid var(--bq-accent, #f6a24a);
+      outline: 2px solid #818cf8;
       outline-offset: 2px;
     }
     .status {
@@ -244,19 +320,74 @@ export function createSettingsMenu(
       margin-top: 8px;
     }
     .error { color: var(--bq-warning, #f87171); }
-    @keyframes menu-in {
-      from { opacity: 0; transform: translateY(-5px) scale(0.98); }
-      to { opacity: 1; transform: none; }
+    @keyframes dropdown-child-fade {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
-    @keyframes flyout-in {
-      from { opacity: 0; transform: scale(0.96); }
-      to { opacity: 1; transform: none; }
+    @keyframes menu-fluid-spring {
+      0% {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.95);
+        filter: blur(6px);
+      }
+      65% {
+        opacity: 1;
+        transform: translateY(1.5px) scale(1.008);
+        filter: blur(0);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+      }
+    }
+    @keyframes flyout-fluid-right {
+      0% {
+        opacity: 0;
+        transform: translateX(-12px) scale(0.94);
+        filter: blur(4px);
+      }
+      70% {
+        opacity: 1;
+        transform: translateX(2px) scale(1.008);
+        filter: blur(0);
+      }
+      100% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+        filter: blur(0);
+      }
+    }
+    @keyframes flyout-fluid-left {
+      0% {
+        opacity: 0;
+        transform: translateX(12px) scale(0.94);
+        filter: blur(4px);
+      }
+      70% {
+        opacity: 1;
+        transform: translateX(-2px) scale(1.008);
+        filter: blur(0);
+      }
+      100% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+        filter: blur(0);
+      }
     }
     @media (prefers-reduced-motion: reduce) {
-      .menu-dropdown, .sub-flyout { animation: none; }
+      .menu-dropdown, .sub-flyout, .menu-dropdown > *, .sub-flyout > * { animation: none !important; }
     }
     :root[data-betterquest-animations="disabled"] .menu-dropdown,
-    :root[data-betterquest-animations="disabled"] .sub-flyout {
+    :root[data-betterquest-animations="disabled"] .sub-flyout,
+    :root[data-betterquest-animations="disabled"] .menu-dropdown > *,
+    :root[data-betterquest-animations="disabled"] .sub-flyout > * {
       animation: none !important;
       transition: none !important;
     }
@@ -475,7 +606,7 @@ export function createSettingsMenu(
           cancelFlyoutClose();
           flyoutTimer = setTimeout(() => {
             flyout.hidden = true;
-          }, 2000);
+          }, HOVER_CLOSE_DELAY_MS);
         };
 
         flyoutEntries.push({
@@ -577,7 +708,7 @@ export function createSettingsMenu(
     } catch (error) {
       paint();
       status.className = 'status error';
-      status.textContent = error instanceof Error ? error.message : 'Preference could not be saved.';
+      status.textContent = 'Could not update settings. Please try again.';
     }
   }
 
@@ -590,7 +721,11 @@ export function createSettingsMenu(
     stop?.();
     stop = undefined;
     trigger.setAttribute('aria-expanded', 'false');
-    if (questTrigger) questTrigger.setAttribute('aria-expanded', 'false');
+    trigger.classList.remove('is-open');
+    if (questTrigger) {
+      questTrigger.setAttribute('aria-expanded', 'false');
+      questTrigger.classList.remove('is-open');
+    }
     if (restoreFocus && trigger.isConnected) {
       if (activeView === 'quest' && questTrigger && questTrigger.isConnected) {
         questTrigger.focus();
@@ -613,7 +748,11 @@ export function createSettingsMenu(
       bqMenu.hidden = false;
       questMenu.hidden = true;
       trigger.setAttribute('aria-expanded', 'true');
-      if (questTrigger) questTrigger.setAttribute('aria-expanded', 'false');
+      trigger.classList.add('is-open');
+      if (questTrigger) {
+        questTrigger.setAttribute('aria-expanded', 'false');
+        questTrigger.classList.remove('is-open');
+      }
 
       if (hostRect.width > 0 && hostRect.left + 330 > winWidth - 16) {
         bqMenu.style.left = 'auto';
@@ -628,7 +767,11 @@ export function createSettingsMenu(
       bqMenu.hidden = true;
       questMenu.hidden = false;
       trigger.setAttribute('aria-expanded', 'false');
-      if (questTrigger) questTrigger.setAttribute('aria-expanded', 'true');
+      trigger.classList.remove('is-open');
+      if (questTrigger) {
+        questTrigger.setAttribute('aria-expanded', 'true');
+        questTrigger.classList.add('is-open');
+      }
 
       if (hostRect.width > 0 && hostRect.right - 250 < 16) {
         questMenu.style.left = '0';
@@ -665,7 +808,7 @@ export function createSettingsMenu(
 
   const scheduleHoverClose = () => {
     cancelHoverClose();
-    hoverTimer = setTimeout(() => close(false), 2000);
+    hoverTimer = setTimeout(() => close(false), HOVER_CLOSE_DELAY_MS);
   };
 
   trigger.addEventListener('pointerenter', () => {

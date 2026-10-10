@@ -4,6 +4,7 @@ import { createAssignmentSection, type Subscribe } from '../features/assignments
 import { findHomepageSlot } from '../adapters/quest/homepage';
 import { createHomepageOverview } from '../features/assignments/homepage';
 import { createCourseArtwork } from '../features/courses/artwork';
+import { createMeetingTimesEnhancer } from '../features/courses/meeting-times';
 import { featurePreferences, type FeaturePreferences } from '../shared/models';
 import { createQuestTheme } from '../features/theme/quest';
 import { questionAdapter } from '../adapters/quest/questions';
@@ -16,6 +17,7 @@ import { BookmarkService } from '../features/bookmarks/service';
 import { createPdfController } from '../features/pdf/controller';
 import { findPdfAssessment, findSlideAssessment } from '../adapters/quest/assessment';
 import { createPdfAssessmentWorkspace, createSlideAssessmentEnhancement } from '../features/assessment/workspace';
+import { createCourseDetailsFacelift, isCourseShowPage } from '../features/courses/details-enhancer';
 import { execute, subscribeLocal, type Execute } from '../shared/client';
 
 /** Composition point: null adapters create no controls, observers, RPCs, or CSS. */
@@ -77,6 +79,23 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
     attributeFilter: ['href', 'src', 'aria-label'], mount: root => {
       const artwork = createCourseArtwork(root);
       return { refresh: () => artwork.reconcile(), dispose: artwork.dispose };
+    },
+  });
+  definitions.push({ name: 'meeting-times', locate: doc => findHomepageSlot(doc)?.table || null,
+    mount: root => {
+      const enhancer = createMeetingTimesEnhancer(root as HTMLTableElement);
+      return { refresh: () => enhancer.reconcile(), dispose: enhancer.dispose };
+    },
+  });
+  definitions.push({
+    name: 'course-details-facelift',
+    locate: doc => {
+      if (!isCourseShowPage(doc.URL)) return null;
+      return doc.querySelector<HTMLElement>('#target') || doc.querySelector<HTMLElement>('#student-course-info-header') || null;
+    },
+    mount: root => {
+      const facelift = createCourseDetailsFacelift(root as HTMLElement);
+      return { refresh: () => facelift.reconcile(), dispose: facelift.dispose };
     },
   });
   if (questionAdapter) {

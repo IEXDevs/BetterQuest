@@ -3,10 +3,11 @@ export type AssignmentId = string;
 export type QuestionId = string;
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type FeatureName = 'assignments' | 'bookmarks' | 'animations';
-export interface FeaturePreferences { assignments: boolean; bookmarks: boolean; animations?: boolean }
+export interface FeaturePreferences { assignments?: boolean; bookmarks?: boolean; animations?: boolean }
 export interface Preferences { theme: ThemePreference; features?: FeaturePreferences }
-export function featurePreferences(preferences: Preferences): FeaturePreferences {
-  return preferences.features || { assignments: true, bookmarks: true, animations: true };
+export function featurePreferences(preferences?: Preferences | null): { assignments: boolean; bookmarks: boolean; animations: boolean } {
+  const current = preferences?.features;
+  return { assignments: current?.assignments ?? true, bookmarks: current?.bookmarks ?? true, animations: current?.animations ?? true };
 }
 export type CompletionStatus = 'unknown' | 'not-started' | 'not-completed' | 'in-progress' | 'completed';
 

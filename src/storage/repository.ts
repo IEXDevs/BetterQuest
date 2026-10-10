@@ -24,8 +24,8 @@ export class LocalRepository {
       const current = decodeState(await this.backend.read());
       const next = applyCommand(current, command);
       if (command.kind !== 'state:read') {
-        if (!isLocalState(next)) throw new Error('Invalid state update.');
-        if (new TextEncoder().encode(JSON.stringify(next)).length > 7_000_000) throw new Error('BetterQuest local data limit reached.');
+        if (!isLocalState(next)) throw new Error('Could not update settings.');
+        if (new TextEncoder().encode(JSON.stringify(next)).length > 7_000_000) throw new Error('Storage limit reached on this device.');
         await this.backend.write(next);
       }
       return structuredClone(next);

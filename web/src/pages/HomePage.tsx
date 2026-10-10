@@ -47,7 +47,7 @@ export function HomePage() {
         <section className="feature-story" id="inside">
           <AnimatedContent distance={40} duration={0.75} className="feature-article">
             <article>
-              <div className="feature-copy"><span className="feature-index">01 / Tracker</span><h2>Keep a streak across every course.</h2><p>BetterQuest tracks the assignments you visit into one overview: what is due, what is still open, and how the week is stacking up. It is a personal streak board for Quest work, not a crawl of your entire account.</p></div>
+              <div className="feature-copy"><span className="feature-index">01 / Tracker</span><h2>Keep a streak across every course.</h2><p>BetterQuest tracks the assignments you visit into one overview: what is due, what is still open, and how the week is stacking up. Done with an assignment before Quest registers it? Mark it complete manually with one click so your streak and to-do list stay accurate.</p></div>
               <div className="feature-visual streak-visual" aria-hidden="true">
                 <div className="streak-visual__head">
                   <small>Current streak</small>

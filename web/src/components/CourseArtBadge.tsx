@@ -3,11 +3,10 @@ import PixelCard, { type PixelCardVariant } from '../bits/PixelCard';
 import SwirlCard, { type SwirlVariant } from '../bits/SwirlCard';
 import SoftAurora from '../bits/SoftAurora';
 import DotGrid from '../bits/DotGrid';
-import RippleGrid from '../bits/RippleGrid';
 import LiquidEther from '../bits/LiquidEther';
 import './CourseArtBadge.css';
 
-export type BackgroundStyle = 'ripple' | 'ether' | 'swirl' | 'pixel' | 'aurora' | 'dotgrid';
+export type BackgroundStyle = 'ether' | 'swirl' | 'pixel' | 'aurora' | 'dotgrid';
 
 const SOLID_BADGE_COLORS: Record<string, string> = {
   M: '#4c1d95',   // Rich solid purple
@@ -48,7 +47,7 @@ export function CourseArtBadge({
   const derivedType: BackgroundStyle =
     bgType ??
     (department === 'M'
-      ? 'ripple'
+      ? 'ether'
       : department === 'CH'
       ? 'pixel'
       : department === 'PHY'
@@ -67,20 +66,6 @@ export function CourseArtBadge({
 
   const renderBackground = () => {
     switch (derivedType) {
-      case 'ripple':
-        return (
-          <RippleGrid
-            gridSize={size === 'hero' ? 24 : size === 'sm' ? 14 : 18}
-            gridColor="#a855f7"
-            rippleColor="#f3e8ff"
-            glowColor="#7c3aed"
-            rippleSpeed={size === 'hero' ? 1.4 : 1.1}
-            style={{ width: '100%', height: '100%' }}
-          >
-            {renderOverlay()}
-          </RippleGrid>
-        );
-
       case 'ether':
         return (
           <LiquidEther

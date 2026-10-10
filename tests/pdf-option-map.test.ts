@@ -51,3 +51,44 @@ test('PDF option mapping fails closed for incomplete sequences and restarts at a
   ]);
 });
 
+test('PDF option mapping identifies question headers containing points, parts, and choices with formula text', () => {
+  const actual = mapper()([
+    run('001 10.0 points', 20),
+    run('1. \\sqrt{x} = 2', 50),
+    run('2. \\sqrt{x} = 4', 70),
+    run('3. \\sqrt{x} = 8', 90),
+    run('4. None of these', 110),
+    run('002 (part 1 of 2) 10.0 pts', 200),
+    run('1. 42 m/s', 220),
+    run('2. 84 m/s', 240),
+    run('3. 126 m/s', 260),
+    run('003: 5.0 points', 300),
+    run('1. Option A', 320),
+    run('2. Option B', 340),
+  ], new Map([[1, 4], [2, 3], [3, 2]]));
+
+  assert.deepEqual(actual.map(({ questionNumber, optionValue, top }) => [questionNumber, optionValue, top]), [
+    [1, 1, 50], [1, 2, 70], [1, 3, 90], [1, 4, 110],
+    [2, 1, 220], [2, 2, 240], [2, 3, 260],
+    [3, 1, 320], [3, 2, 340],
+  ]);
+});
+
+test('PDF option mapping maps choices for questions at the very bottom of the document', () => {
+  const actual = mapper()([
+    run('001', 20),
+    run('1.', 40), run('2.', 60), run('3.', 80),
+    run('002 10.0 points', 120),
+    run('1.', 140), run('2.', 160), run('3.', 180),
+    run('003', 220),
+    run('1.', 240), run('2.', 260), run('3.', 280),
+  ], new Map([[1, 3], [2, 3], [3, 3]]));
+
+  assert.deepEqual(actual.map(({ questionNumber, optionValue, top }) => [questionNumber, optionValue, top]), [
+    [1, 1, 40], [1, 2, 60], [1, 3, 80],
+    [2, 1, 140], [2, 2, 160], [2, 3, 180],
+    [3, 1, 240], [3, 2, 260], [3, 3, 280],
+  ]);
+});
+
+

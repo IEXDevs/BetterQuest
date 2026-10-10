@@ -90,7 +90,8 @@ export function isLocalState(value: unknown): value is LocalState {
     array(value.bookmarks, isBookmark, 5000) && unique(value.bookmarks) && array(value.study, isStudyRecord, 1000) &&
     themePreference(value.preferences.theme) &&
     (value.preferences.features === undefined || (object(value.preferences.features) && only(value.preferences.features, ['assignments', 'bookmarks', 'animations']) &&
-      typeof value.preferences.features.assignments === 'boolean' && typeof value.preferences.features.bookmarks === 'boolean' &&
+      (value.preferences.features.assignments === undefined || typeof value.preferences.features.assignments === 'boolean') &&
+      (value.preferences.features.bookmarks === undefined || typeof value.preferences.features.bookmarks === 'boolean') &&
       (value.preferences.features.animations === undefined || typeof value.preferences.features.animations === 'boolean')));
 }
 
