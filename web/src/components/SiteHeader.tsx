@@ -1,5 +1,5 @@
-import { EXTENSION_INSTALL_URL } from '../content/links';
 import { Brand } from './Brand';
+import { InstallExtensionButton } from './InstallExtensionButton';
 import { ThemeToggle } from './ThemeToggle';
 
 export function SiteHeader({
@@ -12,15 +12,9 @@ export function SiteHeader({
       <Brand />
       <div className="header-actions">
         <nav aria-label="Primary navigation">
-          {current === 'product' ? (
-            <a href="#inside">Inside the layer</a>
-          ) : (
-            <a href="/">Product</a>
-          )}
-          <a href="/privacy" aria-current={current === 'privacy' ? 'page' : undefined}>Privacy</a>
-          <a className="nav-cta" href={EXTENSION_INSTALL_URL} target="_blank" rel="noopener noreferrer">
-            Extension
-          </a>
+          {current === 'privacy' && <a href="/">Product</a>}
+          <a href="/privacy" aria-current={current === 'privacy' ? 'page' : undefined}>Privacy Policy</a>
+          <InstallExtensionButton size="sm" label="Extension" className="nav-cta" />
         </nav>
         <ThemeToggle />
       </div>

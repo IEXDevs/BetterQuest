@@ -2,7 +2,6 @@ import AnimatedContent from '../bits/AnimatedContent';
 import BlurText from '../bits/BlurText';
 import { InstallExtensionButton } from '../components/InstallExtensionButton';
 import { InteractiveProductFrame } from '../components/InteractiveProductFrame';
-import { ProductScene } from '../components/ProductScene';
 import { SiteFooter } from '../components/SiteFooter';
 import { SiteHeader } from '../components/SiteHeader';
 
@@ -13,9 +12,7 @@ export function HomePage() {
       <SiteHeader current="product" />
       <main id="main">
         <section className="hero">
-          <ProductScene variant="product" />
           <div className="hero-copy">
-            <p className="eyebrow"><span className="pulse" aria-hidden="true" />Browser extension for UT Austin Quest</p>
             <BlurText
               tag="h1"
               text="All your Quest work. One View."
@@ -24,6 +21,7 @@ export function HomePage() {
               direction="top"
               delay={80}
               stepDuration={0.28}
+              style={{ justifyContent: 'center', textAlign: 'center', width: '100%' }}
             />
             <p className="hero-lede">
               A streak-style tracker for everything on Quest: every assignment you open, every due date that matters,
@@ -31,19 +29,19 @@ export function HomePage() {
             </p>
             <div className="hero-actions">
               <InstallExtensionButton />
-              <a className="button button-quiet" href="#inside">See the layer</a>
-              <a className="button button-quiet" href="/privacy">Privacy <span aria-hidden="true">↗</span></a>
+              <a className="button button-quiet" href="/privacy">Privacy Policy</a>
             </div>
-            <p className="hero-aside">Runs on Quest pages you open. Keeps its notes in your browser.</p>
           </div>
 
-          <InteractiveProductFrame />
+          <div className="hero-product-stage">
+            <InteractiveProductFrame />
+          </div>
         </section>
 
         <AnimatedContent distance={36} duration={0.7} threshold={0.12} className="statement">
           <p className="eyebrow">Why it exists</p>
-          <h2>Quest is a pile of pages. BetterQuest is the streak that holds them together.</h2>
-          <p>One tracker for the work you have actually opened, so progress and due dates stay visible without a second LMS.</p>
+          <h2>We organize your work and improve the UI with adjustments for maximum ease of use.</h2>
+          <p>Consolidating deadlines, streamlining course navigation, and refining the interface so studying feels effortless.</p>
         </AnimatedContent>
 
         <section className="feature-story" id="inside">
@@ -92,20 +90,8 @@ export function HomePage() {
           </AnimatedContent>
         </section>
 
-        <AnimatedContent distance={36} duration={0.7} className="boundary">
-          <div>
-            <p className="eyebrow">A narrow extension on purpose</p>
-            <h2>Your coursework is not the business model.</h2>
-          </div>
-          <div className="boundary-copy">
-            <p>Assignment metadata, bookmarks, notes, and preferences stay in Chrome extension storage. Limited anonymous error diagnostics may be sent to help us find broken behavior; they exclude submitted answers and coursework text.</p>
-            <div className="boundary-list"><span>Does</span><p>Track work across courses<br />Keep a daily calendar feed<br />Link back to saved questions</p><span>Doesn&apos;t</span><p>Read submitted answers<br />Automate assessments<br />Sell student information</p></div>
-            <a className="text-link" href="/privacy">Read the exact data boundary <span aria-hidden="true">→</span></a>
-          </div>
-        </AnimatedContent>
-
         <section className="closing">
-          <h2>Less hunting.<br />More finishing.</h2>
+          <h2>Getting You To The Finish Line.<br />Better In Every Way Possible</h2>
           <div className="closing-actions">
             <InstallExtensionButton label="Get the extn" />
             <a className="button button-light" href="https://iexdevs.com/contact">Talk to the team <span aria-hidden="true">↗</span></a>

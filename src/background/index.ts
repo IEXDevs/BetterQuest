@@ -8,14 +8,14 @@ const repository = new LocalRepository(chromeBackend());
 const subscribers = new Set<chrome.runtime.Port>();
 chrome.runtime.onConnect.addListener(port => {
   if (port.name !== 'betterquest:changes' || port.sender?.id !== chrome.runtime.id ||
-      !port.sender.url || !isStudentPage(port.sender.url)) { port.disconnect(); return; }
+    !port.sender.url || !isStudentPage(port.sender.url)) { port.disconnect(); return; }
   subscribers.add(port);
   port.onDisconnect.addListener(() => subscribers.delete(port));
 });
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, reply) => {
   if (sender.id !== chrome.runtime.id ||
-      !sender.url || !isStudentPage(sender.url)) return;
+    !sender.url || !isStudentPage(sender.url)) return;
 
   if (isPing(message)) {
     const response: Pong = { type: 'betterquest:pong', version: chrome.runtime.getManifest().version };

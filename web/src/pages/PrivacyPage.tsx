@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react';
 import AnimatedContent from '../bits/AnimatedContent';
 import BlurText from '../bits/BlurText';
-import LineSidebar from '../bits/LineSidebar';
 import Magnet from '../bits/Magnet';
-import { ProductScene } from '../components/ProductScene';
 import { SiteFooter } from '../components/SiteFooter';
 import { SiteHeader } from '../components/SiteHeader';
 import { PRIVACY_EFFECTIVE_DATE, PRIVACY_NAV } from '../content/privacy';
 
 const NAV_IDS = PRIVACY_NAV.map((item) => item.id);
-const NAV_LABELS = PRIVACY_NAV.map((item) => item.label);
 
 export function PrivacyPage() {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -27,7 +24,7 @@ export function PrivacyPage() {
       if (!(visible?.target instanceof HTMLElement)) return;
       const index = NAV_IDS.indexOf(visible.target.id as (typeof NAV_IDS)[number]);
       if (index >= 0) setActiveIndex(index);
-    }, { rootMargin: '-20% 0px -55% 0px', threshold: [0.1, 0.35, 0.6] });
+    }, { rootMargin: '-12% 0px -50% 0px', threshold: [0, 0.1, 0.25] });
 
     sections.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
@@ -39,7 +36,6 @@ export function PrivacyPage() {
       <SiteHeader current="privacy" />
       <main className="policy" id="main">
         <header className="policy-hero">
-          <ProductScene variant="policy" />
           <div>
             <p className="eyebrow">Privacy policy / {PRIVACY_EFFECTIVE_DATE}</p>
             <BlurText
@@ -68,27 +64,27 @@ export function PrivacyPage() {
 
         <div className="policy-layout">
           <aside className="policy-nav" aria-label="On this page">
-            <p>On this page</p>
-            <LineSidebar
-              items={[...NAV_LABELS]}
-              accentColor="#f47b25"
-              textColor="#85827d"
-              markerColor="#5c5954"
-              showIndex
-              showMarker
-              proximityRadius={90}
-              maxShift={18}
-              markerLength={42}
-              itemGap={14}
-              fontSize={0.72}
-              tickScale={0.45}
-              activeIndex={activeIndex}
-              onItemClick={(index) => {
-                setActiveIndex(index);
-                document.getElementById(NAV_IDS[index])?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
-              className="policy-line-sidebar"
-            />
+            <p className="policy-nav-label">On this page</p>
+            <nav className="policy-switcher" aria-label="Privacy sections switcher">
+              {PRIVACY_NAV.map((item, index) => {
+                const isActive = index === activeIndex;
+                const paddedIndex = String(index + 1).padStart(2, '0');
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`policy-switcher-btn ${isActive ? 'is-active' : ''}`}
+                    onClick={() => {
+                      setActiveIndex(index);
+                      document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                  >
+                    <span className="policy-switcher-num">{paddedIndex}</span>
+                    <span className="policy-switcher-text">{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
           </aside>
 
           <article className="policy-copy">

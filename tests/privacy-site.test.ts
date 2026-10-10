@@ -10,12 +10,11 @@ test('BetterQuest publishes a navigable product landing page', async () => {
 
   assert.match(html, /BetterQuest \| Your Quest work, in one view/);
   assert.match(page, /All your Quest work\. One View\./);
-  assert.match(page, /Browser extension for UT Austin Quest/);
+  assert.match(page, /InteractiveProductFrame/);
   assert.match(page, /streak-style tracker/i);
   assert.match(page, /Google Calendar/i);
   assert.match(page, /InstallExtensionButton/);
   assert.match(page, /href="\/privacy"/);
-  assert.match(page, /anonymous error diagnostics/i);
 });
 
 test('BetterQuest privacy page matches the extension data boundary', async () => {
@@ -43,7 +42,7 @@ test('BetterQuest privacy page matches the extension data boundary', async () =>
   assert.match(text, /de-identified.*aggregate|anonymized.*aggregate/i);
   assert.match(text, /public.*internal.*dashboard/is);
   assert.match(page, /https:\/\/iexdevs\.com\/contact/);
-  assert.match(page, /LineSidebar/);
+  assert.match(page, /policy-switcher/);
 });
 
 test('BetterQuest Cloudflare configuration isolates the website from extension dist', async () => {

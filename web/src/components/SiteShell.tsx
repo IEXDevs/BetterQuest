@@ -4,7 +4,7 @@ import { SiteAtmosphere } from './SiteAtmosphere';
 
 export function SiteShell({
   children,
-  atmosphere = 'aurora',
+  atmosphere: _atmosphere = 'aurora',
 }: {
   children: ReactNode;
   atmosphere?: 'aurora' | 'threads';
@@ -17,7 +17,8 @@ export function SiteShell({
       storageKey="betterquest.theme"
       disableTransitionOnChange={false}
     >
-      <SiteAtmosphere variant={atmosphere} />
+      <div className="theme-blur-veil" aria-hidden="true" />
+      <SiteAtmosphere />
       {children}
     </ThemeProvider>
   );

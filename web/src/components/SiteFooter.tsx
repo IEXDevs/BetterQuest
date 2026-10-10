@@ -11,7 +11,7 @@ export function SiteFooter({
       <p>{note}</p>
       <div className="footer-links">
         <a href="/">Product</a>
-        <a href="/privacy">Privacy</a>
+        <a href="/privacy">Privacy Policy</a>
         <a href="https://iexdevs.com/contact">Contact</a>
         <a href="https://iexdevs.com">IEXDevs</a>
       </div>
