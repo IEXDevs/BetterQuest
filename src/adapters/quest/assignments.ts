@@ -13,6 +13,13 @@ export const ASSIGNMENT_SELECTORS = {
   processing: '.dataTables_processing',
 } as const;
 
+export interface AssignmentCompletionBinding {
+  assignmentId: string;
+  title: string;
+  nativeStatus: CompletionStatus;
+  controlSlot: HTMLElement;
+}
+
 const clean = (value: string | null | undefined) => (value || '').replace(/\s+/g, ' ').trim();
 
 function label(cell: Element | undefined, prefix: RegExp): string | null {
@@ -70,6 +77,14 @@ function groupFor(root: Element, table: Element): NonNullable<Assignment['group'
   return { id, label: clean(title?.textContent) || null };
 }
 
+function assignmentSource(link: HTMLAnchorElement, context: PageContext): { sourceId: string; url: URL } | null {
+  try {
+    const url = new URL(sourceUrl(link.getAttribute('href')!, context.url));
+    const sourceId = url.searchParams.get('instance');
+    return url.pathname === '/student/instances/route' && sourceId && /^courseuserassignment_\d+$/.test(sourceId) ? { sourceId, url } : null;
+  } catch { return null; }
+}
+
 export function readCourseIdentity(root: Element, context: PageContext): Course | null {
   const title = clean(root.querySelector(ASSIGNMENT_SELECTORS.title)?.textContent);
   const unique = title.match(/\((\d+)\)\s*$/)?.[1];
@@ -104,10 +119,9 @@ export function parseAssignmentPage(root: Element, context: PageContext): Extrac
       const cells = [...row.querySelectorAll(':scope > td')];
       const link = cells[nameIndex]?.querySelector<HTMLAnchorElement>('a[href]');
       if (!link) continue; // DataTables empty/loading placeholders are not assignments.
-      let url: URL;
-      try { url = new URL(sourceUrl(link.getAttribute('href')!, context.url)); } catch { continue; }
-      const sourceId = url.searchParams.get('instance');
-      if (url.pathname !== '/student/instances/route' || !sourceId || !/^courseuserassignment_\d+$/.test(sourceId)) continue;
+      const source = assignmentSource(link, context);
+      if (!source) continue;
+      const { sourceId, url } = source;
       const title = clean(link.textContent);
       if (!title) continue;
       const state = completion(cells[completionIndex]);
@@ -128,6 +142,31 @@ export function parseAssignmentPage(root: Element, context: PageContext): Extrac
     sourceUrl: course.url, observedAt: context.observedAt, courses: [course], assignments: [...assignments.values()],
     scannedCourseIds: observedTables > 0 && !loading ? [course.id] : [],
   } };
+}
+
+/** Verified native Completed cells are the only place a local correction is offered. */
+export function readAssignmentCompletionBindings(root: Element, context: PageContext): AssignmentCompletionBinding[] {
+  const course = readCourseIdentity(root, context);
+  if (!course || context.signal.aborted) return [];
+  const bindings: AssignmentCompletionBinding[] = [];
+  for (const table of root.querySelectorAll(ASSIGNMENT_SELECTORS.tables)) {
+    const headers = tableColumns(table);
+    const nameIndex = headers.indexOf('Name');
+    const completionIndex = headers.indexOf('Completed');
+    if (nameIndex < 0 || completionIndex < 0) continue;
+    for (const row of table.querySelectorAll('tbody > tr')) {
+      const cells = [...row.querySelectorAll<HTMLElement>(':scope > td')];
+      const link = cells[nameIndex]?.querySelector<HTMLAnchorElement>('a[href]');
+      const slot = cells[completionIndex];
+      if (!link || !slot) continue;
+      const source = assignmentSource(link, context);
+      if (!source) continue;
+      const state = completion(slot).status;
+      if (state !== 'not-completed') continue;
+      bindings.push({ assignmentId: assignmentId(course.id, source.sourceId), title: clean(link.textContent), nativeStatus: state, controlSlot: slot });
+    }
+  }
+  return bindings;
 }
 
 export const assignmentAdapter: AssignmentAdapter = {

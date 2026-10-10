@@ -5,6 +5,7 @@ export type Command =
   | { kind: 'state:read' }
   | { kind: 'assignments:cache'; snapshot: AssignmentSnapshot }
   | { kind: 'assignments:refresh'; requestedAt: string }
+  | { kind: 'assignment:completion:set'; assignmentId: string; completed: boolean }
   | { kind: 'bookmarks:put'; bookmark: Bookmark }
   | { kind: 'bookmarks:remove'; questionId: string }
   | { kind: 'theme:set'; preference: ThemePreference }
@@ -18,10 +19,11 @@ export function isCommand(value: unknown): value is Command {
     case 'state:read': return true;
     case 'assignments:cache': return isSnapshot(value.snapshot);
     case 'assignments:refresh': return timestamp(value.requestedAt);
+    case 'assignment:completion:set': return typeof value.assignmentId === 'string' && value.assignmentId.length > 0 && value.assignmentId.length <= 6000 && typeof value.completed === 'boolean';
     case 'bookmarks:put': return isBookmark(value.bookmark);
     case 'bookmarks:remove': return typeof value.questionId === 'string' && value.questionId.length <= 8000;
     case 'theme:set': return themePreference(value.preference);
-    case 'feature:set': return (value.feature === 'assignments' || value.feature === 'bookmarks') && typeof value.enabled === 'boolean';
+    case 'feature:set': return (value.feature === 'assignments' || value.feature === 'bookmarks' || value.feature === 'animations') && typeof value.enabled === 'boolean';
     case 'study:save': return isStudyRecord(value.record);
     default: return false;
   }
@@ -55,6 +57,14 @@ export function applyCommand(state: LocalState, command: Command): LocalState {
       break;
     }
     case 'assignments:refresh': next.cache.refreshRequestedAt = command.requestedAt; break;
+    case 'assignment:completion:set': {
+      if (!next.cache.assignments.some(assignment => assignment.id === command.assignmentId)) throw new Error('Unknown assignment completion target.');
+      const overrides = { ...(next.completionOverrides || {}) };
+      if (command.completed) overrides[command.assignmentId] = true;
+      else delete overrides[command.assignmentId];
+      next.completionOverrides = overrides;
+      break;
+    }
     case 'bookmarks:put': {
       const old = next.bookmarks.find(bookmark => bookmark.id === command.bookmark.id);
       next.bookmarks = merge(next.bookmarks, [{ ...command.bookmark, createdAt: old?.createdAt || command.bookmark.createdAt }]);

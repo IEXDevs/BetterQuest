@@ -1,4 +1,4 @@
-import { findNavigation } from './navigation';
+import { applyNavigationFacelift, findNavigation, questNavigationLinks } from './navigation';
 import { createNavigationButton } from './ui';
 import { isStudentPage } from '../shared/messages';
 import { startPageFeatures } from './features';
@@ -18,6 +18,7 @@ export function startIntegration(document: Document, window: Window, options: { 
   let navigation: ReturnType<typeof createNavigationButton> | null = null;
   let savedView: ReturnType<typeof createSavedQuestionsView> | undefined;
   let settings: ReturnType<typeof createSettingsMenu> | undefined;
+  let navShell: { navbar: HTMLElement; dispose: () => void } | undefined;
   let lastUrl = window.location.href;
   const features = startPageFeatures(document, window, options.run || execute, options.subscribe || subscribeLocal);
 
@@ -28,6 +29,7 @@ export function startIntegration(document: Document, window: Window, options: { 
     savedView?.close(false);
     navigation?.host.remove();
     navigation = null;
+    navShell?.dispose(); navShell = undefined;
   }
 
   function reconcile() {
@@ -38,6 +40,10 @@ export function startIntegration(document: Document, window: Window, options: { 
     if (!isStudentPage(nextUrl)) { unmount(); return; }
     const target = findNavigation(document);
     if (!target) { unmount(); return; }
+    if (navShell?.navbar !== target.navbar) {
+      navShell?.dispose();
+      navShell = { navbar: target.navbar, ...applyNavigationFacelift(document, target.navbar) };
+    }
 
     if (!navigation) {
       const openSaved = () => {
@@ -49,9 +55,10 @@ export function startIntegration(document: Document, window: Window, options: { 
         );
         savedView.open(navbar, features.hasAssignmentSection());
       };
-      navigation = createNavigationButton(document, true, () => { settings?.toggle(); });
+      navigation = createNavigationButton(document, true, view => { settings?.toggle(view); });
       settings = createSettingsMenu(navigation.host, navigation.button, options.run || execute, options.subscribe || subscribeLocal,
-        { saved: openSaved, upcoming: () => features.focusAssignments(), hasUpcoming: () => features.hasAssignmentSection(), darkAvailable: features.darkAvailable });
+        { saved: openSaved, upcoming: () => features.focusAssignments(), hasUpcoming: () => features.hasAssignmentSection(), darkAvailable: features.darkAvailable,
+          questLinks: () => questNavigationLinks(document) }, navigation.questButton);
     }
     const items = target.before;
     const nameItem = [...items.children].find(item => !item.hasAttribute('data-betterquest') && item.querySelector(':scope > span.qh-nav-link'));
@@ -61,6 +68,10 @@ export function startIntegration(document: Document, window: Window, options: { 
     const navbar = findSavedQuestionsNavbar(document);
     navigation.button.disabled = !navbar;
     navigation.button.title = 'BetterQuest settings';
+    if (navigation.questButton) {
+      navigation.questButton.disabled = !navbar;
+      navigation.questButton.title = 'Quest settings';
+    }
     if (navbar && savedView?.isOpen()) savedView.position(navbar);
   }
 
@@ -71,6 +82,8 @@ export function startIntegration(document: Document, window: Window, options: { 
 
   const observer = new document.defaultView!.MutationObserver(records => {
     const relevant = records.some(record => {
+      if (record.type === 'childList' && [...record.removedNodes].some(removed => removed.nodeType === 1 &&
+        ((removed as Element).matches('[data-betterquest="navigation"]') || Boolean((removed as Element).querySelector('[data-betterquest="navigation"]'))))) return true;
       const node = record.target.nodeType === 1 ? record.target as Element : record.target.parentElement;
       if (node?.closest('[data-betterquest]')) return false;
       const changed = [...record.addedNodes, ...record.removedNodes];

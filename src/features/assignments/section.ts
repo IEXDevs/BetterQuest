@@ -61,17 +61,17 @@ export function createAssignmentSection(root: Element, run: Execute = execute, s
     return true;
   }
 
-  function render(cache: LocalState['cache']) {
+  function render(state: LocalState) {
     if (!course || disposed) return;
     const focusedId = shadow.activeElement?.closest('[data-assignment-id]')?.getAttribute('data-assignment-id');
-    const data = assignmentPanelData(cache);
+    const data = assignmentPanelData(state.cache);
     // Unknown status isn't evidence of incompletion; it stays in the native full list.
-    const pending = visibleAssignments(cache, course.id, 'course', 'todo').filter(assignment => assignment.completion !== 'unknown');
+    const pending = visibleAssignments(state.cache, course.id, 'course', 'todo', state.completionOverrides).filter(assignment => assignment.completion !== 'unknown');
     const observed = data.courses.find(summary => summary.course.id === course!.id)?.scanned;
     result.replaceChildren();
     if (!pending.length) {
       const empty = document.createElement('p'); empty.className = 'empty';
-      empty.textContent = observed ? 'No incomplete assignments in collected rows.' : 'Waiting for assignment tables…';
+      empty.textContent = observed ? 'All caught up! No incomplete assignments.' : 'Loading assignments…';
       result.append(empty);
     } else {
       const list = document.createElement('ul'); list.className = 'list';
@@ -79,17 +79,17 @@ export function createAssignmentSection(root: Element, run: Execute = execute, s
         const row = document.createElement('li'); row.className = 'row'; row.dataset.assignmentId = assignment.id;
         const link = document.createElement('a'); link.className = 'assignment-link';
         link.href = sourceUrl(assignment.url); link.textContent = assignment.title; link.title = assignment.title;
-        const due = displayDeadline(assignment);
+        const due = displayDeadline(assignment, Date.now(), state.completionOverrides);
         const deadline = document.createElement('time');
         deadline.className = 'deadline' + (due.overdue ? ' overdue' : '');
         if (assignment.deadline.iso) deadline.dateTime = assignment.deadline.iso;
         deadline.textContent = (due.overdue ? 'Overdue · ' : '') + due.date + ' · ' + due.time;
-        deadline.title = assignment.deadline.label || assignment.deadline.iso || 'No verified deadline';
+        deadline.title = assignment.deadline.label || assignment.deadline.iso || 'No deadline listed';
         row.append(link, deadline); list.append(row);
       }
       result.append(list);
     }
-    note.textContent = !observed ? 'Not scanned yet' : pending.length > PREVIEW_SIZE ? `${pending.length} incomplete · Course data only` : 'Course data only';
+    note.textContent = !observed ? 'Not synced yet' : pending.length > PREVIEW_SIZE ? `${pending.length} more remaining` : '';
     if (focusedId) {
       [...result.querySelectorAll<HTMLAnchorElement>('a')].find(link => link.closest('[data-assignment-id]')?.getAttribute('data-assignment-id') === focusedId)?.focus({ preventScroll: true });
     }
@@ -101,8 +101,8 @@ export function createAssignmentSection(root: Element, run: Execute = execute, s
     try {
       const state = await run({ kind: 'state:read' });
       if (disposed || current !== generation) return;
-      const signature = JSON.stringify({ cache: state.cache, course });
-      if (signature !== lastRendered) { render(state.cache); lastRendered = signature; }
+      const signature = JSON.stringify({ cache: state.cache, completionOverrides: state.completionOverrides, course });
+      if (signature !== lastRendered) { render(state); lastRendered = signature; }
     } catch (error) {
       if (!disposed && current === generation) {
         const message = document.createElement('p'); message.className = 'error'; message.setAttribute('role', 'alert');
@@ -121,7 +121,7 @@ export function createAssignmentSection(root: Element, run: Execute = execute, s
     nativeAssignments.scrollIntoView?.({ block: 'start' });
   });
   position();
-  const loading = document.createElement('p'); loading.className = 'empty'; loading.textContent = 'Reading assignments…';
+  const loading = document.createElement('p'); loading.className = 'empty'; loading.textContent = 'Loading assignments…';
   result.append(loading);
   try { unsubscribe = subscribe(() => { void refresh(); }); } catch { /* DOM changes can still refresh the summary. */ }
   return {

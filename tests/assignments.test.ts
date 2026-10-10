@@ -32,9 +32,11 @@ function store() {
   let raw: LocalState | undefined;
   let writes = 0;
   const listeners = new Set<() => void>();
-  const repo = new LocalRepository({ read: async () => raw, write: async state => {
-    raw = JSON.parse(JSON.stringify(state)); writes++; listeners.forEach(callback => callback());
-  } });
+  const repo = new LocalRepository({
+    read: async () => raw, write: async state => {
+      raw = JSON.parse(JSON.stringify(state)); writes++; listeners.forEach(callback => callback());
+    }
+  });
   const run: Execute = command => repo.execute(command);
   const subscribe = (callback: () => void) => { listeners.add(callback); return () => { listeners.delete(callback); }; };
   return { run, subscribe, listeners, writes: () => writes };
@@ -85,6 +87,38 @@ test('reads explicit completion and grade labels; a grade never substitutes for 
     row.querySelectorAll('td')[4].textContent = '';
     assert.equal(snapshot(dom).assignments.at(-1)!.completion, 'unknown');
   } finally { dom.window.close(); }
+});
+
+test('incomplete Quest rows receive a reversible local completed checkmark', async () => {
+  const dom = page(); const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    const row = [...dom.window.document.querySelectorAll('#tabs-elements tbody tr')]
+      .find(item => item.textContent?.includes('Section 12.5'))!;
+    const host = row.querySelector<HTMLElement>('[data-betterquest="completion-toggle"]')!;
+    assert.ok(host);
+    const button = host.shadowRoot!.querySelector<HTMLButtonElement>('button')!;
+    assert.equal(button.getAttribute('aria-pressed'), 'false');
+    button.click(); await pause();
+    const state = await f.run({ kind: 'state:read' });
+    const item = state.cache.assignments.find(a => a.title === 'Section 12.5')!;
+    assert.equal(state.completionOverrides?.[item.id], true);
+    assert.equal(button.getAttribute('aria-pressed'), 'true');
+    button.click(); await pause();
+    assert.equal((await f.run({ kind: 'state:read' })).completionOverrides?.[item.id], undefined);
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('unknown Quest completion markup does not receive a manual completion control', async () => {
+  const dom = page(); const f = store();
+  const row = dom.window.document.querySelector('#instances-table-eh3769540 tbody tr:last-child')!;
+  row.querySelectorAll('td')[4].textContent = '';
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    assert.equal(row.querySelector('[data-betterquest="completion-toggle"]'), null);
+  } finally { features.dispose(); dom.window.close(); }
 });
 
 test('multiple assignment groups are collected, empty placeholders ignored, duplicates collapsed', () => {
@@ -224,7 +258,7 @@ test('unknown deadlines sort last; inline errors are visible and do not mutate s
   data.assignments[0].deadline.iso = null; await new AssignmentTracker(f.run).cache(data);
   assert.equal(assignmentPanelData((await f.run({ kind: 'state:read' })).cache).assignments.at(-1)?.title, 'Section 10.1');
   const root = dom.window.document.querySelector('#target')!;
-  const view = createAssignmentSection(root, async () => { throw new Error('Storage fixture failed'); }, () => () => {});
+  const view = createAssignmentSection(root, async () => { throw new Error('Storage fixture failed'); }, () => () => { });
   try {
     await view.refresh(data.courses[0]);
     assert.equal(root.querySelector('[data-betterquest="assignment-section"]')!.shadowRoot!.querySelector('[role="alert"]')?.textContent, 'Storage fixture failed');
@@ -243,12 +277,13 @@ test('full integration keeps the automatic summary while navbar opens Saved Ques
     const section = dom.window.document.querySelector<HTMLElement>('[data-betterquest="assignment-section"]')!;
     assert.equal(section.shadowRoot!.querySelectorAll('.row').length, 1);
     button.click();
-    navigation.querySelector('span')!.shadowRoot!.querySelector<HTMLButtonElement>('.saved-action')!.click();
+    navigation.querySelector(':scope > span')!.shadowRoot!.querySelector<HTMLButtonElement>('.saved-action')!.click();
     const saved = dom.window.document.querySelector('[data-betterquest="saved-questions"]')!;
     assert.equal(saved.shadowRoot!.activeElement, saved.shadowRoot!.querySelector('h2'));
     assert.equal(dom.window.document.querySelector('[data-betterquest="panel"]'), null);
     const targetCopy = dom.window.document.querySelector('#target')!.cloneNode(true) as Element;
     targetCopy.querySelector('[data-betterquest="assignment-section"]')!.remove();
+    targetCopy.querySelectorAll('[data-betterquest="completion-toggle"]').forEach(node => node.remove());
     assert.equal(targetCopy.outerHTML, original);
     assert.equal(dom.window.document.querySelectorAll('[data-betterquest="navigation"]').length, 1);
   } finally { integration.dispose(); dom.window.close(); }
@@ -272,7 +307,7 @@ test('View all delegates to Quest native assignment tab without changing collaps
   const dom = page(); const f = store(); const tracker = new AssignmentTracker(f.run);
   await tracker.cache(snapshot(dom));
   const root = dom.window.document.querySelector('#target')!;
-  const view = createAssignmentSection(root, f.run, () => () => {});
+  const view = createAssignmentSection(root, f.run, () => () => { });
   try {
     await view.refresh(snapshot(dom).courses[0]);
     const body = root.querySelector('[data-betterquest="assignment-section"]')!.shadowRoot!;

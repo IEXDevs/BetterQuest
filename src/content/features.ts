@@ -1,17 +1,21 @@
-import { assignmentAdapter, readCourseIdentity } from '../adapters/quest/assignments';
+import { assignmentAdapter, readAssignmentCompletionBindings, readCourseIdentity } from '../adapters/quest/assignments';
 import { findAssignmentSectionSlot } from '../adapters/quest/assignment-placement';
 import { createAssignmentSection, type Subscribe } from '../features/assignments/section';
 import { findHomepageSlot } from '../adapters/quest/homepage';
 import { createHomepageOverview } from '../features/assignments/homepage';
+import { createCourseArtwork } from '../features/courses/artwork';
 import { featurePreferences, type FeaturePreferences } from '../shared/models';
 import { createQuestTheme } from '../features/theme/quest';
 import { questionAdapter } from '../adapters/quest/questions';
 import { pdfAdapter } from '../adapters/quest/pdf';
 import { createFeatureRuntime, type FeatureDefinition } from '../features/lifecycle';
 import { AssignmentTracker } from '../features/assignments/tracker';
+import { createCompletionControls } from '../features/assignments/completion-controls';
 import { createBookmarkControls } from '../features/bookmarks/controls';
 import { BookmarkService } from '../features/bookmarks/service';
 import { createPdfController } from '../features/pdf/controller';
+import { findPdfAssessment, findSlideAssessment } from '../adapters/quest/assessment';
+import { createPdfAssessmentWorkspace, createSlideAssessmentEnhancement } from '../features/assessment/workspace';
 import { execute, subscribeLocal, type Execute } from '../shared/client';
 
 /** Composition point: null adapters create no controls, observers, RPCs, or CSS. */
@@ -27,8 +31,9 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
     const tracker = new AssignmentTracker(run);
     definitions.push({ name: 'assignments', locate: doc => ready && enabled.assignments ? adapter.locate(doc) : null,
       attributeFilter: ['class', 'href', 'data-order', 'style'],
-      mount: () => {
+      mount: root => {
         let fingerprint = '';
+        const completionControls = createCompletionControls(root, run, subscribe);
         return {
           refresh: async context => {
             const root = adapter.locate(document);
@@ -36,10 +41,12 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
             const result = adapter.read(root, context);
             if (result.status !== 'ready' || context.signal.aborted) return;
             const signature = JSON.stringify({ ...result.value, observedAt: '' });
-            if (signature === fingerprint) return;
-            await tracker.cache(result.value);
-            if (!context.signal.aborted) fingerprint = signature;
-          }, dispose() {},
+            if (signature !== fingerprint) {
+              await tracker.cache(result.value);
+              if (!context.signal.aborted) fingerprint = signature;
+            }
+            if (!context.signal.aborted) await completionControls.reconcile(readAssignmentCompletionBindings(root, context));
+          }, dispose: completionControls.dispose,
         };
       },
     });
@@ -64,6 +71,12 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       const overview = createHomepageOverview(root, run, subscribe); homepage = overview;
       return { refresh: async context => { if (!context.signal.aborted) await overview.refresh(); },
         dispose: () => { overview.dispose(); if (homepage === overview) homepage = undefined; } };
+    },
+  });
+  definitions.push({ name: 'course-artwork', locate: doc => findHomepageSlot(doc)?.table || null,
+    attributeFilter: ['href', 'src', 'aria-label'], mount: root => {
+      const artwork = createCourseArtwork(root);
+      return { refresh: () => artwork.reconcile(), dispose: artwork.dispose };
     },
   });
   if (questionAdapter) {
@@ -96,6 +109,18 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       };
     } });
   }
+  definitions.push({ name: 'pdf-assessment-workspace', locate: doc => findPdfAssessment(doc)?.root || null,
+    attributeFilter: ['class', 'value', 'disabled', 'hidden'], observeOwnedRemovals: true, mount: root => {
+      const workspace = createPdfAssessmentWorkspace(root as HTMLElement);
+      return { refresh: () => workspace.reconcile(), dispose: workspace.dispose };
+    },
+  });
+  definitions.push({ name: 'slide-assessment-workspace', locate: doc => findSlideAssessment(doc),
+    attributeFilter: ['class', 'checked', 'disabled', 'hidden'], mount: root => {
+      const workspace = createSlideAssessmentEnhancement(root as HTMLElement);
+      return { refresh: () => workspace.reconcile(), dispose: workspace.dispose };
+    },
+  });
   // Historical collection/export stays explicitly user-triggered through StudyService.
   const runtime = createFeatureRuntime(document, definitions);
   const manualAbort = new AbortController();
@@ -114,8 +139,10 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       if (disposed || current !== preferenceGeneration) return;
       enabled = featurePreferences(state.preferences); ready = true;
       theme.update(state.preferences.theme);
+      if (enabled.animations === false) document.documentElement.dataset.betterquestAnimations = 'disabled';
+      else document.documentElement.removeAttribute('data-betterquest-animations');
       runtime.reconcile();
-      runtime.refresh(['bookmarks']);
+      runtime.refresh(['course-artwork', 'bookmarks']);
     } catch { /* Do not mount storage-backed features with unknown preferences. */ }
   }
   const reconcile = () => {
@@ -137,5 +164,6 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
     window.removeEventListener('focus', preferencesChanged);
     manualAbort.abort();
     unsubscribe?.(); runtime.dispose(); theme.dispose();
+    document.documentElement.removeAttribute('data-betterquest-animations');
   } };
 }

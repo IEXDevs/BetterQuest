@@ -18,6 +18,7 @@ import { readHistory } from '../src/adapters/quest/history';
 import { LocalRepository, decodeState } from '../src/storage/repository';
 import { isCommand } from '../src/storage/commands';
 import { emptyState, type LocalState } from '../src/shared/models';
+import { displayDeadline, visibleAssignments } from '../src/features/assignments/view-model';
 import { isQuestion, isStudyExport } from '../src/shared/validation';
 import { courseId, questionId, sourceUrl } from '../src/shared/identity';
 import { course, assignment, question, now, snapshot, study } from './fixtures/models';
@@ -57,6 +58,22 @@ test('concurrent writes are serialized and preserve independent bookmark/prefere
   await Promise.all([service.add(course, assignment, question, 'Study note', now), f.repo.execute({ kind: 'theme:set', preference: 'dark' })]);
   const state = await f.repo.execute({ kind: 'state:read' });
   assert.equal(state.bookmarks.length, 1); assert.equal(state.preferences.theme, 'dark');
+});
+
+test('manual completion is local, reversible, and suppresses false overdue state without changing Quest data', async () => {
+  const f = repository();
+  await f.repo.execute({ kind: 'assignments:cache', snapshot: snapshot() });
+  const overdue = { ...assignment, completion: 'not-completed' as const, deadline: { iso: '2026-10-01T05:00:00.000Z', label: 'September 30, 2026 11:59 PM CDT', timeZone: 'America/Chicago' } };
+  await f.repo.execute({ kind: 'assignments:cache', snapshot: { ...snapshot(), assignments: [overdue] } });
+  assert.equal(isCommand({ kind: 'assignment:completion:set', assignmentId: assignment.id, completed: true }), true);
+  const completed = await f.repo.execute({ kind: 'assignment:completion:set', assignmentId: assignment.id, completed: true } as never);
+  assert.equal(completed.completionOverrides?.[assignment.id], true);
+  assert.deepEqual(visibleAssignments(completed.cache, course.id, 'course', 'todo', completed.completionOverrides), []);
+  assert.equal(displayDeadline(overdue, Date.parse(now), completed.completionOverrides).overdue, false);
+  assert.equal(completed.cache.assignments[0].completion, 'not-completed');
+  const restored = await f.repo.execute({ kind: 'assignment:completion:set', assignmentId: assignment.id, completed: false } as never);
+  assert.equal(restored.completionOverrides?.[assignment.id], undefined);
+  assert.equal(visibleAssignments(restored.cache, course.id, 'course', 'todo', restored.completionOverrides).length, 1);
 });
 
 test('corrupt or newer-version storage fails without silently overwriting personal data', async () => {

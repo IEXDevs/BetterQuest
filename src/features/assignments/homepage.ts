@@ -2,12 +2,12 @@ import type { Course, LocalState } from '../../shared/models';
 import { findHomepageSlot, readHomepageCourses } from '../../adapters/quest/homepage';
 import { execute, type Execute } from '../../shared/client';
 import type { Subscribe } from './section';
-import { completionText, displayDeadline } from './view-model';
+import { assignmentIsCompleted, completionText, displayDeadline, type CompletionOverrides } from './view-model';
 
 function canonical(value: string) { const url = new URL(value); url.hash = ''; url.searchParams.sort(); return url.href; }
 
 /** Only assignment IDs observed on the exact current course URL count as coverage. */
-export function homepageOverview(courses: Course[], cache: LocalState['cache']) {
+export function homepageOverview(courses: Course[], cache: LocalState['cache'], overrides: CompletionOverrides = {}) {
   const summaries = courses.map(course => {
     const page = cache.pages.filter(page => page.courseIds.includes(course.id) && canonical(page.sourceUrl) === canonical(course.url))
       .sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt))[0];
@@ -17,8 +17,8 @@ export function homepageOverview(courses: Course[], cache: LocalState['cache']) 
     return { course, scanned, assignments, observedAt: scanned ? page!.observedAt : null };
   });
   const assignments = summaries.flatMap(summary => summary.assignments);
-  const completed = assignments.filter(a => a.completion === 'completed').length;
-  const pending = assignments.filter(a => a.completion !== 'completed' && a.completion !== 'unknown')
+  const completed = assignments.filter(a => assignmentIsCompleted(a, overrides)).length;
+  const pending = assignments.filter(a => !assignmentIsCompleted(a, overrides) && a.completion !== 'unknown')
     .sort((a, b) => ((a.deadline.iso ? Date.parse(a.deadline.iso) : Infinity) - (b.deadline.iso ? Date.parse(b.deadline.iso) : Infinity)) || a.title.localeCompare(b.title));
   return { summaries, completed, total: assignments.length, unknown: assignments.filter(a => a.completion === 'unknown').length,
     observed: summaries.filter(s => s.scanned).length, pending };
@@ -49,7 +49,7 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
   const content = document.createElement('div'); content.setAttribute('aria-live', 'polite');
   section.append(heading, content); shadow.append(style, section);
   let disposed = false, generation = 0, fingerprint = '', lastRender = '', limit = 5;
-  let courses: Course[] = [], cache: LocalState['cache'] | undefined;
+  let courses: Course[] = [], cache: LocalState['cache'] | undefined, overrides: CompletionOverrides = {};
   let stop: (() => void) | undefined;
   function position() {
     const slot = findHomepageSlot(document);
@@ -59,39 +59,39 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
   }
   function render() {
     if (!cache || disposed) return;
-    const data = homepageOverview(courses, cache); content.className = ''; content.replaceChildren();
+    const data = homepageOverview(courses, cache, overrides); content.className = ''; content.replaceChildren();
     const coverage = document.createElement('p'); coverage.className = 'coverage';
-    coverage.textContent = `${data.observed} of ${courses.length} listed course pages observed · Cached rows only`;
+    coverage.textContent = `${data.observed} of ${courses.length} courses synced`;
     const label = document.createElement('div'); label.className = 'progress-label';
-    const progressText = document.createElement('span'); progressText.textContent = `${data.completed} / ${data.total} observed assignments completed`;
-    const percent = document.createElement('span'); percent.textContent = data.total ? `${Math.round(data.completed / data.total * 100)}% of observed rows` : 'No observed assignment data';
+    const progressText = document.createElement('span'); progressText.textContent = `${data.completed} of ${data.total} assignments completed`;
+    const percent = document.createElement('span'); percent.textContent = data.total ? `${Math.round(data.completed / data.total * 100)}% complete` : 'No assignments yet';
     label.append(progressText, percent);
     const progress = document.createElement('progress'); progress.max = Math.max(1, data.total); progress.value = data.completed;
-    progress.setAttribute('aria-label', 'Completion of cached observed assignments');
+    progress.setAttribute('aria-label', 'Assignment completion progress');
     progress.setAttribute('aria-valuetext', progressText.textContent!);
     const caption = document.createElement('p'); caption.className = 'caption';
-    caption.textContent = 'This is not account-wide progress. Open unscanned courses to collect their work; newly added or hidden assignments may be missing.' + (data.unknown ? ` ${data.unknown} observed completion statuses are unknown.` : '');
+    caption.textContent = 'Open any unscanned courses to sync their assignments.' + (data.unknown ? ` (${data.unknown} statuses unknown)` : '');
     const grid = document.createElement('div'); grid.className = 'grid';
-    const upcoming = document.createElement('div'); const upcomingTitle = document.createElement('h3'); upcomingTitle.textContent = 'Upcoming incomplete work'; upcoming.append(upcomingTitle);
+    const upcoming = document.createElement('div'); const upcomingTitle = document.createElement('h3'); upcomingTitle.textContent = 'Upcoming assignments'; upcoming.append(upcomingTitle);
     const list = document.createElement('ul');
     for (const assignment of data.pending.slice(0, limit)) {
       const row = document.createElement('li'); row.className = 'assignment';
       const info = document.createElement('div'); const link = document.createElement('a'); link.href = assignment.url; link.textContent = assignment.title;
-      const meta = document.createElement('span'); meta.className = 'meta'; meta.textContent = `${courses.find(c => c.id === assignment.courseId)?.title || ''} · ${completionText(assignment)}`;
-      info.append(link, meta); const due = displayDeadline(assignment);
+      const meta = document.createElement('span'); meta.className = 'meta'; meta.textContent = `${courses.find(c => c.id === assignment.courseId)?.title || ''} · ${completionText(assignment, overrides)}`;
+      info.append(link, meta); const due = displayDeadline(assignment, Date.now(), overrides);
       const date = document.createElement('div'); date.className = 'due' + (due.overdue ? ' overdue' : ''); date.textContent = (due.overdue ? 'Overdue · ' : '') + due.date;
       const time = document.createElement('small'); time.textContent = due.time; date.append(time); row.append(info, date); list.append(row);
     }
     upcoming.append(list);
-    if (!data.pending.length) { const empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = data.observed ? 'No known incomplete assignments in the observed rows.' : 'Visit a course’s Assignments page to populate this overview.'; upcoming.append(empty); }
+    if (!data.pending.length) { const empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = data.observed ? 'All caught up! No incomplete assignments.' : 'Open a course to see upcoming assignments here.'; upcoming.append(empty); }
     if (data.pending.length > limit) { const more = document.createElement('button'); more.type = 'button'; more.textContent = `Show more (${data.pending.length - limit})`; more.onclick = () => { limit += 5; render(); }; upcoming.append(more); }
     const summary = document.createElement('div'); const summaryTitle = document.createElement('h3'); summaryTitle.textContent = 'Your courses'; summary.append(summaryTitle);
     const courseList = document.createElement('ul');
     for (const item of data.summaries) {
       const row = document.createElement('li'); const link = document.createElement('a'); link.className = 'course-title'; link.href = item.course.url; link.textContent = item.course.title;
       const status = document.createElement('span'); status.className = 'meta' + (!item.scanned ? ' unscanned' : '');
-      status.textContent = item.scanned ? `${item.assignments.filter(a => a.completion === 'completed').length} / ${item.assignments.length} observed rows complete · Cached` : 'Not scanned — open this course to collect assignments';
-      if (item.observedAt) status.title = `Last observed: ${new Date(item.observedAt).toLocaleString()}`;
+      status.textContent = item.scanned ? `${item.assignments.filter(a => assignmentIsCompleted(a, overrides)).length} of ${item.assignments.length} completed` : 'Not synced yet — open this course to sync';
+      if (item.observedAt) status.title = `Last synced: ${new Date(item.observedAt).toLocaleString()}`;
       row.append(link, status); courseList.append(row);
     }
     summary.append(courseList); grid.append(upcoming, summary); content.append(coverage, label, progress, caption, grid);
@@ -110,13 +110,13 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
       }
       const state = await run({ kind: 'state:read' });
       if (disposed || current !== generation) return;
-      courses = discovered; cache = state.cache;
-      const renderKey = JSON.stringify({ courses, cache }); if (renderKey !== lastRender) { render(); lastRender = renderKey; }
+      courses = discovered; cache = state.cache; overrides = state.completionOverrides || {};
+      const renderKey = JSON.stringify({ courses, cache, overrides }); if (renderKey !== lastRender) { render(); lastRender = renderKey; }
     } catch (error) {
       if (!disposed && current === generation) { lastRender = ''; content.className = 'error'; content.textContent = error instanceof Error ? error.message : 'Assignments could not be loaded.'; }
     }
   }
-  position(); content.textContent = 'Reading observed assignments…';
+  position(); content.textContent = 'Loading assignments…';
   if (subscribe) { try { stop = subscribe(() => { void refresh(); }); } catch { /* DOM refreshes can still update the overview. */ } }
   return { refresh, focus: () => { if (!position()) return false; host.scrollIntoView?.({ block: 'start' }); heading.focus({ preventScroll: true }); return true; }, dispose: () => { disposed = true; generation++; stop?.(); host.remove(); } };
 }

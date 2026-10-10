@@ -55,7 +55,7 @@ export function createSavedQuestionsView(document: Document, service: BookmarkSe
       groups.replaceChildren();
       if (!organized.size) {
         const empty = document.createElement('p'); empty.className = 'empty';
-        empty.textContent = 'No saved questions yet. Visit a course’s Assignments page first, then bookmark questions using the icons in its response table.';
+        empty.textContent = 'No saved questions yet. Bookmark questions on any assignment to view them here.';
         groups.append(empty); return;
       }
       for (const [courseId, assignments] of organized) {
@@ -97,7 +97,7 @@ export function createSavedQuestionsView(document: Document, service: BookmarkSe
       if (navbar.nextSibling !== host) navbar.after(host);
       host.hidden = false; upcoming.hidden = !showUpcoming;
       if (!stop) { try { stop = subscribe(() => { void refresh(); }); } catch { /* Reopening still reads persisted state. */ } }
-      groups.textContent = 'Reading saved questions…'; void refresh();
+      groups.textContent = 'Loading saved questions…'; void refresh();
       host.scrollIntoView?.({ block: 'start' }); title.focus({ preventScroll: true });
     },
     close,

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { CourseArtBadge, type BackgroundStyle } from './CourseArtBadge';
 
-type CourseId = 'm408d' | 'ch301' | 'phy303k';
+type CourseId = 'm408c' | 'ch301' | 'phy303k';
 
 type Task = {
   id: string;
@@ -18,6 +19,8 @@ type Task = {
 type Course = {
   id: CourseId;
   code: string;
+  department: string;
+  bgType: BackgroundStyle;
   name: string;
   unique: string;
   count: number;
@@ -27,17 +30,19 @@ type Course = {
 
 const COURSES: Course[] = [
   {
-    id: 'm408d',
-    code: 'M 408D',
-    name: 'Calculus II',
-    unique: '58735',
+    id: 'm408c',
+    code: 'M 408C',
+    department: 'M',
+    bgType: 'ripple',
+    name: 'Differential & Integral Calculus',
+    unique: '58360',
     count: 3,
     tasks: [
       {
         id: 'm1',
         day: 'Fri',
         date: 'Oct 9',
-        course: 'M 408D',
+        course: 'M 408C',
         title: 'Sequences & Series',
         type: 'Homework 5',
         deadline: 'Tonight, 10:00 PM',
@@ -49,7 +54,7 @@ const COURSES: Course[] = [
         id: 'm2',
         day: 'Mon',
         date: 'Oct 12',
-        course: 'M 408D',
+        course: 'M 408C',
         title: 'Power Series Review',
         type: 'Quiz Prep',
         deadline: 'Mon, 5:00 PM',
@@ -60,7 +65,7 @@ const COURSES: Course[] = [
         id: 'm3',
         day: 'Wed',
         date: 'Oct 14',
-        course: 'M 408D',
+        course: 'M 408C',
         title: 'Taylor Approximations',
         type: 'Homework 6',
         deadline: 'Wed, 10:00 PM',
@@ -77,6 +82,8 @@ const COURSES: Course[] = [
   {
     id: 'ch301',
     code: 'CH 301',
+    department: 'CH',
+    bgType: 'pixel',
     name: 'Chemistry I',
     unique: '51200',
     count: 2,
@@ -114,6 +121,8 @@ const COURSES: Course[] = [
   {
     id: 'phy303k',
     code: 'PHY 303K',
+    department: 'PHY',
+    bgType: 'aurora',
     name: 'Physics I',
     unique: '56410',
     count: 3,
@@ -162,18 +171,18 @@ const COURSES: Course[] = [
 ];
 
 const CALENDAR_FEED = [
-  { date: 'Fri, Oct 9', time: '10:00 PM', course: 'M 408D', title: 'Sequences & Series' },
-  { date: 'Mon, Oct 12', time: '5:00 PM', course: 'M 408D', title: 'Power Series Review' },
+  { date: 'Fri, Oct 9', time: '10:00 PM', course: 'M 408C', title: 'Sequences & Series' },
+  { date: 'Mon, Oct 12', time: '5:00 PM', course: 'M 408C', title: 'Power Series Review' },
   { date: 'Mon, Oct 12', time: '11:59 PM', course: 'CH 301', title: 'Thermochemistry' },
   { date: 'Tue, Oct 13', time: '9:00 PM', course: 'PHY 303K', title: 'Rotational Dynamics' },
-  { date: 'Wed, Oct 14', time: '10:00 PM', course: 'M 408D', title: 'Taylor Approximations' },
+  { date: 'Wed, Oct 14', time: '10:00 PM', course: 'M 408C', title: 'Taylor Approximations' },
   { date: 'Thu, Oct 15', time: '11:59 PM', course: 'CH 301', title: 'Gas Laws Worksheet' },
   { date: 'Fri, Oct 16', time: '5:00 PM', course: 'PHY 303K', title: 'Angular Momentum' },
 ];
 
 export function InteractiveProductFrame() {
   const frameRef = useRef<HTMLDivElement>(null);
-  const [activeCourse, setActiveCourse] = useState<CourseId>('m408d');
+  const [activeCourse, setActiveCourse] = useState<CourseId>('m408c');
   const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>({});
   const [savedOpen, setSavedOpen] = useState(true);
   const [viewMode, setViewMode] = useState<'queue' | 'calendar'>('queue');
@@ -299,6 +308,12 @@ export function InteractiveProductFrame() {
                     if (viewMode === 'calendar') setViewMode('queue');
                   }}
                 >
+                  <CourseArtBadge
+                    department={item.department}
+                    code={item.code}
+                    bgType={item.bgType}
+                    size="sm"
+                  />
                   <div className="course-item-main">
                     <span className="course-item-code">{item.code}</span>
                     <span className="course-item-name">{item.name}</span>
@@ -325,19 +340,30 @@ export function InteractiveProductFrame() {
         <div className="frame-content">
           {viewMode === 'queue' ? (
             <>
-              {/* Header */}
+              {/* Hero Course Art Banner with Swirl / Pixel / Aurora and Typography on Top */}
+              <div className="course-hero-banner-wrap">
+                <CourseArtBadge
+                  department={course.department}
+                  code={course.code}
+                  name={course.name}
+                  unique={course.unique}
+                  bgType={course.bgType}
+                  size="hero"
+                />
+              </div>
+
+              {/* Subheader with Streak & Sync */}
               <div className="course-content-header">
                 <div className="header-titles">
                   <div className="header-eyebrow-row">
-                    <span className="unique-chip">Unique #{course.unique}</span>
                     <span className="streak-indicator">
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 23c-4.97 0-9-3.8-9-8.5 0-3.37 2.13-6.52 4.45-8.78.36-.35.94-.13.98.37.16 2.05 1.55 3.73 3.07 3.91.24.03.46-.14.48-.38.16-1.92 1.35-4.48 3.52-6.62.33-.33.88-.13.93.33.28 2.62 1.95 4.67 3.57 6.67 1 1.25 1 3.5 1 4.5 0 4.7-4.03 8.5-9 8.5z" />
                       </svg>
                       <span>12-day streak</span>
                     </span>
+                    <span className="unique-chip">Quest Verified · Local Cache</span>
                   </div>
-                  <h3 className="course-display-name">{course.code} — {course.name}</h3>
                 </div>
 
                 {/* Refined Calendar Sync Pill */}

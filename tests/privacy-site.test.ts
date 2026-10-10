@@ -54,5 +54,7 @@ test('BetterQuest Cloudflare configuration isolates the website from extension d
   assert.match(config, /betterquest\.iexdevs\.com/);
   assert.match(packageJson.scripts['site:deploy'], /wrangler deploy/);
   assert.match(packageJson.scripts['site:build'], /vite build/);
-  assert.equal(packageJson.scripts.build, 'tsc --noEmit && node scripts/build.mjs');
+  assert.equal(packageJson.scripts['build:extn'], 'tsc --noEmit && node scripts/build.mjs');
+  assert.match(packageJson.scripts.build, /build:extn/);
+  assert.match(packageJson.scripts.build, /build:site/);
 });

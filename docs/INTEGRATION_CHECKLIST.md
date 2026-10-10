@@ -1,6 +1,6 @@
 # Authenticated Quest inspection checklist
 
-The navbar, course assignment fragment, response table, and supplied full homepage structure are integrated. Homepage overview, native settings, and scoped dark mode are implemented; no tests were run for this latest update. PDF/study-history adapters remain disabled. Additional snippets should be sanitized and omit credentials/unreleased material.
+The navbar, course assignment fragment, response table, homepage, PDF assessment view, and Slides response surface are integrated. Homepage overview, local completion corrections, department artwork, compact navigation, assessment workspace, and scoped dark mode are tested. PDF content extraction and study-history adapters remain disabled.
 
 ## Implement first: assignment tracker
 
@@ -49,12 +49,13 @@ The reference file contains third-party extension components and page scripts. T
 
 ## PDF experience
 
-- [ ] Existing PDF link `href`, embed/object/iframe source/type, document parent root, and any click-generated URLs.
+- [x] Native assignment PDF iframe verified at `#presentation-pdf-frame iframe[title="Assignment PDF"]` inside `#pdf-frame`.
 - [ ] Which original links mean problem PDF versus released solutions; never manufacture a solution URL.
-- [ ] Whether the renderer is a native Chrome plugin, a same-origin HTML viewer, or a cross-origin iframe. A plugin/cross-origin document is not ordinary accessible DOM.
-- [ ] Existing navigation/zoom/view controls and any documented renderer bridge/API that can be used safely.
-- [ ] A verified nearby slot for optional controls that does not replace the document, existing links, or downloads.
-- [ ] Session/URL lifetime and behavior when the assignment rerenders. Do not add request interception or downloading machinery for this scaffold.
+- [x] The native Chrome PDF surface is treated as opaque and retained on a light surface.
+- [x] Response rows and native selectors/submits verified; the side rail mirrors options and delegates explicit submission.
+- [x] The side rail is inserted beside `#pdf-frame` without replacing the document, links, or downloads.
+- [x] Route/root replacement cleanup is covered without request interception or downloading machinery.
+- [ ] Renderer bridge or PDF text layer for exact page/equation hit-testing.
 - [ ] Only enable capabilities the bridge can confirm. Test original viewing/download behavior before any enhancement is enabled.
 
 ## Historical study data export

@@ -1,6 +1,14 @@
 import type { Course } from '../../shared/models';
 import { courseId, sourceUrl } from '../../shared/identity';
 
+export interface HomepageCourseRow {
+  row: HTMLTableRowElement;
+  artworkCell: HTMLTableCellElement;
+  nativeImage: HTMLImageElement | null;
+  departmentCode: string;
+  courseCode: string;
+}
+
 /** Homepage selectors/column labels from the supplied authenticated document. */
 export function findHomepageSlot(document: Document): { root: HTMLElement; wrapper: HTMLElement; table: HTMLTableElement } | null {
   if (new URL(document.URL).pathname.replace(/\/$/, '') !== '/student/courses') return null;
@@ -35,4 +43,24 @@ export function readHomepageCourses(document: Document): Course[] {
     } catch { /* Invalid/non-Quest course links do not become records. */ }
   }
   return [...courses.values()];
+}
+
+export function departmentFromCourseCode(courseCode: string): string {
+  const prefix = courseCode.toUpperCase().match(/^\s*([A-Z][A-Z\s]{0,7}?)\s*\d/);
+  return (prefix?.[1] || courseCode.match(/[A-Za-z]+/)?.[0] || 'UT').replace(/\s+/g, '').slice(0, 5) || 'UT';
+}
+
+/** Reads presentation-only row slots; course identity continues to come from readHomepageCourses. */
+export function readHomepageCourseRows(document: Document): HomepageCourseRow[] {
+  const slot = findHomepageSlot(document);
+  if (!slot) return [];
+  const rows: HomepageCourseRow[] = [];
+  for (const row of slot.table.querySelectorAll<HTMLTableRowElement>('tbody > tr')) {
+    const artworkCell = row.querySelector<HTMLTableCellElement>(':scope > td:first-child');
+    const codeCell = row.querySelector<HTMLTableCellElement>('td[aria-label^="Course Short Name:"]');
+    const courseCode = (codeCell?.getAttribute('aria-label')?.replace(/^Course Short Name:\s*/i, '') || codeCell?.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!artworkCell || !courseCode) continue;
+    rows.push({ row, artworkCell, nativeImage: artworkCell.querySelector('img'), departmentCode: departmentFromCourseCode(courseCode), courseCode });
+  }
+  return rows;
 }

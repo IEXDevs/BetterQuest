@@ -4,7 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc --noEmit && node scripts/build.mjs",
+    "dev": "vite --config web/vite.config.ts",
+    "dev:extn": "node scripts/watch.mjs",
+    "watch": "node scripts/watch.mjs",
+    "build": "npm run build:extn && npm run build:site",
+    "build:extn": "tsc --noEmit && node scripts/build.mjs",
+    "build:site": "npm run site:build && wrangler deploy --dry-run",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "site:build": "vite build --config web/vite.config.ts",
@@ -35,6 +40,7 @@
     "motion": "^14.1.0",
     "next-themes": "^0.4.6",
     "ogl": "^1.0.11",
+    "pdfjs-dist": "^6.4.299",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "three": "^0.180.0"

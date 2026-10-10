@@ -1,14 +1,14 @@
 # V1 foundations
 
-The verified homepage now has an observed-assignment overview after the native course table and before enrollment. The course-info summary and response bookmarks remain. BetterQuest sits inside `.qh-nav` and opens a compact settings menu with implemented feature switches, persistent dark mode, and Saved Questions. PDF enhancement and study capture remain disabled; no toggles are offered for them.
+The verified homepage has an observed-assignment overview and department artwork. The course-info summary, reversible local completion corrections, and response bookmarks remain. BetterQuest owns one compact top-right menu while preserving native Quest links. Verified assessment pages receive a PDF response rail or slide-choice facelift; the opaque PDF document itself and study capture remain untouched.
 
 ## Implemented versus disabled
 
 | Feature | Working infrastructure | Awaiting inspected Quest DOM |
 | --- | --- | --- |
-| Assignments | Existing cache/tracker reused; verified homepage discovery and overview; observed-only progress; unscanned-course summaries; existing three-item course preview | Internal course/term mapping, semester rollover, additional layouts and live Chrome checking |
+| Assignments | Existing cache/tracker reused; verified homepage discovery and overview; local completion overrides; department art; observed-only progress; existing three-item course preview | Internal course/term mapping, semester rollover, additional layouts |
 | Bookmarks | Verified response-table/row IDs; compact filled/outlined icons; existing persistent service; cloned/recycled row reconciliation; grouped Saved Questions; original assignment links | Slide/other layouts, additional assessment-type evidence, live Chrome visual checks |
-| PDF | Detection adapter contract; capability-gated navigation/zoom/view intent dispatcher; bridge disposal; original-source URLs | Actual link/embed markup, safe controls slot, verified bridge to the document renderer. No controls or replacements are enabled |
+| Assessment | Verified PDF iframe/response-table workspace and Slides radio-card layout; native selectors/submits remain authoritative | PDF text/equation hit-testing, page mapping, or a document-renderer bridge |
 | Study export | Historical-homework validation; explicit save/collect API; JSON export builder/serializer/download; schema; source provenance; extracted/not-extracted counts; answer/solution **availability metadata** | Historical homework eligibility, visible prompt/math/diagram representation, released answer/solution links, existing export insertion slot |
 | Theme | Persistent settings switch; existing light/dark/system resolution/tokens; scoped verified Quest tables/cards/forms/navbar; addon palette integration; cleanup; no inversion | Live Chrome contrast/MathJax/PDF checks and any additional unsupported component markup |
 
@@ -27,12 +27,14 @@ src/
     homepage.ts            Verified course table/enrollment slot and inventory
     questions.ts           Verified response-table IDs and empty final slots
     saved-questions-placement.ts Verified navbar sibling for the inline view
-    pdf.ts                 PDF source/document boundary (null until inspected)
+    assessment.ts          Verified PDF iframe, response rows, and Slides surfaces
+    pdf.ts                 Generic PDF bridge boundary (still null)
     history.ts             Accessible historical homework boundary (null)
     theme.ts               Verified component roots (null)
   features/
     lifecycle.ts           Scoped observers, root replacement, abort/dispose
     assignments/tracker.ts Cache, freshness, refresh orchestration
+    assignments/completion-controls.ts Reversible local completion corrections
     assignments/section.ts Three-item course-info summary and native View all
     assignments/view-model.ts Pure filtering, sorting, deadlines, and coverage
     assignments/homepage.ts Observed-only progress and course overview
@@ -40,7 +42,9 @@ src/
     bookmarks/service.ts   Bookmark CRUD/filter/group/source navigation
     bookmarks/controls.ts  Compact SVG icons and source-ID reconciliation
     bookmarks/saved-view.ts Grouped metadata-only Saved Questions view
-    pdf/controller.ts      Verified bridge capabilities and operation bounds
+    assessment/workspace.ts PDF response rail and Slides presentation polish
+    courses/artwork.ts     Deterministic department artwork
+    pdf/controller.ts      Generic bridge capabilities and operation bounds
     pdf/controls.ts        UI intent/availability contract; no new viewer
     study/export.ts        Explicit historical collection + portable JSON
     theme/preferences.ts  Persistent preference API
@@ -76,7 +80,7 @@ No dependencies were added for this scaffolding. `storage` is the only API permi
 
 All data lives in `chrome.storage.local` under `betterquest.local.v1`. The service worker restricts storage access to trusted contexts and is the only writer. Content scripts submit validated commands; multiple tabs share a serialized read/modify/write queue. Data survives worker suspension/restart because the worker reads persisted state for each operation. Missing data initializes an empty state. Corrupt or newer-version data produces an error without deleting or silently overwriting it. A conservative seven-megabyte serialized-size limit precedes Chrome quota errors.
 
-The state schema is versioned, but only version 1 is supported; a future migration must be explicit and tested. There is no import, reset, student-account identification, or cross-device sync workflow yet. Different Quest users in one Chrome profile would share extension-local data; use separate profiles for now.
+The state schema is versioned, but only version 1 is supported; a future migration must be explicit and tested. Optional `completionOverrides` records user-owned corrections keyed by verified assignment ID; removing a correction returns to Quest's observed status. Existing schema-v1 records remain valid. There is no import, reset, student-account identification, or cross-device sync workflow yet. Different Quest users in one Chrome profile share extension-local data; use separate profiles for now.
 
 IDs are constructed from **verified Quest source identifiers**, namespaced by their parent course/assignment. The assignment parser uses the course heading's unique number and the linked `courseuserassignment_…` instance value. Internal course IDs/term mapping are not present in this fragment and still need inspection. Titles, question positions, and displayed question numbers are not identities. Missing IDs disable the relevant collection/control. Unknown metadata remains unknown: an unparsed due label is kept with `iso: null`; a grade does not imply completion. Optional grade, start-date, group, completion-label, and observed-course fields preserve compatibility with earlier stored records.
 
@@ -94,7 +98,7 @@ The supplied full homepage establishes `#courses-table_wrapper` inside `#courses
 
 Progress uses only assignment IDs from the most recent matching native course-page observation. Course URL matching is conservative so unrelated semesters/aliases are not promoted to scanned. The bar is labeled completed/total observed assignments; missing course data is excluded and called out, never counted as completed. The current list can itself be partial, and hidden/new assignments may be missing even from an observed page. No account-wide sync claim is made. Course summaries link directly to native course pages to collect data; upcoming links retain original assignment URLs.
 
-The menu is an owned LI in `.qh-nav`, after the native name item when present. The trigger uses native navigation classes instead of the former blue button. A small scoped menu offers assignment/bookmark switches and working dark mode, plus Saved Questions and Upcoming actions. Existing preference records remain valid; missing feature flags mean enabled. New feature:set commands only update flags. Preference notifications reconcile/unmount disabled controls while retaining user data.
+The menu is an owned LI in `.qh-nav`. Scoped CSS hides the other native items visually while keeping them in place, and allowlisted links are mirrored inside the BetterQuest menu. Disposal restores the original shell. The menu offers assignment/bookmark switches, dark mode, Saved Questions, Assignments, and Quest account links.
 
 Records and messages are runtime-validated. Unknown fields are rejected, preventing accidental persistence of response fields. Parent references must agree. Historical study records still require verified historical homework. Metadata-only bookmarks permit unknown assignment types without changing their type or enabling study capture; known assessments are rejected. Answer/solution fields remain availability/source metadata, never response values or answer text.
 
@@ -117,7 +121,7 @@ Saved Questions uses BookmarkService grouping/removal and worker storage. It dis
 5. Place controls in verified slots using owned markers/Shadow DOM. Response icons use blank final TD cells and type=button even inside native forms; other form slots stay excluded. Never change native response values, source URLs, or submission handlers.
 6. Use services with `Execute` injection for unit tests, and the shared client in Chrome. Change subscriptions refresh bookmark/theme consumers only; assignment cache writes do not recursively trigger new cache collection.
 
-Assignment and question adapters use synchronous DOM reads at present. Asynchronous PDF/history work can use the `PageContext.signal` contract; never apply a late result after cancellation. Study collection remains explicitly user-triggered through `StudyService.collect`; it is not part of automatic page refresh. PDF controls remain disabled until a real `PdfBridge` declares support and passes integration tests.
+Assignment, question, and assessment adapters use synchronous DOM reads. The assessment workspace never reads PDF contents: it enlarges the verified native iframe and mirrors native response options into a side rail. Choice selection dispatches input/change to Quest's selector; submission occurs only from an explicit click delegated to Quest's existing button. The generic `PdfBridge` remains disabled.
 
 Theme scopes reuse `createThemeScope` tokens on verified `#main-content` and `#quest-nav-header-div` roots. A dedicated theme adapter owns native CSS selectors. A separate marker on the verified `#body-id.mdb-skin` paints the page background without broad element overrides. The controller avoids reapplying identical tokens on every DOM reconciliation and restores original attributes/properties on cleanup. Native cards/tables/forms/status colors are targeted explicitly; MathJax foreground inherits readable text, PDF frames keep original paper colors, and no blanket filters/inversion are used. Shadow-DOM widgets consume the same variables. The switch is hidden when the verified main shell is absent.
 

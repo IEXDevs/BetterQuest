@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "BetterQuest",
   "version": "0.1.0",
-  "description": "A minimal BetterQuest entry point in Quest's student navigation.",
+  "description": "A polished Quest workspace with assignment tracking, response tools, dark mode, and local bookmarks.",
   "minimum_chrome_version": "120",
   "permissions": ["storage"],
   "icons": {
@@ -32,6 +32,16 @@
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "pdf.worker.min.mjs",
+        "pdfjs/wasm/*",
+        "pdfjs/standard_fonts/*"
+      ],
+      "matches": ["https://quest.cns.utexas.edu/*"]
     }
   ]
 }

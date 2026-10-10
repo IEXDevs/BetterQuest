@@ -2,11 +2,11 @@ export type CourseId = string;
 export type AssignmentId = string;
 export type QuestionId = string;
 export type ThemePreference = 'light' | 'dark' | 'system';
-export type FeatureName = 'assignments' | 'bookmarks';
-export interface FeaturePreferences { assignments: boolean; bookmarks: boolean }
+export type FeatureName = 'assignments' | 'bookmarks' | 'animations';
+export interface FeaturePreferences { assignments: boolean; bookmarks: boolean; animations?: boolean }
 export interface Preferences { theme: ThemePreference; features?: FeaturePreferences }
 export function featurePreferences(preferences: Preferences): FeaturePreferences {
-  return preferences.features || { assignments: true, bookmarks: true };
+  return preferences.features || { assignments: true, bookmarks: true, animations: true };
 }
 export type CompletionStatus = 'unknown' | 'not-started' | 'not-completed' | 'in-progress' | 'completed';
 
@@ -105,6 +105,8 @@ export interface StudyRecord {
 export interface LocalState {
   schemaVersion: 1;
   cache: { courses: Course[]; assignments: Assignment[]; pages: CachedPage[]; refreshRequestedAt: string | null };
+  /** User-owned corrections; observed Quest status remains unchanged in the cache. */
+  completionOverrides?: Partial<Record<AssignmentId, true>>;
   bookmarks: Bookmark[];
   study: StudyRecord[];
   preferences: Preferences;
@@ -128,6 +130,6 @@ export function emptyState(): LocalState {
   return {
     schemaVersion: 1,
     cache: { courses: [], assignments: [], pages: [], refreshRequestedAt: null },
-    bookmarks: [], study: [], preferences: { theme: 'system' },
+    completionOverrides: {}, bookmarks: [], study: [], preferences: { theme: 'system' },
   };
 }
