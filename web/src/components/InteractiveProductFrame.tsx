@@ -279,7 +279,7 @@ export function InteractiveProductFrame() {
         {/* Clean, Non-Gaudy Sidebar */}
         <aside className="frame-sidebar">
           <div className="sidebar-brand-pill">
-            <span className="sidebar-brand-glyph">BQ</span>
+            <img src="/logo.png" alt="" className="sidebar-brand-glyph" width="28" height="28" />
             <span className="sidebar-brand-name">BetterQuest</span>
             <span className="sidebar-status-beacon" title="Extension connected" />
           </div>

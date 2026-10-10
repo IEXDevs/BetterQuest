@@ -1,7 +1,7 @@
 export function Brand({ subtitle = 'An IEXDevs product' }: { subtitle?: string }) {
   return (
     <a className="brand" href="/" aria-label="BetterQuest home">
-      <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span>
+      <img src="/logo.png" alt="BetterQuest logo" className="brand-mark" width="36" height="36" />
       <span>
         <strong>BetterQuest</strong>
         <small>{subtitle}</small>
