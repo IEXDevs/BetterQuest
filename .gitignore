@@ -1,4 +1,15 @@
 node_modules/
 dist/
+.wrangler/
+output/
 .npm-cache/
 *.log
+
+# Vite marketing site build output (source lives in web/)
+site/assets/
+site/index.html
+site/privacy/
+site/theme-boot.js
+site/scene.js
+site/theme.js
+site/_headers

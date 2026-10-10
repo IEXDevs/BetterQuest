@@ -3,130 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#173f3a" />
-    <meta
-      name="description"
-      content="BetterQuest brings assignment overviews, saved questions, and a calmer interface to UT Austin Quest."
-    />
-    <title>BetterQuest | A calmer way through Quest</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <meta name="theme-color" content="#080808" />
+    <meta name="description" content="BetterQuest is a streak-style Quest tracker with one overview of your work and a Google Calendar feed that updates every day." />
+    <title>BetterQuest | Your Quest work, in one view</title>
+    <script src="/theme-boot.js"></script>
+    <script type="module" crossorigin src="/assets/main-RhFtno5D.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/styles-DLp-E9kX.js">
+    <link rel="modulepreload" crossorigin href="/assets/Triangle-GlFcswsc.js">
+    <link rel="stylesheet" crossorigin href="/assets/styles-CBP-blld.css">
+    <link rel="stylesheet" crossorigin href="/assets/main-pYJXp5V-.css">
   </head>
-  <body>
-    <a class="skip-link" href="#main">Skip to content</a>
-    <header class="site-header">
-      <a class="wordmark" href="/" aria-label="BetterQuest home">
-        <span class="wordmark-mark" aria-hidden="true">BQ</span>
-        <span>BetterQuest</span>
-      </a>
-      <nav aria-label="Primary navigation">
-        <a href="#what-it-does">Features</a>
-        <a href="/privacy">Privacy</a>
-        <a class="nav-contact" href="https://iexdevs.com/contact">Contact</a>
-      </nav>
-    </header>
-
-    <main id="main">
-      <section class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">A student-built browser extension for UT Austin Quest</p>
-          <h1>Quest, without the scavenger hunt.</h1>
-          <p class="hero-lede">
-            BetterQuest gathers the work you already see into a clearer assignment overview, keeps useful questions
-            close, and makes the interface easier on your eyes.
-          </p>
-          <div class="hero-actions">
-            <a class="button button-primary" href="#what-it-does">See what changes</a>
-            <a class="button button-secondary" href="/privacy">Read our privacy promise</a>
-          </div>
-        </div>
-
-        <aside class="quest-card" aria-label="BetterQuest summary">
-          <div class="quest-card-topline">
-            <span>BetterQuest</span>
-            <span class="status"><i aria-hidden="true"></i> Local by design</span>
-          </div>
-          <div class="assignment-list">
-            <article>
-              <span class="course-tag teal">M 408D</span>
-              <div><strong>Homework overview</strong><small>Deadlines in one place</small></div>
-              <span class="check" aria-hidden="true">✓</span>
-            </article>
-            <article>
-              <span class="course-tag gold">CH 301</span>
-              <div><strong>Saved question</strong><small>Return when you are ready</small></div>
-              <span class="bookmark" aria-hidden="true">◆</span>
-            </article>
-            <article>
-              <span class="course-tag blue">PHY 303K</span>
-              <div><strong>Course snapshot</strong><small>Only what you have visited</small></div>
-              <span class="check" aria-hidden="true">✓</span>
-            </article>
-          </div>
-          <p class="card-note">Coursework stays local. Limited anonymous error diagnostics help us fix failures.</p>
-        </aside>
-      </section>
-
-      <section class="principles" aria-label="Product principles">
-        <p>One permission</p><strong>Chrome storage</strong>
-        <p>One website scope</p><strong>UT Austin Quest</strong>
-        <p>Zero ad trackers</p><strong>Your work is not a product</strong>
-      </section>
-
-      <section class="feature-section" id="what-it-does">
-        <div class="section-heading">
-          <p class="eyebrow">Small changes, placed where they help</p>
-          <h2>A better layer, not a replacement.</h2>
-          <p>
-            BetterQuest works inside the pages students already know. It leaves Quest&apos;s submissions, grades, and
-            native controls alone.
-          </p>
-        </div>
-        <div class="feature-grid">
-          <article>
-            <span class="feature-number">01</span>
-            <h3>Assignment overview</h3>
-            <p>See cached assignment deadlines and completion status from courses you have actually visited.</p>
-          </article>
-          <article>
-            <span class="feature-number">02</span>
-            <h3>Saved questions</h3>
-            <p>Bookmark a question locally and return to its original assignment without touching your response.</p>
-          </article>
-          <article>
-            <span class="feature-number">03</span>
-            <h3>Comfortable themes</h3>
-            <p>Choose a persistent light, dark, or system theme while preserving Quest&apos;s familiar layout.</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="privacy-callout">
-        <div>
-          <p class="eyebrow">Built with a narrow boundary</p>
-          <h2>Your coursework stays with you.</h2>
-        </div>
-        <div>
-          <p>
-            BetterQuest keeps coursework in local extension storage. Anonymous error diagnostics may be sent when you
-            report an issue or the extension detects a failure; EasyAccess account support is planned, not active.
-          </p>
-          <a class="text-link" href="/privacy">Read the privacy policy <span aria-hidden="true">→</span></a>
-        </div>
-      </section>
-    </main>
-
-    <footer>
-      <div>
-        <a class="wordmark footer-mark" href="/">
-          <span class="wordmark-mark" aria-hidden="true">BQ</span><span>BetterQuest</span>
-        </a>
-        <p>An independent IEXDevs student project. Not affiliated with The University of Texas at Austin.</p>
-      </div>
-      <div class="footer-links">
-        <a href="/privacy">Privacy</a>
-        <a href="https://iexdevs.com/contact">Contact</a>
-        <a href="https://iexdevs.com">IEXDevs</a>
-      </div>
-    </footer>
+  <body data-scene="product">
+    <div id="root"></div>
   </body>
 </html>

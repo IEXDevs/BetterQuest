@@ -1,24 +1,27 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { JSDOM } from 'jsdom';
 
 const read = (path: string) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 test('BetterQuest publishes a navigable product landing page', async () => {
-  const html = await read('site/index.html');
-  const document = new JSDOM(html).window.document;
+  const page = await read('web/src/pages/HomePage.tsx');
+  const html = await read('web/index.html');
 
-  assert.equal(document.title, 'BetterQuest | A calmer way through Quest');
-  assert.equal(document.querySelector('h1')?.textContent?.trim(), 'Quest, without the scavenger hunt.');
-  assert.equal(document.querySelector('a[href="/privacy"]')?.textContent?.trim(), 'Privacy');
-  assert.ok(document.querySelector('a[href="https://iexdevs.com/contact"]'));
-  assert.match(document.body.textContent ?? '', /anonymous error diagnostics/i);
+  assert.match(html, /BetterQuest \| Your Quest work, in one view/);
+  assert.match(page, /All your Quest work\. One View\./);
+  assert.match(page, /Browser extension for UT Austin Quest/);
+  assert.match(page, /streak-style tracker/i);
+  assert.match(page, /Google Calendar/i);
+  assert.match(page, /InstallExtensionButton/);
+  assert.match(page, /href="\/privacy"/);
+  assert.match(page, /anonymous error diagnostics/i);
 });
 
 test('BetterQuest privacy page matches the extension data boundary', async () => {
-  const html = await read('site/privacy/index.html');
-  const text = new JSDOM(html).window.document.body.textContent?.replace(/\s+/g, ' ') ?? '';
+  const page = await read('web/src/pages/PrivacyPage.tsx');
+  const content = await read('web/src/content/privacy.ts');
+  const text = `${page}\n${content}`.replace(/\s+/g, ' ');
 
   assert.match(text, /October 9, 2026/);
   assert.match(text, /betterquest\.local\.v1/);
@@ -39,7 +42,8 @@ test('BetterQuest privacy page matches the extension data boundary', async () =>
   assert.match(text, /API.*request.*hour/i);
   assert.match(text, /de-identified.*aggregate|anonymized.*aggregate/i);
   assert.match(text, /public.*internal.*dashboard/is);
-  assert.ok(new JSDOM(html).window.document.querySelector('a[href="https://iexdevs.com/contact"]'));
+  assert.match(page, /https:\/\/iexdevs\.com\/contact/);
+  assert.match(page, /LineSidebar/);
 });
 
 test('BetterQuest Cloudflare configuration isolates the website from extension dist', async () => {
@@ -50,5 +54,6 @@ test('BetterQuest Cloudflare configuration isolates the website from extension d
   assert.match(config, /"directory"\s*:\s*"site"/);
   assert.match(config, /betterquest\.iexdevs\.com/);
   assert.match(packageJson.scripts['site:deploy'], /wrangler deploy/);
+  assert.match(packageJson.scripts['site:build'], /vite build/);
   assert.equal(packageJson.scripts.build, 'tsc --noEmit && node scripts/build.mjs');
 });
