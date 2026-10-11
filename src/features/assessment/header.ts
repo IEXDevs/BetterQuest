@@ -57,7 +57,19 @@ export function createAssessmentHeader(root: HTMLElement) {
       };
       const nearDue = link.parentElement;
       const alreadyPlaced = Boolean(nearDue && /\bdue(?:\s+date)?\b/i.test(nearDue.textContent || ''));
-      const due = alreadyPlaced ? null : findDue();
+      let due = alreadyPlaced ? null : findDue();
+      // A bare "Due date" label is not the row: the row carries the label AND
+      // the date value, and the download belongs on that line, to their right.
+      if (due && !/\d/.test(due.textContent || '')) {
+        const row = due.parentElement;
+        if (row && row !== root && !row.contains(link) &&
+          /\bdue(?:\s+date)?\b/i.test(row.textContent || '') &&
+          /\d/.test(row.textContent || '') &&
+          (row.textContent || '').length <= 300 &&
+          !row.querySelector('p, table, iframe, canvas, select, img, svg, input, button, [data-betterquest-download]')) {
+          due = row;
+        }
+      }
       if (due && !due.contains(link)) {
         due.dataset.betterquestDueRow = 'true';
         due.append(link);

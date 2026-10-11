@@ -363,9 +363,20 @@ function withNativeResponsesVisible<T>(elements: PdfAssessmentElements, read: ()
   const marked = elements.responseRoot.hasAttribute('data-betterquest-native-responses');
   elements.responseRoot.removeAttribute('data-betterquest-native-responses');
   elements.responseRoot.dataset.betterquestNativeVisible = 'true';
+  // Fullscreen hides every #target child except the PDF frame, which takes the
+  // wrappers above the response table out of layout. Everything inside this
+  // scope is programmatic (set value, dispatch events, click), so mark the
+  // whole chain to read through it — this never affects rendering.
+  const markedAncestors: HTMLElement[] = [];
+  for (let node = elements.responseRoot.parentElement; node && node !== elements.responseRoot.ownerDocument.documentElement; node = node.parentElement) {
+    if (node.hasAttribute('data-betterquest-native-visible')) continue;
+    node.setAttribute('data-betterquest-native-visible', 'true');
+    markedAncestors.push(node);
+  }
   try { return read(); }
   finally {
     delete elements.responseRoot.dataset.betterquestNativeVisible;
+    for (const node of markedAncestors) node.removeAttribute('data-betterquest-native-visible');
     if (marked) elements.responseRoot.dataset.betterquestNativeResponses = 'true';
   }
 }
@@ -848,7 +859,10 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       const binding = bindings.find(item => Number(item.number) === questionNumber);
       const nativeOption = binding ? [...binding.select.options].find(item => item.value === String(optionValue)) : undefined;
       const available = binding && isNativeControlAvailable(binding.select);
-      if (!binding || binding.answered || !available || !nativeOption || !isResponseOptionAvailable(nativeOption)) return false;
+      if (!binding || binding.answered || !available || !nativeOption || !isResponseOptionAvailable(nativeOption)) {
+        console.warn(`[BetterQuest] Question ${questionNumber}: answer not handed to Quest (${!binding ? 'no response row' : binding.answered ? 'already answered' : !available ? 'answer control unavailable' : !nativeOption ? 'option missing' : 'option disabled'}).`);
+        return false;
+      }
 
       binding.select.value = nativeOption.value;
       for (const opt of binding.select.options) {

@@ -70,6 +70,24 @@ test('incorrect responses remain selectable while attempts remain', () => {
   } finally { workspace.dispose(); dom.window.close(); }
 });
 
+test('answers still reach Quest when fullscreen hides the response table wrappers', () => {
+  const dom = homework();
+  const doc = dom.window.document;
+  const tableRoot = doc.querySelector<HTMLElement>('#view-responses-table-id')!;
+  const row = doc.createElement('div');
+  row.className = 'row';
+  tableRoot.before(row);
+  row.append(tableRoot);
+  // Exactly what the fullscreen CSS does to every #target child but #pdf-frame.
+  row.style.setProperty('display', 'none', 'important');
+  const { workspace, rail } = mount(dom);
+  try {
+    const choice = rail().querySelector<HTMLButtonElement>('[data-value="2"]')!;
+    choice.click();
+    assert.equal(doc.querySelector('select')!.value, '2', 'The answer must reach Quest even while its wrappers are out of layout');
+  } finally { workspace.dispose(); dom.window.close(); }
+});
+
 test('workspace settles without observer redraws and preserves focused answer buttons', async () => {
   const dom = homework();
   const { root, workspace, rail } = mount(dom);
@@ -101,6 +119,25 @@ test('PDF Download sits beside the due date and restores the native link on disp
     assert.equal(link.parentElement, doc.querySelector('#download'));
     assert.equal(link.textContent, 'PDF w/o expl');
   } finally { workspace.dispose(); dom.window.close(); }
+});
+
+test('slides put PDF Download beside the date, not under a bare Due label', () => {
+  const dom = new JSDOM('<main id="main-content"><div id="target">' +
+    '<div id="sched"><div class="label">Due date</div><div class="val">10/14/26 11:59 PM</div></div>' +
+    '<p id="download"><a href="/student/images/problem_pdf?instance=courseuserassignment_1">PDF w/o expl</a></p>' +
+    '<div id="presentation-div"><div class="instanceitempart"><label><input type="radio" name="response_1" value="1">1</label>' +
+    '<button type="button" class="submit-btn">Submit</button></div></div></div></main>',
+    { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
+  const doc = dom.window.document;
+  const header = createAssessmentHeader(doc.querySelector<HTMLElement>('#main-content')!);
+  header.reconcile();
+  try {
+    const link = doc.querySelector<HTMLAnchorElement>('a')!;
+    assert.equal(link.parentElement, doc.querySelector('#sched'), 'Download sits in the due row beside the date value');
+    assert.equal(doc.querySelector('.label')!.querySelector('a'), null, 'The bare label never hosts the button');
+    header.dispose();
+    assert.equal(link.parentElement, doc.querySelector('#download'));
+  } finally { header.dispose(); dom.window.close(); }
 });
 
 test('slides mode moves PDF Download beside a nested due line', () => {

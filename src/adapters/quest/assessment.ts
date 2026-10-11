@@ -208,7 +208,7 @@ export function isElementVisible(control: HTMLElement): boolean {
   const inputEl = control as HTMLSelectElement | HTMLButtonElement | HTMLInputElement;
   if (inputEl.hidden || control.getAttribute('aria-hidden') === 'true') return false;
   for (let node: HTMLElement | null = control; node; node = node.parentElement) {
-    if (node.hasAttribute('data-betterquest-native-responses') || node.id === 'view-responses-table-id') {
+    if (node.hasAttribute('data-betterquest-native-responses') || node.hasAttribute('data-betterquest-native-visible') || node.id === 'view-responses-table-id') {
       continue;
     }
     const style = node.ownerDocument.defaultView?.getComputedStyle(node);
@@ -225,7 +225,7 @@ export function isNativeControlAvailable(control: HTMLElement): boolean {
   const inputEl = control as HTMLSelectElement | HTMLButtonElement | HTMLInputElement;
   if (inputEl.disabled || inputEl.hidden || control.getAttribute('aria-disabled') === 'true') return false;
   for (let node: HTMLElement | null = control; node; node = node.parentElement) {
-    if (node.hasAttribute('data-betterquest-native-responses') || node.id === 'view-responses-table-id') {
+    if (node.hasAttribute('data-betterquest-native-responses') || node.hasAttribute('data-betterquest-native-visible') || node.id === 'view-responses-table-id') {
       continue;
     }
     const style = node.ownerDocument.defaultView?.getComputedStyle(node);
