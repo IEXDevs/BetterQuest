@@ -362,7 +362,7 @@ test('answer cards show right or wrong status with points earned', () => {
   } finally { workspace.dispose(); dom.window.close(); }
 });
 
-test('review sliders turn fluid with a centered readout', async () => {
+test('review sliders turn fluid with a centered readout', () => {
   const dom = new JSDOM('<div id="tabs-review">' +
     '<p>Custom Reviews allow you to create non-graded assignments.</p><p id="progress">you have completed <strong>46 / 121</strong> review problems</p>' +
     '<div class="card"><div class="card-header h4">2. How many questions?</div><div class="card"><br><div class="d-flex flex-row">' +
@@ -387,23 +387,16 @@ test('review sliders turn fluid with a centered readout', async () => {
     input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     assert.equal(output.textContent, '37', 'Readout tracks free values');
     assert.equal(input.style.getPropertyValue('--bq-fill'), '67.5%');
-    const bubble = doc.querySelector<HTMLElement>('[data-betterquest="slider-bubble"]')!;
-    assert.ok(bubble, 'Bubble rides the thumb');
-    assert.equal(bubble.textContent, '37');
-    assert.match(bubble.style.left, /67\.5%/, 'Bubble sits over the chosen point');
-    assert.match(bubble.style.left, /22px/, 'Bubble stays inside the bar edges');
-    assert.equal(bubble.style.getPropertyValue('--tilt'), '-9deg', 'Moving right leans the bubble left');
-    await new Promise(resolve => setTimeout(resolve, 250));
-    assert.equal(bubble.style.getPropertyValue('--tilt'), '0deg', 'Bubble straightens when idle');
+    assert.equal(doc.querySelector('[data-betterquest="slider-bubble"]'), null, 'No bubble element anymore');
     const css = doc.querySelector('[data-betterquest="review-slider-styles"]')!.textContent!;
     assert.match(css, /\.bq-slider-value[^{]*\{[^}]*text-align:center/, 'Value sits centered under the slider');
-    assert.match(css, /\.slidecontainer[^{]*\.bq-bubble|\.bq-bubble/, 'Bubble styled');
-    assert.match(css, /slidecontainer:hover \.bq-bubble/, 'Bubble appears on hover');
-    assert.match(css, /bq-live \.bq-bubble/, 'Bubble appears while dragging');
+    assert.match(css, /\.bq-slider-value[^{]*\{[^}]*font-size:24px/, 'Value is large');
+    assert.equal(doc.querySelector('#tabs-review')?.getAttribute('data-betterquest-sliders'), 'true', 'Pane carries the slider scope');
+    assert.equal(doc.querySelectorAll('[data-betterquest="slider-value"]').length, 1, 'Exactly one readout per slider');
+    assert.match(css, /\[data-betterquest-sliders\] \.slidecontainer > \.thumb\{display:none/, 'Native thumb bubble stays hidden');
     disposeReviewSliders(doc);
     assert.equal(input.getAttribute('step'), '10', 'Original step restores on disposal');
     assert.equal(doc.querySelector('[data-betterquest="slider-value"]'), null);
-    assert.equal(doc.querySelector('[data-betterquest="slider-bubble"]'), null, 'Bubble cleans up too');
     assert.equal(doc.querySelector('[data-betterquest="review-slider-styles"]'), null);
   } finally { dom.window.close(); }
 });

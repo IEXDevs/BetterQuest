@@ -147,43 +147,19 @@ export function findReviewPane(document: Document): HTMLElement | null {
 }
 
 const REVIEW_SLIDER_STYLES = `
-  #tabs-review .slidecontainer,
-  [data-betterquest-page="review"] .slidecontainer{position:relative;padding:38px 0 34px}
-  #tabs-review input[type="range"].bq-slider,
-  [data-betterquest-page="review"] input[type="range"].bq-slider{-webkit-appearance:none;appearance:none;width:100%;height:26px;margin:0;background:transparent;cursor:pointer;--bq-fill:50%}
-  #tabs-review input[type="range"].bq-slider::-webkit-slider-runnable-track,
-  [data-betterquest-page="review"] input[type="range"].bq-slider::-webkit-slider-runnable-track{height:8px;border-radius:999px;background:linear-gradient(to right,var(--bq-accent,#227ab0) var(--bq-fill),var(--bq-raised,#e6ebf0) var(--bq-fill))}
-  #tabs-review input[type="range"].bq-slider::-webkit-slider-thumb,
-  [data-betterquest-page="review"] input[type="range"].bq-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;margin-top:-7px;border-radius:50%;background:#fff;border:3px solid var(--bq-accent,#227ab0);box-shadow:0 2px 8px #10203333;transition:transform .15s ease,box-shadow .15s ease}
-  #tabs-review input[type="range"].bq-slider:active::-webkit-slider-thumb,
-  [data-betterquest-page="review"] input[type="range"].bq-slider:active::-webkit-slider-thumb{transform:scale(1.15);box-shadow:0 0 0 5px color-mix(in srgb,var(--bq-accent,#227ab0) 22%,transparent)}
-  #tabs-review input[type="range"].bq-slider::-moz-range-track,
-  [data-betterquest-page="review"] input[type="range"].bq-slider::-moz-range-track{height:8px;border-radius:999px;background:var(--bq-raised,#e6ebf0)}
-  #tabs-review input[type="range"].bq-slider::-moz-range-progress,
-  [data-betterquest-page="review"] input[type="range"].bq-slider::-moz-range-progress{height:8px;border-radius:999px;background:var(--bq-accent,#227ab0)}
-  #tabs-review input[type="range"].bq-slider::-moz-range-thumb,
-  [data-betterquest-page="review"] input[type="range"].bq-slider::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--bq-accent,#227ab0);box-shadow:0 2px 8px #10203333}
-  #tabs-review input[type="range"].bq-slider:focus-visible,
-  [data-betterquest-page="review"] input[type="range"].bq-slider:focus-visible{outline:2px solid var(--bq-accent,#227ab0);outline-offset:6px;border-radius:999px}
-  #tabs-review .slidecontainer > .thumb,
-  [data-betterquest-page="review"] .slidecontainer > .thumb{display:none!important}
-  #tabs-review .bq-slider-value,
-  [data-betterquest-page="review"] .bq-slider-value{display:block;text-align:center;font-weight:750;font-size:15px;margin:8px 0 0;color:var(--bq-text,#26384a);font-variant-numeric:tabular-nums}
-  #tabs-review .bq-bubble,
-  [data-betterquest-page="review"] .bq-bubble{position:absolute;top:2px;left:50%;transform:translate(-50%,-100%) rotate(var(--tilt,0deg));min-width:44px;padding:4px 10px;border-radius:999px;background:var(--bq-accent,#227ab0);color:#fff;font-weight:750;font-size:13px;text-align:center;font-variant-numeric:tabular-nums;box-shadow:0 4px 14px #10203344;opacity:0;pointer-events:none;transition:opacity .15s ease,transform .12s ease,left .08s linear}
-  #tabs-review .bq-bubble::after,
-  [data-betterquest-page="review"] .bq-bubble::after{content:'';position:absolute;left:50%;bottom:-5px;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--bq-accent,#227ab0);border-bottom:0}
-  #tabs-review .slidecontainer:hover .bq-bubble,
-  #tabs-review .slidecontainer:focus-within .bq-bubble,
-  #tabs-review .slidecontainer.bq-live .bq-bubble,
-  [data-betterquest-page="review"] .slidecontainer:hover .bq-bubble,
-  [data-betterquest-page="review"] .slidecontainer:focus-within .bq-bubble,
-  [data-betterquest-page="review"] .slidecontainer.bq-live .bq-bubble{opacity:1}
+  [data-betterquest-sliders] .slidecontainer{position:relative;padding-bottom:34px}
+  [data-betterquest-sliders] input[type="range"].bq-slider{-webkit-appearance:none;appearance:none;width:100%;height:26px;margin:0;background:transparent;cursor:pointer;--bq-fill:50%}
+  [data-betterquest-sliders] input[type="range"].bq-slider::-webkit-slider-runnable-track{height:8px;border-radius:999px;background:linear-gradient(to right,var(--bq-accent,#227ab0) var(--bq-fill),var(--bq-raised,#e6ebf0) var(--bq-fill))}
+  [data-betterquest-sliders] input[type="range"].bq-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;margin-top:-7px;border-radius:50%;background:#fff;border:3px solid var(--bq-accent,#227ab0);box-shadow:0 2px 8px #10203333;transition:transform .15s ease,box-shadow .15s ease}
+  [data-betterquest-sliders] input[type="range"].bq-slider:active::-webkit-slider-thumb{transform:scale(1.15);box-shadow:0 0 0 5px color-mix(in srgb,var(--bq-accent,#227ab0) 22%,transparent)}
+  [data-betterquest-sliders] input[type="range"].bq-slider::-moz-range-track{height:8px;border-radius:999px;background:var(--bq-raised,#e6ebf0)}
+  [data-betterquest-sliders] input[type="range"].bq-slider::-moz-range-progress{height:8px;border-radius:999px;background:var(--bq-accent,#227ab0)}
+  [data-betterquest-sliders] input[type="range"].bq-slider::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--bq-accent,#227ab0);box-shadow:0 2px 8px #10203333}
+  [data-betterquest-sliders] input[type="range"].bq-slider:focus-visible{outline:2px solid var(--bq-accent,#227ab0);outline-offset:6px;border-radius:999px}
+  [data-betterquest-sliders] .slidecontainer > .thumb{display:none!important}
+  [data-betterquest-sliders] .bq-slider-value{display:block;text-align:center;font-weight:800;font-size:24px;margin:10px 0 0;color:var(--bq-text,#26384a);font-variant-numeric:tabular-nums;line-height:1.1}
   @media(prefers-reduced-motion:reduce){
-    #tabs-review input[type="range"].bq-slider::-webkit-slider-thumb,
-    [data-betterquest-page="review"] input[type="range"].bq-slider::-webkit-slider-thumb{transition:none}
-    #tabs-review .bq-bubble,
-    [data-betterquest-page="review"] .bq-bubble{transition:none}
+    [data-betterquest-sliders] input[type="range"].bq-slider::-webkit-slider-thumb{transition:none}
   }
 `;
 
@@ -213,8 +189,10 @@ function paintSlider(input: HTMLInputElement) {
   if (input.style.getPropertyValue('--bq-fill') !== fill) input.style.setProperty('--bq-fill', fill);
   const key = input.id || input.name;
   const host = input.closest('.slidecontainer') || input.parentElement;
-  let output = host?.querySelector<HTMLElement>(
-    `:scope > [data-betterquest="slider-value"][data-slider-for="${key}"]`);
+  const existing = host?.querySelectorAll<HTMLElement>(
+    `:scope > [data-betterquest="slider-value"][data-slider-for="${key}"]`) || [];
+  existing.forEach((el, index) => { if (index > 0) el.remove(); });
+  let output = existing[0] || null;
   if (!output && host) {
     output = input.ownerDocument.createElement('output');
     output.dataset.betterquest = 'slider-value';
@@ -223,38 +201,12 @@ function paintSlider(input: HTMLInputElement) {
     host.append(output);
   }
   if (output && output.textContent !== input.value) output.textContent = input.value;
-  let bubble = host?.querySelector<HTMLElement>(
-    `:scope > [data-betterquest="slider-bubble"][data-slider-for="${key}"]`);
-  if (!bubble && host) {
-    bubble = input.ownerDocument.createElement('div');
-    bubble.dataset.betterquest = 'slider-bubble';
-    bubble.dataset.sliderFor = key;
-    bubble.setAttribute('aria-hidden', 'true');
-    host.append(bubble);
-  }
-  if (bubble) {
-    if (bubble.textContent !== input.value) bubble.textContent = input.value;
-    const pos = `clamp(22px, ${pct}%, calc(100% - 22px))`;
-    if (bubble.style.left !== pos) bubble.style.left = pos;
-    const last = input.dataset.betterquestLast;
-    if (last !== undefined && last !== input.value) {
-      bubble.style.setProperty('--tilt', Number(input.value) > Number(last) ? '-9deg' : '9deg');
-      const pending = sliderTiltTimers.get(input);
-      if (pending !== undefined) clearTimeout(pending);
-      sliderTiltTimers.set(input, setTimeout(() => {
-        bubble?.style.setProperty('--tilt', '0deg');
-        sliderTiltTimers.delete(input);
-      }, 160));
-    }
-    input.dataset.betterquestLast = input.value;
-  }
 }
-
-const sliderTiltTimers = new WeakMap<HTMLInputElement, ReturnType<typeof setTimeout>>();
 
 export function enhanceReviewSliders(pane: HTMLElement): void {
   const doc = pane.ownerDocument;
   ensureSliderStyles(doc);
+  pane.dataset.betterquestSliders = 'true';
   for (const input of pane.querySelectorAll<HTMLInputElement>('input[type="range"]')) {
     if (input.closest('[data-betterquest="review-dashboard"]')) continue;
     if (input.dataset.betterquestSlider !== 'true') {
@@ -270,23 +222,21 @@ export function enhanceReviewSliders(pane: HTMLElement): void {
       const repaint = () => paintSlider(input);
       input.addEventListener('input', repaint);
       input.addEventListener('change', repaint);
-      const container = input.closest('.slidecontainer');
-      if (container) {
-        input.addEventListener('pointerdown', () => container.classList.add('bq-live'));
-        input.addEventListener('pointerup', () => container.classList.remove('bq-live'));
-        input.addEventListener('pointercancel', () => container.classList.remove('bq-live'));
-        input.addEventListener('blur', () => container.classList.remove('bq-live'));
-      }
     }
   }
   // Drop readouts whose inputs Quest re-rendered away.
   for (const output of [...pane.querySelectorAll<HTMLElement>('[data-betterquest="slider-value"]')]) {
     if (!sliderInputAlive(pane, output)) output.remove();
   }
+  // Leftover bubbles from before the bubble was removed.
+  pane.querySelectorAll('[data-betterquest="slider-bubble"]').forEach(el => el.remove());
 }
 
 export function disposeReviewSliders(document: Document): void {
   document.querySelector('[data-betterquest="review-slider-styles"]')?.remove();
+  document.querySelectorAll<HTMLElement>('[data-betterquest-sliders]').forEach(el => {
+    el.removeAttribute('data-betterquest-sliders');
+  });
   for (const input of document.querySelectorAll<HTMLInputElement>('input[type="range"][data-betterquest-slider]')) {
     const original = input.dataset.betterquestOriginalStep;
     if (original) input.setAttribute('step', original);
@@ -296,10 +246,8 @@ export function disposeReviewSliders(document: Document): void {
     delete input.dataset.betterquestSlider;
     delete input.dataset.betterquestOriginalStep;
     delete input.dataset.betterquestSliderBound;
-    delete input.dataset.betterquestLast;
   }
   document.querySelectorAll('[data-betterquest="slider-value"]').forEach(el => el.remove());
-  document.querySelectorAll('[data-betterquest="slider-bubble"]').forEach(el => el.remove());
 }
 
 export function enhanceCourseReviewTab(document: Document): boolean {
