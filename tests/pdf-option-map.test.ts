@@ -91,4 +91,19 @@ test('PDF option mapping maps choices for questions at the very bottom of the do
   ]);
 });
 
+test('PDF option mapping maps choices using uppercase and lowercase letters', () => {
+  const actual = mapper()([
+    run('001', 20),
+    run('A.', 40), run('B.', 60), run('C.', 80), run('D.', 100),
+    run('002 (part 1 of 1)', 140),
+    run('a.', 160), run('b.', 180), run('c.', 200),
+  ], new Map([[1, 4], [2, 3]]));
+
+  assert.deepEqual(actual.map(({ questionNumber, optionValue, top }) => [questionNumber, optionValue, top]), [
+    [1, 1, 40], [1, 2, 60], [1, 3, 80], [1, 4, 100],
+    [2, 1, 160], [2, 2, 180], [2, 3, 200],
+  ]);
+});
+
+
 

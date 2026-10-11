@@ -7,7 +7,7 @@ import { createSettingsMenu } from '../src/features/settings/menu';
 import { LocalRepository } from '../src/storage/repository';
 import { createQuestTheme } from '../src/features/theme/quest';
 import { detectPageCategory } from '../src/adapters/quest/theme';
-import { readAssessmentMetrics } from '../src/adapters/quest/assessment';
+import { readAssessmentMetrics, readAssessmentResponses } from '../src/adapters/quest/assessment';
 import { formatMeetingTime, createMeetingTimesEnhancer } from '../src/features/courses/meeting-times';
 import { enhanceCourseInfoCard, collapseCourseCategoriesByDefault } from '../src/features/courses/details-enhancer';
 import type { Execute } from '../src/shared/client';
@@ -354,7 +354,7 @@ test('Slides reveal only the selected question submit and preserve natively hidd
   } finally { features.dispose(); dom.window.close(); }
 });
 
-test('moving from options to suboptions keeps modal open and debounces for around 500ms on cursor leave', async () => {
+test('moving from options to suboptions keeps modal open and closes immediately on cursor leave without 500ms delay', async () => {
   const dom = new JSDOM(`<html><body><div id="nav-host"></div></body></html>`, { pretendToBeVisual: true });
   prepare(dom);
   const f = store();
@@ -390,18 +390,12 @@ test('moving from options to suboptions keeps modal open and debounces for aroun
     assert.equal(menuHost.hidden, false);
     assert.equal(flyout.hidden, false);
 
-    // 4. Move cursor off flyout entirely into empty space
+    // 4. Move cursor off flyout entirely into empty space: closes immediately without 500ms wait
     flyout.dispatchEvent(new dom.window.Event('pointerleave'));
 
-    // After 250ms, the modal and flyout MUST STILL BE OPEN
-    await new Promise(resolve => setTimeout(resolve, 250));
-    assert.equal(menuHost.hidden, false, 'Modal should remain open during 500ms debounce window');
-    assert.equal(flyout.hidden, false, 'Flyout should remain open during 500ms debounce window');
-
-    // After 600ms total (> 500ms), both modal and flyout disappear
-    await new Promise(resolve => setTimeout(resolve, 350));
-    assert.equal(menuHost.hidden, true, 'Modal should disappear after 500ms without cursor');
-    assert.equal(flyout.hidden, true, 'Flyout should disappear after 500ms without cursor');
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(menuHost.hidden, true, 'Modal should close immediately without 500ms wait');
+    assert.equal(flyout.hidden, true, 'Flyout should close immediately without 500ms wait');
   } finally {
     menu.dispose();
     dom.window.close();
@@ -562,21 +556,21 @@ test('detectPageCategory recognizes grades and review from urls, active tabs, an
   assert.equal(detectPageCategory(dom3.window.document), null);
 });
 
-test('formatMeetingTime converts TTH 330-500 to Tuesday/Thursday 3:30 - 5:00', () => {
+test('formatMeetingTime converts TTH 330-500 to Tuesday/Thursday 3:30 PM - 5:00 PM', () => {
   const result = formatMeetingTime('TTH 330-500');
   assert.ok(result);
   assert.equal(result.days, 'Tuesday/Thursday');
-  assert.equal(result.time, '3:30 - 5:00');
-  assert.equal(result.formatted, 'Tuesday/Thursday 3:30 - 5:00');
+  assert.equal(result.time, '3:30 PM - 5:00 PM');
+  assert.equal(result.formatted, 'Tuesday/Thursday 3:30 PM - 5:00 PM');
 
   const mwf = formatMeetingTime('MWF 1000-1100');
-  assert.equal(mwf?.formatted, 'Monday/Wednesday/Friday 10:00 - 11:00');
+  assert.equal(mwf?.formatted, 'Monday/Wednesday/Friday 10:00 AM - 11:00 AM');
 
   const mw = formatMeetingTime('MW 100-230');
-  assert.equal(mw?.formatted, 'Monday/Wednesday 1:00 - 2:30');
+  assert.equal(mw?.formatted, 'Monday/Wednesday 1:00 PM - 2:30 PM');
 
   const th = formatMeetingTime('TH 330-500');
-  assert.equal(th?.formatted, 'Thursday 3:30 - 5:00');
+  assert.equal(th?.formatted, 'Thursday 3:30 PM - 5:00 PM');
 });
 
 test('createMeetingTimesEnhancer formats meeting time cell in courses table and cleans up on dispose', () => {
@@ -609,12 +603,12 @@ test('createMeetingTimesEnhancer formats meeting time cell in courses table and 
   const enhancer = createMeetingTimesEnhancer(table);
 
   const cell = table.querySelector('tbody tr td:nth-child(5)')!;
-  assert.equal(cell.textContent?.trim(), 'Tuesday/Thursday 3:30 - 5:00');
+  assert.equal(cell.textContent?.trim(), 'Tuesday/Thursday 3:30 PM - 5:00 PM');
 
   const badge = cell.querySelector('[data-betterquest="meeting-time"]')!;
   assert.ok(badge);
   assert.equal(badge.querySelector('.bq-meeting-days')?.textContent, 'Tuesday/Thursday');
-  assert.equal(badge.querySelector('.bq-meeting-hours')?.textContent, '3:30 - 5:00');
+  assert.equal(badge.querySelector('.bq-meeting-hours')?.textContent, '3:30 PM - 5:00 PM');
 
   enhancer.dispose();
   assert.equal(cell.textContent?.trim(), 'TTH 330-500');
@@ -671,7 +665,7 @@ test('enhanceCourseInfoCard formats instructor contact, meeting schedule, and lo
   const time = columns[1].querySelector<HTMLElement>('.bq-meeting-time')!;
   assert.ok(time);
   assert.equal(time.querySelector('.bq-meeting-days')?.textContent, 'Tuesday/Thursday');
-  assert.equal(time.querySelector('.bq-meeting-hours')?.textContent, '3:30 - 5:00');
+  assert.equal(time.querySelector('.bq-meeting-hours')?.textContent, '3:30 PM - 5:00 PM');
 
   const loc = columns[1].querySelector<HTMLElement>('.bq-course-location')!;
   assert.ok(loc);
@@ -777,6 +771,16 @@ test('course details facelift integrates with startPageFeatures on course show p
             <table><tr><td>HW 1</td></tr></table>
           </div>
         </div>
+        <div id="tabs-grades">
+          <div class="card-header">
+            <button type="button" class="btn btn-link" data-toggle="collapse" data-target="#header-grades-1" aria-expanded="true">
+              <span class="h4">Homework Grades</span>
+            </button>
+          </div>
+          <div class="collapse show" id="header-grades-1">
+            <table><tr><td>HW 1: 100%</td></tr></table>
+          </div>
+        </div>
       </div>
     </div>
   </body></html>`, {
@@ -794,18 +798,229 @@ test('course details facelift integrates with startPageFeatures on course show p
     const info = dom.window.document.querySelector<HTMLElement>('#student-course-info-header')!;
     assert.ok(info.querySelector('.bq-meeting-time'));
     assert.equal(info.querySelector('.bq-meeting-days')?.textContent, 'Tuesday/Thursday');
-    assert.equal(info.querySelector('.bq-meeting-hours')?.textContent, '3:30 - 5:00');
+    assert.equal(info.querySelector('.bq-meeting-hours')?.textContent, '3:30 PM - 5:00 PM');
     assert.ok(info.querySelector('.bq-contact-btn'));
     assert.ok(info.querySelector('.bq-course-location'));
 
-    // Category accordion is collapsed by default
+    // Category accordion in assignments is collapsed by default
     const category = dom.window.document.querySelector<HTMLElement>('#header-999')!;
     assert.equal(category.classList.contains('show'), false);
     const catBtn = dom.window.document.querySelector<HTMLButtonElement>('button[data-target="#header-999"]')!;
     assert.equal(catBtn.getAttribute('aria-expanded'), 'false');
     assert.ok(catBtn.classList.contains('collapsed'));
+
+    // Panels in grades MUST NOT be collapsed
+    const gradePanel = dom.window.document.querySelector<HTMLElement>('#header-grades-1')!;
+    assert.equal(gradePanel.classList.contains('show'), true, 'Grades panel must remain expanded');
+    const gradeBtn = dom.window.document.querySelector<HTMLButtonElement>('button[data-target="#header-grades-1"]')!;
+    assert.equal(gradeBtn.getAttribute('aria-expanded'), 'true');
+    assert.equal(gradeBtn.classList.contains('collapsed'), false);
   } finally {
     features.dispose();
     dom.window.close();
   }
 });
+
+test('readAssessmentResponses parses all questions with full choice lists from completed Quest responses', async () => {
+  const fs = await import('node:fs/promises');
+  const html = await fs.readFile(new URL('./fixtures/quest-responses.html', import.meta.url), 'utf-8');
+  const dom = new JSDOM(`<body>${html}</body>`);
+  const table = dom.window.document.querySelector<HTMLTableElement>('table[id^="instance-table-courseuserassignment_"]')!;
+  assert.ok(table);
+  const bindings = readAssessmentResponses(table);
+  assert.equal(bindings.length, 12, 'Must parse all 12 questions from table');
+  for (let i = 0; i < 12; i++) {
+    const b = bindings[i];
+    assert.equal(b.number, String(i + 1));
+    assert.ok(b.options.length >= 4, `Question ${i + 1} must have complete choice options`);
+    assert.ok(b.select.value, `Question ${i + 1} must preserve submitted value`);
+  }
+});
+
+test('PDF workspace hides choice selectors for answered questions and renders all possible choice buttons for unanswered questions', async () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target">
+    <div id="pdf-frame"><div id="presentation-pdf-frame"><iframe src="/student/images/download_pdf?instance=courseuserassignment_1" title="Assignment PDF"></iframe></div></div>
+    <div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody>
+      <!-- Question 1: Unanswered, 4 choices -->
+      <tr data-id="cuaip_1"><td>1.</td><td><select aria-label="Select your response"><option value="">- select -</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></td><td class="status"></td><td class="previous">0 / 2</td><td class="correct"></td><td><button aria-label="Submit response">Submit</button></td></tr>
+      <!-- Question 2: Completed/Answered row with answer 3 -->
+      <tr data-id="cuaip_2"><td>2.</td><td class="input">3</td><td class="status"><i class="material-icons text-success">check</i></td><td class="previous">1 / 2</td><td class="correct">10</td><td></td></tr>
+    </tbody></table></div>
+  </div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile();
+    await pause();
+    const host = dom.window.document.querySelector<HTMLElement>('[data-betterquest="assessment-rail"]')!;
+    assert.ok(host);
+
+    const q1Card = host.shadowRoot!.querySelector<HTMLElement>('[data-question-id="cuaip_1"]')!;
+    assert.ok(q1Card);
+    const q1Choices = q1Card.querySelectorAll<HTMLButtonElement>('.choice');
+    assert.equal(q1Choices.length, 4, 'Unanswered question 1 must show buttons for ALL 4 possible answers');
+    assert.equal(q1Card.querySelector('.submitted-tag'), null);
+
+    const q2Card = host.shadowRoot!.querySelector<HTMLElement>('[data-question-id="cuaip_2"]')!;
+    assert.ok(q2Card);
+    assert.equal(q2Card.querySelector('.choices'), null, 'Answered question 2 must NOT show choice selector buttons');
+    assert.equal(q2Card.querySelector('.submit'), null, 'Answered question 2 must NOT show submit button');
+    const tag = q2Card.querySelector<HTMLElement>('.submitted-tag')!;
+    assert.ok(tag);
+    assert.equal(tag.textContent, 'Submitted: Answer 3');
+  } finally {
+    features.dispose();
+    dom.window.close();
+  }
+});
+
+test('PDF workspace shows strictly one type of PDF depending on view mode and toggles without stacking', async () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target">
+    <div id="pdf-frame"><div id="presentation-pdf-frame"><iframe src="/student/images/download_pdf?instance=courseuserassignment_1" title="Assignment PDF"></iframe></div></div>
+    <div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody>
+      <tr data-id="cuaip_1"><td>1.</td><td><select aria-label="Select your response"><option value="">- select -</option><option value="1">1</option><option value="2">2</option></select></td><td class="status"></td><td class="previous">0 / 2</td><td class="correct">10</td><td><button aria-label="Submit response">Submit</button></td></tr>
+    </tbody></table></div>
+  </div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile();
+    await pause();
+    const host = dom.window.document.querySelector<HTMLElement>('[data-betterquest="assessment-rail"]')!;
+    assert.ok(host);
+
+    // Unanswered question 1 must show choice selector buttons even when correct column has points (10)
+    const q1Card = host.shadowRoot!.querySelector<HTMLElement>('[data-question-id="cuaip_1"]')!;
+    assert.ok(q1Card);
+    assert.equal(q1Card.querySelectorAll('.choice').length, 2, 'Must show choices for unanswered question');
+
+    const pdfFrame = dom.window.document.querySelector<HTMLElement>('#pdf-frame')!;
+    const pres = dom.window.document.querySelector<HTMLElement>('#presentation-pdf-frame')!;
+    const iframe = dom.window.document.querySelector<HTMLIFrameElement>('#presentation-pdf-frame iframe')!;
+    const bqViewer = pdfFrame.querySelector<HTMLElement>('[data-betterquest="interactive-pdf"]');
+
+    // 1. In default BetterQuest View: native iframe and presentation frame are strictly hidden
+    assert.equal(pres.hidden, true, 'Native presentation frame must be hidden in BetterQuest view');
+    assert.equal(iframe.hidden, true, 'Native iframe must be hidden in BetterQuest view');
+    assert.equal(pres.style.display, 'none');
+    assert.equal(iframe.style.display, 'none');
+    if (bqViewer) {
+      assert.equal(bqViewer.hidden, false, 'BetterQuest interactive viewer must be visible');
+      assert.equal(bqViewer.style.display, 'block');
+    }
+
+    // 2. Switch to Basic View: native frame is visible, BetterQuest viewer is strictly hidden
+    const basicBtn = host.shadowRoot!.querySelector<HTMLButtonElement>('.mode-btn[data-mode="basic"]')!;
+    basicBtn.click();
+    assert.equal(pres.hidden, false, 'Native presentation frame must be visible in Basic view');
+    assert.equal(iframe.hidden, false, 'Native iframe must be visible in Basic view');
+    assert.equal(pres.style.display, '');
+    assert.equal(iframe.style.display, '');
+    if (bqViewer) {
+      assert.equal(bqViewer.hidden, true, 'BetterQuest viewer must be hidden in Basic view');
+      assert.equal(bqViewer.style.display, 'none');
+    }
+
+    // 3. Switch back to BetterQuest View: native frame is hidden again, BetterQuest viewer is visible
+    const bqBtn = host.shadowRoot!.querySelector<HTMLButtonElement>('.mode-btn[data-mode="betterquest"]')!;
+    bqBtn.click();
+    assert.equal(pres.hidden, true, 'Native presentation frame must be hidden when switching back');
+    assert.equal(iframe.hidden, true, 'Native iframe must be hidden when switching back');
+    assert.equal(pres.style.display, 'none');
+    assert.equal(iframe.style.display, 'none');
+    if (bqViewer) {
+      assert.equal(bqViewer.hidden, false);
+      assert.equal(bqViewer.style.display, 'block');
+    }
+  } finally {
+    features.dispose();
+    dom.window.close();
+  }
+});
+
+test('Upcoming Assignments shows in-progress assignments (e.g. 5 of 20 completed) instead of falsely claiming all caught up', async () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target">
+    <div class="card">
+      <div class="card-header">
+        <button type="button" data-toggle="collapse" data-target="#student-course-info-header">
+          <span class="h4">CALCULUS (58355)</span>
+        </button>
+      </div>
+      <div class="collapse show" id="student-course-info-header">
+        <div class="row">
+          <div class="col"><div class="qlabel">Instructor</div><div>Teacher Name</div></div>
+          <div class="col"><div class="qlabel">Meets</div><div>TTH 330-500</div></div>
+          <div class="col"></div>
+          <div class="col"></div>
+        </div>
+      </div>
+    </div>
+    <div id="tabs-elements">
+      <table id="instances-table-eh999999">
+        <thead>
+          <tr><th></th><th>Name</th><th>Start Date</th><th>Due Date (Central Time (US & Canada))</th><th>Completed</th><th>Grade</th><th>Class Average</th><th></th></tr>
+        </thead>
+        <tbody>
+          <!-- HW01: 100% completed -->
+          <tr>
+            <td></td>
+            <td><a href="/student/instances/route?instance=courseuserassignment_101">HW01</a></td>
+            <td>August 25, 2026 12:00 AM CDT</td>
+            <td>September 02, 2026 11:59 PM CDT</td>
+            <td><span class="sr-only">Completed status: Completed</span><i class="material-icons text-success">check</i></td>
+            <td>100%</td>
+            <td>90%</td>
+            <td></td>
+          </tr>
+          <!-- HW07: In progress, 5 of 20 completed, due in the future -->
+          <tr>
+            <td></td>
+            <td><a href="/student/instances/route?instance=courseuserassignment_107">HW07</a></td>
+            <td>October 07, 2026 12:00 AM CDT</td>
+            <td>October 14, 2026 11:59 PM CDT</td>
+            <td><span class="sr-only">Completed status: 5 of 20 completed</span>5/20</td>
+            <td>25%</td>
+            <td>50%</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/courses/show?course=3491354', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile();
+    await pause();
+
+    // Verify course show extraction observed the assignments
+    const state = await f.run({ kind: 'state:read' });
+    const hw07 = state.cache.assignments.find(a => a.title === 'HW07')!;
+    assert.ok(hw07);
+    assert.equal(hw07.completion, 'in-progress');
+
+    // Upcoming assignments section inside course info header
+    const upcoming = dom.window.document.querySelector<HTMLElement>('[data-betterquest="assignment-section"]')!;
+    assert.ok(upcoming);
+    const shadow = upcoming.shadowRoot!;
+
+    // Must NOT say "All caught up! No incomplete assignments."
+    assert.equal(shadow.querySelector('.empty'), null, 'Must NOT claim all caught up when HW07 is incomplete');
+
+    // Must display HW07 in the list of upcoming assignments
+    const rows = shadow.querySelectorAll('.list .row');
+    assert.equal(rows.length, 1, 'HW07 must be listed as an upcoming incomplete assignment');
+    assert.equal(rows[0].querySelector('.assignment-link')?.textContent, 'HW07');
+    assert.match(rows[0].querySelector('.deadline')?.textContent || '', /Oct 14/);
+  } finally {
+    features.dispose();
+    dom.window.close();
+  }
+});
+
+
+
+

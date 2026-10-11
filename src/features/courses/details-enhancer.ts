@@ -1,4 +1,5 @@
 import { formatMeetingTime } from './meeting-times';
+import { enhanceCourseReviewTab } from './review-enhancer';
 
 export function isCourseShowPage(url: string): boolean {
   try {
@@ -133,11 +134,16 @@ export function enhanceCourseInfoCard(root: HTMLElement) {
 
 export function collapseCourseCategoriesByDefault(document: Document) {
   const categories = document.querySelectorAll<HTMLElement>(
-    'div.collapse.show[id^="header-"], #tabs-elements div.collapse.show, #info-tab-data div.collapse.show'
+    '#tabs-elements div.collapse.show, div.collapse.show[id^="header-"]'
   );
   for (const cat of categories) {
-    // Only target category panels, never the main course info header
+    // Only target assignment category panels; never course info header or panels in grades
     if (cat.id === 'student-course-info-header') continue;
+    if (cat.closest('#tabs-grades, [id*="grades"], .grades-tab, #info-tab-grades, .tab-pane#tabs-grades')) continue;
+    if (/grade/i.test(cat.id)) continue;
+    const catButton = document.querySelector<HTMLButtonElement>(`button[data-target*="${cat.id}"]`);
+    if (catButton && /grade/i.test(catButton.textContent || '')) continue;
+
     if (cat.dataset.betterquestDefaultCollapsed === 'true') continue;
     cat.dataset.betterquestDefaultCollapsed = 'true';
     cat.classList.remove('show');
@@ -163,6 +169,7 @@ export function createCourseDetailsFacelift(root: HTMLElement) {
     if (disposed) return;
     enhanceCourseInfoCard(root);
     collapseCourseCategoriesByDefault(doc);
+    enhanceCourseReviewTab(doc);
   }
 
   reconcile();

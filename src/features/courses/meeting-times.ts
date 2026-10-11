@@ -23,26 +23,83 @@ export function parseDayTokens(rawDays: string): string[] {
   return matches.map(m => map[m] || m);
 }
 
-export function formatSingleClockTime(digits: string): string {
-  const clean = digits.trim().replace(/:/g, '');
-  if (!/^\d{3,4}$/.test(clean)) return digits.trim();
-  const minutes = clean.slice(-2);
-  const hours = clean.slice(0, -2);
-  return `${hours}:${minutes}`;
+export function parseClockTime(raw: string): { hour: number; minute: number; ampm?: 'AM' | 'PM' } | null {
+  const ampmMatch = raw.match(/\b(AM|PM)\b/i);
+  const ampm = ampmMatch ? (ampmMatch[1].toUpperCase() as 'AM' | 'PM') : undefined;
+  const numOnly = raw.replace(/[^\d:]/g, '').trim();
+  const clean = numOnly.replace(/:/g, '');
+  if (!clean || !/^\d{3,4}$/.test(clean)) return null;
+  const minute = Number(clean.slice(-2));
+  const hour = Number(clean.slice(0, -2));
+  if (minute >= 60 || hour < 1 || hour > 24) return null;
+  return { hour, minute, ampm };
+}
+
+function inferAmpm(startHour: number, endHour?: number, explicitEndAmpm?: 'AM' | 'PM'): { startAmpm: 'AM' | 'PM'; endAmpm?: 'AM' | 'PM' } {
+  if (explicitEndAmpm) {
+    if (endHour !== undefined) {
+      if (explicitEndAmpm === 'AM') {
+        return { startAmpm: 'AM', endAmpm: 'AM' };
+      }
+      if (startHour >= 8 && startHour <= 11 && (endHour === 12 || endHour < startHour)) {
+        return { startAmpm: 'AM', endAmpm: 'PM' };
+      }
+      return { startAmpm: 'PM', endAmpm: 'PM' };
+    }
+    return { startAmpm: explicitEndAmpm };
+  }
+
+  const startAmpm: 'AM' | 'PM' = (startHour >= 7 && startHour <= 11) ? 'AM' : 'PM';
+  if (endHour === undefined) {
+    return { startAmpm };
+  }
+
+  let endAmpm: 'AM' | 'PM';
+  if (startAmpm === 'AM') {
+    if (endHour > startHour && endHour <= 11) {
+      endAmpm = 'AM';
+    } else {
+      endAmpm = 'PM';
+    }
+  } else {
+    endAmpm = 'PM';
+  }
+
+  return { startAmpm, endAmpm };
+}
+
+export function formatSingleClockTime(digits: string, ampm?: 'AM' | 'PM'): string {
+  const parsed = parseClockTime(digits);
+  if (!parsed) return digits.trim();
+  const resolvedAmpm = ampm || parsed.ampm || inferAmpm(parsed.hour).startAmpm;
+  const minutes = String(parsed.minute).padStart(2, '0');
+  return `${parsed.hour}:${minutes} ${resolvedAmpm}`;
 }
 
 export function formatMeetingTimeRange(range: string): string {
-  const ampmMatch = range.match(/\s*(AM|PM|am|pm)\s*$/i);
-  const suffix = ampmMatch ? ` ${ampmMatch[1].toUpperCase()}` : '';
-  const cleanRange = range.replace(/\s*(AM|PM|am|pm)\s*$/i, '').trim();
-
-  const parts = cleanRange.split(/\s*[-–—]\s*/);
+  const explicitRangeAmpm = range.match(/\s*(AM|PM)\s*$/i)?.[1]?.toUpperCase() as 'AM' | 'PM' | undefined;
+  const parts = range.split(/\s*[-–—]\s*/);
   if (parts.length === 2) {
-    const start = formatSingleClockTime(parts[0]);
-    const end = formatSingleClockTime(parts[1]);
-    return `${start} - ${end}${suffix}`;
+    const p1 = parseClockTime(parts[0]);
+    const p2 = parseClockTime(parts[1]);
+    if (p1 && p2) {
+      const explicitEnd = p2.ampm || explicitRangeAmpm;
+      const explicitStart = p1.ampm;
+      const { startAmpm, endAmpm } = inferAmpm(p1.hour, p2.hour, explicitEnd);
+      const startMinutes = String(p1.minute).padStart(2, '0');
+      const endMinutes = String(p2.minute).padStart(2, '0');
+      return `${p1.hour}:${startMinutes} ${explicitStart || startAmpm} - ${p2.hour}:${endMinutes} ${explicitEnd || endAmpm}`;
+    }
   }
-  return `${formatSingleClockTime(cleanRange)}${suffix}`;
+
+  const single = parseClockTime(range);
+  if (single) {
+    const minutes = String(single.minute).padStart(2, '0');
+    const ampm = single.ampm || explicitRangeAmpm || inferAmpm(single.hour).startAmpm;
+    return `${single.hour}:${minutes} ${ampm}`;
+  }
+
+  return range.trim();
 }
 
 export function formatMeetingTime(raw: string): FormattedMeetingTime | null {
@@ -61,7 +118,7 @@ export function formatMeetingTime(raw: string): FormattedMeetingTime | null {
     }
   }
 
-  const match = trimmed.match(/^([A-Za-z]+)\s+([\d:]{3,5}\s*[-–—]\s*[\d:]{3,5}(?:\s*(?:AM|PM|am|pm))?)$/);
+  const match = trimmed.match(/^([A-Za-z]+)\s+([\d:]{3,5}(?:\s*(?:AM|PM))?\s*[-–—]\s*[\d:]{3,5}(?:\s*(?:AM|PM))?)$/i);
   if (match) {
     const rawDays = match[1];
     const rawTime = match[2];

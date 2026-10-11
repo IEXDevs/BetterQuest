@@ -1,4 +1,4 @@
-import { mapPdfOptionLabels, type PdfOptionTarget, type PdfTextRun } from '../../adapters/quest/assessment';
+import { mapPdfOptionLabels, parseQuestionBoundary, clean, type PdfOptionTarget, type PdfTextRun } from '../../adapters/quest/assessment';
 
 export interface InteractivePdfPage {
   width: number;
@@ -17,6 +17,7 @@ export type OpenInteractivePdf = (url: string, signal: AbortSignal) => Promise<I
 export interface InteractivePdfOptions {
   url: string;
   optionMaximums: ReadonlyMap<number, number>;
+  answeredQuestions?: ReadonlySet<number>;
   onChoose: (questionNumber: number, optionValue: number) => void;
   onSubmit?: (questionNumber: number) => void;
   openDocument?: OpenInteractivePdf;
@@ -109,13 +110,13 @@ function hitArea(
   pageHeight: number
 ) {
   const isLeftColumn = target.left < pageWidth * 0.5;
-  const columnRight = isLeftColumn ? pageWidth * 0.48 : pageWidth * 0.96;
+  const hasRightColumnTargets = targets.some(item => item.page === target.page && item.left >= pageWidth * 0.5);
+  const columnRight = (isLeftColumn && hasRightColumnTargets) ? pageWidth * 0.48 : pageWidth * 0.96;
   const sameColumn = targets.find(item =>
     item.page === target.page &&
     item.questionNumber === target.questionNumber &&
-    item.optionValue === target.optionValue + 1 &&
-    item.top > target.top &&
-    Math.abs(item.left - target.left) < pageWidth * 0.15
+    item.top > target.top + 2 &&
+    Math.abs(item.left - target.left) < pageWidth * 0.25
   );
   const verticalLimit = sameColumn
     ? sameColumn.top
@@ -148,14 +149,16 @@ function hitArea(
     bottom = Math.min(verticalLimit - 2, target.top + Math.max(22, target.height * 1.8));
   }
 
-  const width = Math.max(40, right - left);
-  const height = Math.max(20, bottom - top);
+  const safeLeft = Math.max(0, Math.min(pageWidth - 40, left));
+  const safeTop = Math.max(0, Math.min(pageHeight - 20, top));
+  const safeWidth = Math.min(pageWidth - safeLeft, Math.max(40, right - safeLeft));
+  const safeHeight = Math.min(pageHeight - safeTop, Math.max(20, bottom - safeTop));
 
   return {
-    left: (left / pageWidth) * 100,
-    top: (top / pageHeight) * 100,
-    width: (width / pageWidth) * 100,
-    height: (height / pageHeight) * 100,
+    left: (safeLeft / pageWidth) * 100,
+    top: (safeTop / pageHeight) * 100,
+    width: (safeWidth / pageWidth) * 100,
+    height: (safeHeight / pageHeight) * 100,
   };
 }
 
@@ -368,6 +371,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   let disposed = false;
   let zoomLevel = 1;
   let fitScale = 1;
+  let currentAnswered = new Set<number>(options.answeredQuestions ?? []);
 
   function dismissConfirm() {
     for (const [qNum, btn] of submitButtons.entries()) {
@@ -434,8 +438,100 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       }
       fitPagesToViewer();
       const targets = mapPdfOptionLabels(runs, options.optionMaximums);
-      if (!targets.length) throw new Error('Interactive choices unavailable for this document.');
+
+      // Ensure boxes for ALL answers possible for every unanswered question
+      for (const [qNum, max] of options.optionMaximums.entries()) {
+        if (currentAnswered.has(qNum)) continue;
+        if (max < 1 || max > 9) continue;
+        const qTargets = targets.filter(t => t.questionNumber === qNum);
+        if (qTargets.length > 0 && qTargets.length < max) {
+          const existingValues = new Set(qTargets.map(t => t.optionValue));
+          const sorted = [...qTargets].sort((a, b) => a.optionValue - b.optionValue);
+          const first = sorted[0];
+          const last = sorted[sorted.length - 1];
+          const dy = sorted.length > 1
+            ? (last.top - first.top) / (sorted.length - 1)
+            : Math.max(30, last.height * 2.8);
+          for (let v = 1; v <= max; v++) {
+            if (!existingValues.has(v)) {
+              const offset = v - last.optionValue;
+              targets.push({
+                text: `${v}.`,
+                page: last.page,
+                left: last.left,
+                top: last.top + dy * offset,
+                width: last.width,
+                height: last.height,
+                questionNumber: qNum,
+                optionValue: v,
+              });
+            }
+          }
+        } else if (qTargets.length === 0) {
+          const qBoundaryRun = runs.find(r => parseQuestionBoundary(clean(r.text)) === qNum) ||
+            runs.find(r => clean(r.text) === String(qNum).padStart(3, '0')) ||
+            runs.find(r => new RegExp(`^0*${qNum}(?:\\b|[:.)\\s])`).test(clean(r.text)));
+          if (qBoundaryRun) {
+            const dy = Math.max(30, qBoundaryRun.height * 2.5);
+            const startTop = qBoundaryRun.top + Math.max(40, qBoundaryRun.height * 3);
+            for (let v = 1; v <= max; v++) {
+              targets.push({
+                text: `${v}.`,
+                page: qBoundaryRun.page,
+                left: Math.max(40, qBoundaryRun.left),
+                top: startTop + (v - 1) * dy,
+                width: 14,
+                height: 12,
+                questionNumber: qNum,
+                optionValue: v,
+              });
+            }
+          }
+        }
+      }
+
+      if (!targets.length) {
+        if (currentAnswered.size > 0 && currentAnswered.size >= options.optionMaximums.size) {
+          const pageLabel = `${source.pageCount} ${source.pageCount === 1 ? 'page' : 'pages'}`;
+          meta.textContent = `${pageLabel} · All questions completed`;
+          return true;
+        }
+        const page1 = pageElements.get(1);
+        if (page1 && options.optionMaximums.size > 0) {
+          let currentTop = 80;
+          for (const [qNum, max] of options.optionMaximums.entries()) {
+            if (currentAnswered.has(qNum)) continue;
+            for (let v = 1; v <= max; v++) {
+              targets.push({
+                text: `${v}.`,
+                page: 1,
+                left: 60,
+                top: currentTop,
+                width: 14,
+                height: 12,
+                questionNumber: qNum,
+                optionValue: v,
+              });
+              currentTop += 28;
+            }
+            currentTop += 20;
+          }
+        }
+        if (!targets.length) {
+          if (currentAnswered.size > 0) {
+            const pageLabel = `${source.pageCount} ${source.pageCount === 1 ? 'page' : 'pages'}`;
+            meta.textContent = `${pageLabel} · All questions completed`;
+            return true;
+          }
+          throw new Error('Interactive choices unavailable for this document.');
+        }
+      }
+
       for (const target of targets) {
+        if (currentAnswered.has(target.questionNumber)) {
+          // If a user has already answered a question do not show the option to choose answers for that
+          continue;
+        }
         const page = pageElements.get(target.page); if (!page) continue;
         const area = hitArea(target, targets, page.runs, page.width, page.height);
         const button = document.createElement('button'); button.type = 'button'; button.className = 'option-hit';
@@ -448,8 +544,11 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         });
         page.root.append(button);
       }
+      const activeTargets = targets.filter(t => !currentAnswered.has(t.questionNumber));
       const pageLabel = `${source.pageCount} ${source.pageCount === 1 ? 'page' : 'pages'}`;
-      const choiceLabel = `${targets.length} answer ${targets.length === 1 ? 'choice' : 'choices'}`;
+      const choiceLabel = activeTargets.length > 0
+        ? `${activeTargets.length} answer ${activeTargets.length === 1 ? 'choice' : 'choices'}`
+        : 'All questions completed';
       meta.textContent = `${pageLabel} · ${choiceLabel}`;
       return true;
     } catch (error) {
@@ -464,6 +563,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     element,
     ready,
     setSelected(questionNumber: number, optionValue: string) {
+      if (currentAnswered.has(questionNumber)) return;
       for (const button of shadow.querySelectorAll<HTMLButtonElement>('.option-hit')) {
         const q = Number(button.dataset.question);
         if (q === questionNumber) {
@@ -511,6 +611,27 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         element.removeAttribute('data-fullscreen');
       }
       syncFs();
+    },
+    setAnsweredQuestions(answered: ReadonlySet<number>) {
+      currentAnswered = new Set(answered);
+      for (const button of shadow.querySelectorAll<HTMLButtonElement>('.option-hit')) {
+        const q = Number(button.dataset.question);
+        if (currentAnswered.has(q)) {
+          button.remove();
+        }
+      }
+      for (const [qNum, btn] of submitButtons.entries()) {
+        if (currentAnswered.has(qNum)) {
+          btn.remove();
+          submitButtons.delete(qNum);
+        }
+      }
+      const activeHits = shadow.querySelectorAll<HTMLButtonElement>('.option-hit');
+      const pageLabel = `${pageElements.size} ${pageElements.size === 1 ? 'page' : 'pages'}`;
+      const choiceLabel = activeHits.length > 0
+        ? `${activeHits.length} answer ${activeHits.length === 1 ? 'choice' : 'choices'}`
+        : 'All questions completed';
+      meta.textContent = `${pageLabel} · ${choiceLabel}`;
     },
     dispose() {
       if (disposed) return;

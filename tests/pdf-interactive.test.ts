@@ -250,3 +250,57 @@ test('interactive PDF options spanning page breaks are mapped to their respectiv
     dom.window.close();
   }
 });
+
+test('interactive PDF viewer suppresses boxes for answered questions and always shows boxes for all possible answers on unanswered questions', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const selected: Array<[number, number]> = [];
+  const pRun = (text: string, top: number, page = 1, left = 55) => ({ text, page, left, top, width: 12, height: 12 });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    optionMaximums: new Map([[1, 3], [2, 4]]),
+    answeredQuestions: new Set([1]),
+    onChoose: (q, opt) => selected.push([q, opt]),
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600,
+        height: 800,
+        runs: [
+          pRun('001', 50), pRun('1.', 100), pRun('2.', 150), pRun('3.', 200),
+          pRun('002', 280), pRun('1.', 320), pRun('2.', 370), pRun('3.', 420),
+        ],
+      }),
+      destroy: () => {},
+    }),
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    const q1Buttons = viewer.element.shadowRoot!.querySelectorAll<HTMLButtonElement>('.option-hit[data-question="1"]');
+    assert.equal(q1Buttons.length, 0, 'Answered question 1 must NOT show any clickable option boxes on PDF');
+
+    const q2Buttons = viewer.element.shadowRoot!.querySelectorAll<HTMLButtonElement>('.option-hit[data-question="2"]');
+    assert.equal(q2Buttons.length, 4, 'Unanswered question 2 must have boxes for ALL 4 possible answers');
+
+    // Attempting to select an answered question does nothing
+    viewer.setSelected(1, '2');
+    assert.equal(viewer.element.shadowRoot!.querySelector('.pdf-submit-btn'), null);
+
+    // Selecting unanswered question 2 option 4 works
+    q2Buttons[3].click();
+    assert.deepEqual(selected, [[2, 4]]);
+    viewer.setSelected(2, '4');
+    assert.equal(q2Buttons[3].getAttribute('aria-pressed'), 'true');
+    assert.ok(viewer.element.shadowRoot!.querySelector('.pdf-submit-btn'));
+
+    // Dynamically marking question 2 as answered removes all option boxes
+    viewer.setAnsweredQuestions(new Set([1, 2]));
+    assert.equal(viewer.element.shadowRoot!.querySelectorAll('.option-hit').length, 0);
+    assert.equal(viewer.element.shadowRoot!.querySelector('.pdf-submit-btn'), null);
+    const meta = viewer.element.shadowRoot!.querySelector('.meta')!.textContent!;
+    assert.match(meta, /All questions completed/);
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});

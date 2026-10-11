@@ -55,9 +55,43 @@ export function readDeadline(cell: Element | undefined, heading: string): Deadli
 }
 
 function completion(cell: Element | undefined): { status: CompletionStatus; label: string | null } {
-  const value = label(cell, /^Completed status:\s*/i);
-  if (value === 'Completed') return { status: 'completed', label: value };
-  if (value === 'Not completed') return { status: 'not-completed', label: value };
+  if (!cell) return { status: 'unknown', label: null };
+  const rawLabel = label(cell, /^Completed status:\s*/i);
+  const fullText = clean(cell.textContent).replace(/^Completed status:\s*/i, '').trim();
+  const value = rawLabel || fullText || null;
+  if (!value) return { status: 'unknown', label: null };
+
+  const fractionMatch = value.match(/(\d+)\s*(?:of|\/)\s*(\d+)/i) || fullText.match(/(\d+)\s*(?:of|\/)\s*(\d+)/i);
+  if (fractionMatch) {
+    const done = Number(fractionMatch[1]);
+    const total = Number(fractionMatch[2]);
+    if (Number.isFinite(done) && Number.isFinite(total) && total > 0) {
+      if (done >= total) {
+        return { status: 'completed', label: value };
+      }
+      if (done === 0) {
+        return { status: 'not-completed', label: value };
+      }
+      return { status: 'in-progress', label: value };
+    }
+  }
+
+  if (/^completed\b/i.test(value) || /^submitted\b/i.test(value) || /completedcheck/i.test(fullText) || cell.querySelector('.text-success')) {
+    return { status: 'completed', label: value };
+  }
+  const icon = cell.querySelector('i.material-icons');
+  if (icon && icon.textContent?.trim() === 'check') {
+    return { status: 'completed', label: value };
+  }
+
+  if (/^not\s+completed\b/i.test(value) || /^not\s+started\b/i.test(value) || /^unsubmitted\b/i.test(value)) {
+    return { status: 'not-completed', label: value };
+  }
+
+  if (/^in\s+progress\b/i.test(value)) {
+    return { status: 'in-progress', label: value };
+  }
+
   return { status: 'unknown', label: value };
 }
 
@@ -162,7 +196,7 @@ export function readAssignmentCompletionBindings(root: Element, context: PageCon
       const source = assignmentSource(link, context);
       if (!source) continue;
       const state = completion(slot).status;
-      if (state !== 'not-completed') continue;
+      if (state !== 'not-completed' && state !== 'in-progress' && state !== 'not-started') continue;
       bindings.push({ assignmentId: assignmentId(course.id, source.sourceId), title: clean(link.textContent), nativeStatus: state, controlSlot: slot });
     }
   }

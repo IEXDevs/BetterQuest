@@ -10,7 +10,7 @@ function emptyColumn(column: HTMLElement): boolean {
 /** Verified course-info row: use the first empty existing column after Meets. */
 export function findAssignmentSectionSlot(document: Document): { root: HTMLElement; column: HTMLElement } | null {
   const root = document.querySelector<HTMLElement>(ASSIGNMENT_SELECTORS.root);
-  const row = root?.querySelector<HTMLElement>('#student-course-info-header > .row.text-center');
+  const row = root?.querySelector<HTMLElement>('#student-course-info-header > .row');
   const title = root?.querySelector(ASSIGNMENT_SELECTORS.title)?.textContent || '';
   if (!root || !row || !/\(\d+\)\s*$/.test(title.trim())) return null;
   const columns = [...row.querySelectorAll<HTMLElement>(':scope > .col')];

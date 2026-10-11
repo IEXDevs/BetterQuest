@@ -144,46 +144,92 @@ function installStyles(document: Document) {
       clear:both!important;
       box-sizing:border-box!important;
     }
-    [data-betterquest-pdf-workspace="enhanced"] #presentation-pdf-frame,
-    #presentation-pdf-frame{
-      display:block!important;
-      width:100%!important;
-      max-width:100%!important;
-      min-width:100%!important;
-      margin:0!important;
-      float:none!important;
-      overflow:hidden;
-      border:0;
-      border-radius:0;
-      background:#fff;
-      box-shadow:0 18px 50px #172a3b1a;
-      box-sizing:border-box!important;
+    /* Mode-specific PDF display: STRICTLY show ONLY ONE type of PDF depending on view mode */
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="betterquest"] #presentation-pdf-frame,
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="betterquest"] iframe:not([data-betterquest]),
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="betterquest"] #pdf-frame > :not([data-betterquest="interactive-pdf"]),
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="new"] #presentation-pdf-frame,
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="new"] iframe:not([data-betterquest]),
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="new"] #pdf-frame > :not([data-betterquest="interactive-pdf"]),
+    #pdf-frame[data-betterquest-pdf-mode="betterquest"] #presentation-pdf-frame,
+    #pdf-frame[data-betterquest-pdf-mode="betterquest"] iframe:not([data-betterquest]),
+    #pdf-frame[data-betterquest-pdf-mode="betterquest"] > :not([data-betterquest="interactive-pdf"]),
+    #presentation-pdf-frame[hidden],
+    #presentation-pdf-frame iframe[hidden],
+    #pdf-frame iframe[hidden]{
+      display: none !important;
+      visibility: hidden !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      pointer-events: none !important;
     }
-    [data-betterquest-pdf-workspace="enhanced"] #presentation-pdf-frame iframe,
-    #presentation-pdf-frame iframe{
-      display:block!important;
-      width:100%!important;
-      min-width:100%!important;
-      max-width:100%!important;
-      height:calc(100vh - 104px)!important;
-      min-height:760px!important;
-      border:0;
-      background:#fff;
-      color-scheme:light;
-      box-sizing:border-box!important;
+
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="betterquest"] [data-betterquest="interactive-pdf"],
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="new"] [data-betterquest="interactive-pdf"],
+    #pdf-frame[data-betterquest-pdf-mode="betterquest"] [data-betterquest="interactive-pdf"]{
+      display: block !important;
+      width: 100% !important;
+      min-width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
     }
-    #presentation-pdf-frame iframe[hidden]{
-      display:none!important;
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="betterquest"] [data-betterquest="interactive-pdf"][hidden],
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="new"] [data-betterquest="interactive-pdf"][hidden]{
+      display: none !important;
     }
-    [data-betterquest="interactive-pdf"]{
-      display:block!important;
-      width:100%!important;
-      min-width:100%!important;
-      max-width:100%!important;
-      box-sizing:border-box!important;
-    }
+
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="basic"] [data-betterquest="interactive-pdf"],
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="old"] [data-betterquest="interactive-pdf"],
+    #pdf-frame[data-betterquest-pdf-mode="basic"] [data-betterquest="interactive-pdf"],
+    #pdf-frame[data-betterquest-pdf-mode="old"] [data-betterquest="interactive-pdf"],
     [data-betterquest="interactive-pdf"][hidden]{
-      display:none!important;
+      display: none !important;
+      visibility: hidden !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      pointer-events: none !important;
+    }
+
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="basic"] #presentation-pdf-frame,
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="basic"] #presentation-pdf-frame iframe,
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="basic"] #pdf-frame iframe,
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="old"] #presentation-pdf-frame,
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="old"] #presentation-pdf-frame iframe,
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="old"] #pdf-frame iframe,
+    #pdf-frame[data-betterquest-pdf-mode="basic"] #presentation-pdf-frame,
+    #pdf-frame[data-betterquest-pdf-mode="basic"] iframe{
+      display: block !important;
+      visibility: visible !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 100% !important;
+      margin: 0 !important;
+      float: none !important;
+      overflow: hidden;
+      border: 0;
+      border-radius: 0;
+      background: #fff;
+      box-shadow: 0 18px 50px #172a3b1a;
+      box-sizing: border-box !important;
+    }
+
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="basic"] #presentation-pdf-frame iframe,
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="basic"] #pdf-frame iframe,
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="old"] #presentation-pdf-frame iframe,
+    :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="old"] #pdf-frame iframe,
+    #pdf-frame[data-betterquest-pdf-mode="basic"] iframe{
+      height: calc(100vh - 104px) !important;
+      min-height: 760px !important;
+      border: 0;
+      background: #fff;
+      color-scheme: light;
+      box-sizing: border-box !important;
     }
 
     /* FULLSCREEN / FULL PAGE: Completely hide sidebar rail and native elements, 100vw x 100vh full page */
@@ -231,6 +277,22 @@ function installStyles(document: Document) {
       border:0!important;
       border-radius:0!important;
       background:#0f172a!important;
+    }
+    :fullscreen :is([data-betterquest-pdf-mode="betterquest"], [data-betterquest-pdf-mode="new"]) #presentation-pdf-frame,
+    [data-betterquest-fullscreen="true"] :is([data-betterquest-pdf-mode="betterquest"], [data-betterquest-pdf-mode="new"]) #presentation-pdf-frame,
+    :fullscreen :is([data-betterquest-pdf-mode="betterquest"], [data-betterquest-pdf-mode="new"]) iframe,
+    [data-betterquest-fullscreen="true"] :is([data-betterquest-pdf-mode="betterquest"], [data-betterquest-pdf-mode="new"]) iframe,
+    :fullscreen #pdf-frame[data-betterquest-pdf-mode="betterquest"] #presentation-pdf-frame,
+    [data-betterquest-fullscreen="true"] #pdf-frame[data-betterquest-pdf-mode="betterquest"] #presentation-pdf-frame,
+    :fullscreen #pdf-frame[data-betterquest-pdf-mode="betterquest"] iframe,
+    [data-betterquest-fullscreen="true"] #pdf-frame[data-betterquest-pdf-mode="betterquest"] iframe{
+      display:none!important;
+    }
+    :fullscreen :is([data-betterquest-pdf-mode="basic"], [data-betterquest-pdf-mode="old"]) [data-betterquest="interactive-pdf"],
+    [data-betterquest-fullscreen="true"] :is([data-betterquest-pdf-mode="basic"], [data-betterquest-pdf-mode="old"]) [data-betterquest="interactive-pdf"],
+    :fullscreen #pdf-frame[data-betterquest-pdf-mode="basic"] [data-betterquest="interactive-pdf"],
+    [data-betterquest-fullscreen="true"] #pdf-frame[data-betterquest-pdf-mode="basic"] [data-betterquest="interactive-pdf"]{
+      display:none!important;
     }
     :fullscreen #presentation-pdf-frame,
     [data-betterquest-fullscreen="true"] #presentation-pdf-frame{
@@ -386,6 +448,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     .submit{border:0;border-radius:6px;background:#2563eb;color:#fff;padding:8px 14px;font:750 11px/1 inherit;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;margin-left:auto}
     .submit:hover{transform:translateY(-1px);background:#1d4ed8;box-shadow:0 4px 12px #2563eb40}
     .submit[hidden]{display:none}
+    .submitted-tag{display:inline-flex;align-items:center;padding:5px 12px;border-radius:6px;background:var(--bq-raised,#f2f5f7);color:var(--bq-assessment-muted);font:700 12px/1 inherit;border:1px solid var(--bq-border,#d7e2f0)}
     .empty{color:var(--bq-assessment-muted);grid-column:1/-1}
     @media(max-width:1050px){#target[data-betterquest-pdf-workspace="enhanced"]{grid-template-columns:1fr}#target[data-betterquest-pdf-workspace="enhanced"] > #pdf-frame,#target[data-betterquest-pdf-workspace="enhanced"] > [data-betterquest="assessment-rail"]{grid-column:1}#target[data-betterquest-pdf-workspace="enhanced"] > [data-betterquest="assessment-rail"]{position:static;margin-top:14px}}
     @media(prefers-reduced-motion:reduce){.meter span,.choice,.submit{transition:none}.choice:hover,.submit:hover{transform:none}}
@@ -423,7 +486,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     currentMode = mode;
     try { localStorage.setItem(MODE_STORAGE_KEY, mode); } catch {}
     updateModeButtons();
-    showInteractive(mode === 'betterquest');
+    syncPdfVisibility(mode === 'betterquest' && pdfViewerReady !== false);
   }
 
   function updateModeButtons() {
@@ -432,6 +495,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     bqModeBtn.setAttribute('aria-checked', String(currentMode === 'betterquest'));
     bqModeBtn.classList.toggle('active', currentMode === 'betterquest');
     root.dataset.betterquestPdfMode = currentMode;
+    document.documentElement.dataset.betterquestPdfMode = currentMode;
+    document.body.dataset.betterquestPdfMode = currentMode;
     host.dataset.layout = currentMode === 'basic' ? 'sidebar' : 'bottom';
     rail.dataset.layout = currentMode === 'basic' ? 'sidebar' : 'bottom';
   }
@@ -477,6 +542,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   let disposed = false;
   let pdfViewer: PdfViewer | undefined;
   let pdfViewerStarted = false;
+  let pdfViewerReady: boolean | undefined = undefined;
   const viewerFactory = options.createPdfViewer || (typeof chrome !== 'undefined' ? createInteractivePdfViewer : undefined);
 
   function toggleFullscreen(enable?: boolean) {
@@ -538,16 +604,70 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   };
   document.addEventListener('keydown', handleKeydown);
 
-  let pdfViewerReady = false;
-
-  function showInteractive(active: boolean) {
+  function syncPdfVisibility(active: boolean) {
     const elements = findPdfAssessment(document); if (!elements) return;
-    if (active && pdfViewer && pdfViewerReady) {
-      pdfViewer.element.hidden = false;
-      elements.iframe.hidden = true;
+    const mode = active ? 'betterquest' : 'basic';
+    root.dataset.betterquestPdfMode = mode;
+    document.documentElement.dataset.betterquestPdfMode = mode;
+    document.body.dataset.betterquestPdfMode = mode;
+    elements.pdfFrame.dataset.betterquestPdfMode = mode;
+
+    if (active) {
+      if (pdfViewer) {
+        pdfViewer.element.hidden = false;
+        pdfViewer.element.style.setProperty('display', 'block', 'important');
+      }
+      const presentations = [
+        ...elements.pdfFrame.querySelectorAll<HTMLElement>('#presentation-pdf-frame'),
+        ...root.querySelectorAll<HTMLElement>('#presentation-pdf-frame'),
+        ...document.querySelectorAll<HTMLElement>('#presentation-pdf-frame'),
+      ];
+      for (const pres of new Set(presentations)) {
+        pres.hidden = true;
+        pres.style.setProperty('display', 'none', 'important');
+        pres.style.setProperty('visibility', 'hidden', 'important');
+        pres.style.setProperty('height', '0px', 'important');
+      }
+      const iframes = [
+        ...elements.pdfFrame.querySelectorAll<HTMLIFrameElement>('iframe:not([data-betterquest])'),
+        ...root.querySelectorAll<HTMLIFrameElement>('iframe:not([data-betterquest])'),
+        ...document.querySelectorAll<HTMLIFrameElement>('#presentation-pdf-frame iframe, iframe[title="Assignment PDF"], iframe[src*="download_pdf"], iframe[src*="problem_pdf"]'),
+      ];
+      if (elements.iframe) iframes.push(elements.iframe);
+      for (const ifr of new Set(iframes)) {
+        ifr.hidden = true;
+        ifr.style.setProperty('display', 'none', 'important');
+        ifr.style.setProperty('visibility', 'hidden', 'important');
+        ifr.style.setProperty('height', '0px', 'important');
+      }
     } else {
-      if (pdfViewer) pdfViewer.element.hidden = true;
-      elements.iframe.hidden = false;
+      if (pdfViewer) {
+        pdfViewer.element.hidden = true;
+        pdfViewer.element.style.setProperty('display', 'none', 'important');
+      }
+      const presentations = [
+        ...elements.pdfFrame.querySelectorAll<HTMLElement>('#presentation-pdf-frame'),
+        ...root.querySelectorAll<HTMLElement>('#presentation-pdf-frame'),
+        ...document.querySelectorAll<HTMLElement>('#presentation-pdf-frame'),
+      ];
+      for (const pres of new Set(presentations)) {
+        pres.hidden = false;
+        pres.style.removeProperty('display');
+        pres.style.removeProperty('visibility');
+        pres.style.removeProperty('height');
+      }
+      const iframes = [
+        ...elements.pdfFrame.querySelectorAll<HTMLIFrameElement>('iframe:not([data-betterquest])'),
+        ...root.querySelectorAll<HTMLIFrameElement>('iframe:not([data-betterquest])'),
+        ...document.querySelectorAll<HTMLIFrameElement>('#presentation-pdf-frame iframe, iframe[title="Assignment PDF"], iframe[src*="download_pdf"], iframe[src*="problem_pdf"]'),
+      ];
+      if (elements.iframe) iframes.push(elements.iframe);
+      for (const ifr of new Set(iframes)) {
+        ifr.hidden = false;
+        ifr.style.removeProperty('display');
+        ifr.style.removeProperty('visibility');
+        ifr.style.removeProperty('height');
+      }
     }
   }
 
@@ -587,7 +707,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       const binding = bindings.find(item => Number(item.number) === questionNumber);
       const nativeOption = binding ? [...binding.select.options].find(item => item.value === String(optionValue)) : undefined;
       const available = binding && isNativeControlAvailable(binding.select);
-      if (!binding || !available || !nativeOption || !isResponseOptionAvailable(nativeOption)) return false;
+      if (!binding || binding.answered || !available || !nativeOption || !isResponseOptionAvailable(nativeOption)) return false;
 
       binding.select.value = nativeOption.value;
       for (const opt of binding.select.options) {
@@ -629,26 +749,25 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     }
     if (!optionMaximums.size) return;
     pdfViewerStarted = true;
-    elements.iframe.hidden = false;
+    const answeredQuestions = new Set<number>(
+      bindings.filter(b => b.answered).map(b => Number(b.number)).filter(Number.isInteger)
+    );
     pdfViewer = viewerFactory(elements.pdfFrame, {
       url: elements.iframe.src,
       optionMaximums,
+      answeredQuestions,
       onChoose: (questionNumber, optionValue) => { chooseNative(questionNumber, optionValue); },
       onSubmit: (questionNumber) => { submitNative(questionNumber); },
     });
-    pdfViewer.element.hidden = true;
+    syncPdfVisibility(currentMode === 'betterquest');
     void pdfViewer.ready.then(ready => {
       if (disposed || !pdfViewer) return;
       pdfViewerReady = ready;
-      if (ready && currentMode === 'betterquest') {
-        showInteractive(true);
-      } else {
-        showInteractive(false);
-        if (!ready) {
-          pdfViewer.dispose();
-          pdfViewer = undefined;
-        }
+      if (!ready && currentMode === 'betterquest') {
+        syncPdfVisibility(false);
+        return;
       }
+      syncPdfVisibility(currentMode === 'betterquest' && pdfViewerReady !== false);
     });
   }
 
@@ -668,27 +787,45 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     hideNativeStatsElements(document, root);
     paintSummary(bindings, elements.tally);
     ensurePdfViewer(elements, bindings);
+    const answeredQuestions = new Set<number>(
+      bindings.filter(b => b.answered).map(b => Number(b.number)).filter(Number.isInteger)
+    );
+    pdfViewer?.setAnsweredQuestions?.(answeredQuestions);
+    syncPdfVisibility(currentMode === 'betterquest' && pdfViewerReady !== false);
     questions.replaceChildren();
     for (const binding of bindings) {
       const card = document.createElement('article'); card.className = 'question'; card.dataset.questionId = binding.id;
       const cardTop = document.createElement('div'); cardTop.className = 'question-top';
       const number = document.createElement('span'); number.className = 'number'; number.textContent = `Question ${binding.number}`;
       const selected = document.createElement('span'); selected.className = 'selected';
+
+      if (binding.answered) {
+        selected.textContent = binding.select.value ? `Answer ${binding.select.value} submitted` : 'Completed';
+        const submittedTag = document.createElement('span');
+        submittedTag.className = 'submitted-tag';
+        submittedTag.textContent = binding.select.value ? `Submitted: Answer ${binding.select.value}` : 'Submitted';
+        cardTop.append(number, selected);
+        const cardBottom = document.createElement('div'); cardBottom.className = 'question-bottom';
+        cardBottom.append(submittedTag);
+        card.append(cardTop, cardBottom);
+        questions.append(card);
+        continue;
+      }
+
       selected.textContent = binding.select.value
-        ? (binding.select.disabled ? `Answer ${binding.select.value} submitted` : `Answer ${binding.select.value} selected`)
+        ? `Answer ${binding.select.value} selected`
         : 'Not answered';
       const choices = document.createElement('div'); choices.className = 'choices'; choices.setAttribute('role', 'group'); choices.setAttribute('aria-label', `Question ${binding.number} response`);
       for (const option of binding.options) {
         const choice = document.createElement('button'); choice.type = 'button'; choice.className = 'choice'; choice.dataset.value = option.value; choice.textContent = option.label;
         choice.setAttribute('aria-label', `Choose response ${option.label} for question ${binding.number}`); choice.setAttribute('aria-pressed', String(binding.select.value === option.value));
-        if (binding.select.disabled) choice.disabled = true;
         choice.addEventListener('click', () => {
           chooseNative(Number(binding.number), Number(option.value));
         });
         choices.append(choice);
       }
       const submit = document.createElement('button'); submit.type = 'button'; submit.className = 'submit'; submit.textContent = `Submit question ${binding.number}`;
-      submit.hidden = !binding.select.value || binding.select.disabled || !isNativeControlAvailable(binding.submit);
+      submit.hidden = !binding.select.value || !isNativeControlAvailable(binding.submit);
       submit.addEventListener('click', () => {
         submitNative(Number(binding.number));
       });
@@ -706,8 +843,12 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     disposed = true; const elements = findPdfAssessment(document);
     document.removeEventListener('fullscreenchange', syncFs);
     document.removeEventListener('keydown', handleKeydown);
+    syncPdfVisibility(false);
     root.removeAttribute('data-betterquest-pdf-workspace');
     root.removeAttribute('data-betterquest-pdf-mode');
+    document.documentElement.removeAttribute('data-betterquest-pdf-mode');
+    document.body.removeAttribute('data-betterquest-pdf-mode');
+    elements?.pdfFrame.removeAttribute('data-betterquest-pdf-mode');
     root.removeAttribute('data-betterquest-fullscreen');
     document.documentElement.removeAttribute('data-betterquest-fullscreen');
     elements?.responseRoot.removeAttribute('data-betterquest-native-responses');
@@ -718,6 +859,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       (el as HTMLElement).style.removeProperty('display');
       el.removeAttribute('data-betterquest-native-stats');
     });
+    syncPdfVisibility(false);
     if (elements) elements.iframe.hidden = false;
     if (elements?.pdfFrame.dataset.betterquestSynthesized === 'true') elements.pdfFrame.remove();
     pdfViewer?.dispose(); pdfViewer = undefined; host.remove(); style.remove();

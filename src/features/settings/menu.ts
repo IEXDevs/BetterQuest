@@ -6,7 +6,7 @@ import type { QuestNavigationLink } from '../../content/navigation';
 
 export type MenuView = 'betterquest' | 'quest';
 
-const HOVER_CLOSE_DELAY_MS = 500;
+const HOVER_CLOSE_DELAY_MS = 0;
 
 export function createSettingsMenu(
   host: HTMLElement,
@@ -57,6 +57,15 @@ export function createSettingsMenu(
       animation: menu-fluid-spring 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
       backdrop-filter: blur(28px) saturate(190%);
       will-change: transform, opacity, filter;
+    }
+    .menu-dropdown::before {
+      content: '';
+      position: absolute;
+      top: -12px;
+      left: 0;
+      right: 0;
+      height: 12px;
+      pointer-events: auto;
     }
     .bq-menu {
       width: 330px;

@@ -5,6 +5,7 @@ export interface AssessmentResponseBinding {
   submit: HTMLButtonElement;
   options: { value: string; label: string }[];
   attempts: number;
+  answered: boolean;
 }
 
 export interface PdfAssessmentElements {
@@ -30,7 +31,7 @@ export interface PdfOptionTarget extends PdfTextRun {
   optionValue: number;
 }
 
-const clean = (value: string | null | undefined) => (value || '').replace(/\s+/g, ' ').trim();
+export const clean = (value: string | null | undefined) => (value || '').replace(/\s+/g, ' ').trim();
 
 export function parseQuestionBoundary(text: string): number | null {
   const cleaned = clean(text);
@@ -120,9 +121,25 @@ export function mapPdfOptionLabels(runs: PdfTextRun[], optionMaximums: ReadonlyM
     const maximum = hasExplicit ? optionMaximums.get(questionNumber)! : globalFallback;
     if (maximum < 1 || maximum > 9) continue;
 
-    const option = text.match(/^([1-9])\.(?!\d)/) || text.match(/^\(([1-9])\)/) || text.match(/^([1-9])\)(?!\d)/);
-    if (!option) continue;
-    const value = Number(option[1]);
+    let value: number | null = null;
+    const numMatch = text.match(/^([1-9])\.(?!\d)/) ||
+                     text.match(/^\(([1-9])\)/) ||
+                     text.match(/^([1-9])\)(?!\d)/) ||
+                     text.match(/^([1-9]):(?!\d)/) ||
+                     text.match(/^([1-9])\s*[-–—]/);
+    if (numMatch) {
+      value = Number(numMatch[1]);
+    } else {
+      const letterMatch = text.match(/^([a-iA-I])\.(?!\w)/) ||
+                          text.match(/^\(([a-iA-I])\)/) ||
+                          text.match(/^([a-iA-I])\)(?!\w)/) ||
+                          text.match(/^([a-iA-I]):(?!\w)/) ||
+                          text.match(/^([a-iA-I])\s*[-–—]/);
+      if (letterMatch) {
+        value = letterMatch[1].toUpperCase().charCodeAt(0) - 64;
+      }
+    }
+    if (value === null) continue;
     if (value > maximum) continue;
 
     if (value === 1) {
@@ -243,8 +260,11 @@ export function findPdfAssessment(document: Document): PdfAssessmentElements | n
     table?.parentElement;
   if (!responseRoot || !table) return null;
 
-  let pdfFrame = root.querySelector<HTMLElement>(':scope > #pdf-frame, #pdf-frame');
-  let iframe = pdfFrame?.querySelector<HTMLIFrameElement>('#presentation-pdf-frame iframe, iframe[title="Assignment PDF"], iframe');
+  let pdfFrame = root.querySelector<HTMLElement>(':scope > #pdf-frame, #pdf-frame') ||
+    document.querySelector<HTMLElement>('#pdf-frame');
+  let iframe = pdfFrame?.querySelector<HTMLIFrameElement>('#presentation-pdf-frame iframe, iframe[title="Assignment PDF"], iframe') ||
+    root.querySelector<HTMLIFrameElement>('#presentation-pdf-frame iframe, iframe[title="Assignment PDF"], iframe') ||
+    document.querySelector<HTMLIFrameElement>('#presentation-pdf-frame iframe, iframe[title="Assignment PDF"], iframe[src*="download_pdf"], iframe[src*="problem_pdf"]');
 
   if (!pdfFrame || !iframe) {
     const anchors = [
@@ -302,72 +322,89 @@ export function readAssessmentResponses(table: HTMLTableElement): AssessmentResp
     if (!isElementVisible(row)) continue;
 
     const select = row.querySelector<HTMLSelectElement>('select[name="response"], select[aria-label="Select your response"], select');
-    const submit = row.querySelector<HTMLButtonElement>('button[aria-label="Submit response"], button[type="submit"], input[type="submit"], button, input[value*="Submit" i]') ||
-      table.querySelector<HTMLButtonElement>('button[type="submit"], input[type="submit"]');
+    const rowSubmit = row.querySelector<HTMLButtonElement>('button[aria-label="Submit response"], button[type="submit"], input[type="submit"], button, input[value*="Submit" i]');
+    const submit = rowSubmit ||
+      table.querySelector<HTMLButtonElement>('button[type="submit"], input[type="submit"]') ||
+      table.closest('form')?.querySelector<HTMLButtonElement>('button[type="submit"], input[type="submit"], input[value*="Submit" i], button[value*="Submit" i]') ||
+      table.ownerDocument.querySelector<HTMLButtonElement>('#target button[type="submit"], #target input[type="submit"], #main-content button[type="submit"], #main-content input[type="submit"]');
+    const isSubmitAvailable = Boolean(submit && isElementVisible(submit));
 
-    if (select && submit && isNativeControlAvailable(select) && isElementVisible(submit)) {
-      const options = [...select.options]
-        .filter(isResponseOptionAvailable)
-        .map(option => ({ value: option.value, label: clean(option.textContent) || option.value }));
-      if (options.length > 0) {
-        const attempts = Number(row.querySelector('.previous')?.textContent?.match(/\d+/)?.[0] || 0);
-        rows.push({ id, number: clean(cells[0]?.textContent).replace(/\.$/, '') || String(rows.length + 1), select, submit, options, attempts });
-        continue;
-      }
+    let val = '';
+    if (select) {
+      val = select.value;
+    } else {
+      const answerText = clean(cells[1]?.textContent);
+      const answerMatch = answerText.match(/^([1-9])\b/);
+      val = answerMatch ? answerMatch[1] : '';
     }
 
-    // Completed, answered, or non-active-select row:
-    const answerText = clean(cells[1]?.textContent);
-    const answerMatch = answerText.match(/^([1-9])\b/) || answerText.match(/\b([1-9])\b/);
-    const val = answerMatch ? answerMatch[1] : '';
-
-    const triesMatch = row.querySelector('.previous')?.textContent?.match(/\d+\s*\/\s*(\d+)/);
+    const previousText = row.querySelector('.previous')?.textContent;
+    const triesMatch = previousText?.match(/\d+\s*\/\s*(\d+)/);
     const maxTries = triesMatch ? Number(triesMatch[1]) : 0;
-    const attempts = Number(row.querySelector('.previous')?.textContent?.match(/\d+/)?.[0] || (val ? 1 : 0));
+    const previousMatch = previousText?.match(/(\d+)\s*\/\s*(\d+)/) || previousText?.match(/\d+/);
+    const attempts = previousMatch ? Number(previousMatch[1] ?? previousMatch[0]) : 0;
 
-    // If there is no answer and no attempts recorded, and native controls are not available, ignore incomplete/hidden row
-    if (!val && attempts === 0 && (!submit || !isElementVisible(submit))) {
+    const statusText = clean(row.querySelector('.status')?.textContent);
+    const hasSuccessClass = Boolean(row.querySelector('.status .text-success, .status [class*="text-success"]'));
+    const isCorrect = hasSuccessClass || /correct/i.test(statusText);
+    const triesExhausted = Boolean(maxTries > 0 && attempts >= maxTries);
+
+    // If there is no answer and no attempts recorded, and native submit is hidden, fail closed
+    if (!val && attempts === 0 && !isSubmitAvailable) {
       continue;
     }
 
-    let options: { value: string; label: string }[] = [];
     if (select) {
-      options = [...select.options]
-        .map(opt => ({ value: opt.value, label: clean(opt.textContent) || opt.value }))
-        .filter(opt => opt.value);
-    }
-    if (!options.length) {
-      const maxVal = val ? Number(val) : 1;
-      const optionCount = Math.max(maxVal, maxTries, 5);
-      options = Array.from({ length: optionCount }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
-    }
-
-    const syntheticSelect = select || row.ownerDocument.createElement('select');
-    if (!select) {
-      syntheticSelect.disabled = true;
-      for (const optItem of options) {
-        const opt = row.ownerDocument.createElement('option');
-        opt.value = optItem.value;
-        opt.textContent = optItem.label;
-        if (optItem.value === val) opt.selected = true;
-        syntheticSelect.append(opt);
+      let options = [...select.options]
+        .filter(isResponseOptionAvailable)
+        .map(option => ({ value: option.value, label: clean(option.textContent) || option.value }));
+      if (!options.length) {
+        options = [...select.options]
+          .map(opt => ({ value: opt.value, label: clean(opt.textContent) || opt.value }))
+          .filter(opt => opt.value);
       }
-      if (val) syntheticSelect.value = val;
+      if (!options.length) {
+        const optionCount = Math.max(maxTries, 5);
+        options = Array.from({ length: optionCount }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
+      }
+      const selectDisabled = select.disabled || select.getAttribute('aria-disabled') === 'true';
+      const isAnswered = selectDisabled || isCorrect || triesExhausted || Boolean(!isSubmitAvailable && val);
+      rows.push({
+        id,
+        number: clean(cells[0]?.textContent).replace(/\.$/, '') || String(rows.length + 1),
+        select,
+        submit: submit || row.ownerDocument.createElement('button'),
+        options,
+        attempts,
+        answered: isAnswered,
+      });
+      continue;
     }
 
-    const syntheticSubmit = submit || row.ownerDocument.createElement('button');
-    if (!submit) {
-      syntheticSubmit.disabled = true;
-      syntheticSubmit.hidden = true;
+    // No select input: static completed answer in cell 1 (e.g. "3" in quest-responses.html)
+    const optionCount = Math.max(val ? Number(val) : 1, maxTries, 5);
+    const options = Array.from({ length: optionCount }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
+    const syntheticSelect = row.ownerDocument.createElement('select');
+    syntheticSelect.disabled = true;
+    for (const optItem of options) {
+      const opt = row.ownerDocument.createElement('option');
+      opt.value = optItem.value;
+      opt.textContent = optItem.label;
+      if (optItem.value === val) opt.selected = true;
+      syntheticSelect.append(opt);
     }
-
+    if (val) syntheticSelect.value = val;
+    const effectiveSubmit = submit || row.ownerDocument.createElement('button');
+    effectiveSubmit.disabled = true;
+    effectiveSubmit.hidden = true;
     rows.push({
       id,
       number: clean(cells[0]?.textContent).replace(/\.$/, '') || String(rows.length + 1),
       select: syntheticSelect,
-      submit: syntheticSubmit,
+      submit: effectiveSubmit,
       options,
-      attempts,
+      attempts: attempts || (val ? 1 : 0),
+      answered: true,
     });
   }
   return rows;

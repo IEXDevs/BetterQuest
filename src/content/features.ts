@@ -18,6 +18,7 @@ import { createPdfController } from '../features/pdf/controller';
 import { findPdfAssessment, findSlideAssessment } from '../adapters/quest/assessment';
 import { createPdfAssessmentWorkspace, createSlideAssessmentEnhancement } from '../features/assessment/workspace';
 import { createCourseDetailsFacelift, isCourseShowPage } from '../features/courses/details-enhancer';
+import { enhanceCourseReviewTab } from '../features/courses/review-enhancer';
 import { execute, subscribeLocal, type Execute } from '../shared/client';
 
 /** Composition point: null adapters create no controls, observers, RPCs, or CSS. */
@@ -96,6 +97,31 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
     mount: root => {
       const facelift = createCourseDetailsFacelift(root as HTMLElement);
       return { refresh: () => facelift.reconcile(), dispose: facelift.dispose };
+    },
+  });
+  definitions.push({
+    name: 'course-review-tab',
+    locate: doc => {
+      if (!isCourseShowPage(doc.URL) && !doc.URL.includes('/review')) return null;
+      return doc.querySelector<HTMLElement>('#tabs-review') || doc.querySelector<HTMLElement>('[data-betterquest-page="review"]') || null;
+    },
+    attributeFilter: ['class', 'style', 'aria-selected', 'hidden'],
+    observeOwnedRemovals: true,
+    mount: root => {
+      enhanceCourseReviewTab(root.ownerDocument);
+      return {
+        refresh: () => {
+          enhanceCourseReviewTab(root.ownerDocument);
+        },
+        dispose: () => {
+          const existing = root.querySelector('[data-betterquest="review-dashboard"]');
+          existing?.remove();
+          root.querySelectorAll<HTMLElement>('[data-betterquest-review-raw]').forEach(el => {
+            el.style.removeProperty('display');
+            el.removeAttribute('data-betterquest-review-raw');
+          });
+        },
+      };
     },
   });
   if (questionAdapter) {
