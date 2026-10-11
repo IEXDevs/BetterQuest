@@ -17,8 +17,9 @@ import { BookmarkService } from '../features/bookmarks/service';
 import { createPdfController } from '../features/pdf/controller';
 import { findPdfAssessment, findSlideAssessment } from '../adapters/quest/assessment';
 import { createPdfAssessmentWorkspace, createSlideAssessmentEnhancement } from '../features/assessment/workspace';
+import { createAssessmentHeader } from '../features/assessment/header';
 import { createCourseDetailsFacelift, isCourseShowPage } from '../features/courses/details-enhancer';
-import { enhanceCourseReviewTab } from '../features/courses/review-enhancer';
+import { enhanceCourseReviewTab, findReviewPane } from '../features/courses/review-enhancer';
 import { execute, subscribeLocal, type Execute } from '../shared/client';
 
 /** Composition point: null adapters create no controls, observers, RPCs, or CSS. */
@@ -103,7 +104,7 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
     name: 'course-review-tab',
     locate: doc => {
       if (!isCourseShowPage(doc.URL) && !doc.URL.includes('/review')) return null;
-      return doc.querySelector<HTMLElement>('#tabs-review') || doc.querySelector<HTMLElement>('[data-betterquest-page="review"]') || null;
+      return findReviewPane(doc);
     },
     attributeFilter: ['class', 'style', 'aria-selected', 'hidden'],
     observeOwnedRemovals: true,
@@ -154,6 +155,14 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       };
     } });
   }
+  definitions.push({ name: 'assessment-header',
+    locate: doc => new URL(doc.URL).pathname.startsWith('/student/instances/')
+      ? doc.querySelector<HTMLElement>('#main-content') : null,
+    attributeFilter: ['href'], mount: root => {
+      const header = createAssessmentHeader(root as HTMLElement);
+      return { refresh: header.reconcile, dispose: header.dispose };
+    },
+  });
   definitions.push({ name: 'pdf-assessment-workspace', locate: doc => findPdfAssessment(doc)?.root || null,
     attributeFilter: ['class', 'value', 'disabled', 'hidden'], observeOwnedRemovals: true, mount: root => {
       const workspace = createPdfAssessmentWorkspace(root as HTMLElement);

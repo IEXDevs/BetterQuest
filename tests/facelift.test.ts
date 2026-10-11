@@ -354,7 +354,7 @@ test('Slides reveal only the selected question submit and preserve natively hidd
   } finally { features.dispose(); dom.window.close(); }
 });
 
-test('moving from options to suboptions keeps modal open and closes immediately on cursor leave without 500ms delay', async () => {
+test('moving from options to suboptions keeps modal open and closes 250ms after cursor leave', async () => {
   const dom = new JSDOM(`<html><body><div id="nav-host"></div></body></html>`, { pretendToBeVisual: true });
   prepare(dom);
   const f = store();
@@ -390,12 +390,16 @@ test('moving from options to suboptions keeps modal open and closes immediately 
     assert.equal(menuHost.hidden, false);
     assert.equal(flyout.hidden, false);
 
-    // 4. Move cursor off flyout entirely into empty space: closes immediately without 500ms wait
+    // 4. Move cursor off flyout entirely into empty space: stays open through the
+    // 250ms grace period, then closes
     flyout.dispatchEvent(new dom.window.Event('pointerleave'));
 
     await new Promise(resolve => setTimeout(resolve, 20));
-    assert.equal(menuHost.hidden, true, 'Modal should close immediately without 500ms wait');
-    assert.equal(flyout.hidden, true, 'Flyout should close immediately without 500ms wait');
+    assert.equal(menuHost.hidden, false, 'Modal should stay open during the 250ms grace period');
+    assert.equal(flyout.hidden, false, 'Flyout should stay open during the 250ms grace period');
+    await new Promise(resolve => setTimeout(resolve, 400));
+    assert.equal(menuHost.hidden, true, 'Modal should close after the 250ms grace period');
+    assert.equal(flyout.hidden, true, 'Flyout should close after the 250ms grace period');
   } finally {
     menu.dispose();
     dom.window.close();

@@ -346,7 +346,7 @@ export function readAssessmentResponses(table: HTMLTableElement): AssessmentResp
 
     const statusText = clean(row.querySelector('.status')?.textContent);
     const hasSuccessClass = Boolean(row.querySelector('.status .text-success, .status [class*="text-success"]'));
-    const isCorrect = hasSuccessClass || /correct/i.test(statusText);
+    const isCorrect = hasSuccessClass || /\bcorrect\b/i.test(statusText) && !/\b(?:incorrect|not correct)\b/i.test(statusText);
     const triesExhausted = Boolean(maxTries > 0 && attempts >= maxTries);
 
     // If there is no answer and no attempts recorded, and native submit is hidden, fail closed

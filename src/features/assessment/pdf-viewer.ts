@@ -360,7 +360,8 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   const zoom = document.createElement('div'); zoom.className = 'zoom';
   const zoomOut = document.createElement('button'); zoomOut.type = 'button'; zoomOut.textContent = '−'; zoomOut.setAttribute('aria-label', 'Zoom out');
   const zoomIn = document.createElement('button'); zoomIn.type = 'button'; zoomIn.textContent = '+'; zoomIn.setAttribute('aria-label', 'Zoom in');
-  zoom.append(zoomOut, zoomIn); toolbarActions.append(fullscreenBtn, zoom); toolbar.append(copy, toolbarActions);
+  const zoomValue = document.createElement('output'); zoomValue.setAttribute('aria-label', 'PDF zoom');
+  zoom.append(zoomOut, zoomValue, zoomIn); toolbarActions.append(fullscreenBtn, zoom); toolbar.append(copy, toolbarActions);
   const pages = document.createElement('div'); pages.className = 'pages';
   const loading = document.createElement('div'); loading.className = 'loading'; loading.textContent = 'Loading clickable choices…'; pages.append(loading);
   shell.append(toolbar, pages); shadow.append(style, shell); container.append(element);
@@ -398,6 +399,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   document.addEventListener('keydown', handleKey);
 
   function paintZoom() {
+    zoomValue.textContent = `${Math.round(zoomLevel * 100)}%`;
     pages.classList.toggle('is-zoomed', zoomLevel > 1.001);
     for (const { root, width } of pageElements.values()) {
       const targetWidth = Math.round(width * fitScale * zoomLevel * 100) / 100;

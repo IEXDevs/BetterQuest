@@ -736,6 +736,26 @@ export const QUEST_DARK_STYLES = `
     box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.07), 0 2px 6px rgba(0, 0, 0, 0.03) !important;
   }
 
+  #main-content .bq-review-summary {
+    background:var(--bq-surface,#fff)!important;box-shadow:none!important;
+    border:1px solid var(--bq-border,#d7e2f0)!important;gap:12px!important;
+    padding:clamp(18px,3vw,28px)!important;
+  }
+  #main-content .bq-review-summary .bq-review-title{margin:0!important;font-size:24px!important}
+  #main-content .bq-review-summary .bq-review-lead{margin:0!important;max-width:68ch}
+  #main-content .bq-review-progress{display:flex;align-items:baseline;flex-wrap:wrap;gap:10px 20px;padding:18px 0 4px}
+  #main-content .bq-review-count{margin:0!important;flex:1 1 260px;font-size:16px}
+  #main-content .bq-review-count strong{font-size:28px;font-variant-numeric:tabular-nums}
+  #main-content .bq-review-summary .bq-review-track{flex:1 0 100%;height:8px;margin:0!important;overflow:hidden}
+  #main-content .bq-review-summary .bq-review-fill{background:#2563eb!important;box-shadow:none!important;transition:none!important}
+  #main-content .bq-review-goal{margin:0!important;font-size:14px}
+  #main-content .bq-review-tips{border-top:1px solid var(--bq-border,#d7e2f0);padding-top:16px;line-height:1.6}
+  #main-content .bq-review-tips summary{cursor:pointer;font-weight:650}
+  #main-content .bq-review-tips summary:focus-visible{outline:2px solid #2563eb;outline-offset:4px}
+  #main-content .bq-review-tips p{max-width:70ch;margin:12px 0!important}
+  #main-content .bq-review-tips ul{padding-left:20px;margin:0!important;max-width:70ch}
+  #main-content .bq-review-tips li + li{margin-top:8px}
+
   /* 1. Hero Header */
   .bq-review-hero {
     display: flex !important;

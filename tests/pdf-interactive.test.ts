@@ -86,6 +86,8 @@ test('interactive PDF viewer fits a wide page to the available viewing area', as
     assert.equal(await viewer.ready, true);
     const page = viewer.element.shadowRoot!.querySelector<HTMLElement>('.page')!;
     assert.ok(Math.abs(Number.parseFloat(page.style.getPropertyValue('--bq-pdf-page-width')) - 320) < 0.01, 'the fitted page should use the full viewer width');
+    const zoomLabel = viewer.element.shadowRoot!.querySelector('output')!;
+    assert.match(zoomLabel.textContent || '', /100%/, 'PDF zoom must default to 100%');
     viewer.element.shadowRoot!.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
     assert.equal(pages.classList.contains('is-zoomed'), true);
     viewer.element.shadowRoot!.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();

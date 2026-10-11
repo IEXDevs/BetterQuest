@@ -6,7 +6,9 @@ export interface ReviewStats {
 }
 
 export function extractReviewStats(container: HTMLElement): ReviewStats | null {
-  const text = container.textContent || '';
+  const source = container.cloneNode(true) as HTMLElement;
+  source.querySelectorAll('[data-betterquest]').forEach(node => node.remove());
+  const text = source.textContent || '';
   // Match "you have completed 46 / 121 review problems", "completed: 46 of 121", etc.
   const match = text.match(/(?:you have\s+)?completed[\s\S]{0,100}?(\d+)\s*(?:\/|of)\s*(\d+)/i) ||
     text.match(/(\d+)\s*(?:\/|of)\s*(\d+)\s*(?:review\s*problems|problems\s*completed)/i) ||
@@ -22,179 +24,62 @@ export function extractReviewStats(container: HTMLElement): ReviewStats | null {
 }
 
 export function createReviewDashboard(stats: ReviewStats | null, doc: Document): HTMLElement {
-  const completed = stats ? stats.completed : 0;
-  const total = stats ? stats.total : 0;
-  const percent = stats ? stats.percent : 0;
-  const toGo = stats ? stats.remainingToGoal : Math.max(0, 100 - completed);
-
-  const dashboard = doc.createElement('div');
-  dashboard.className = 'bq-review-dashboard';
+  const dashboard = doc.createElement('section');
+  dashboard.className = 'bq-review-dashboard bq-review-summary';
   dashboard.dataset.betterquest = 'review-dashboard';
-
-  // 1. Hero Section
-  const hero = doc.createElement('div');
-  hero.className = 'bq-review-hero';
-
-  const heroText = doc.createElement('div');
-  heroText.className = 'bq-review-hero-text';
-
-  const badge = doc.createElement('div');
-  badge.className = 'bq-review-badge';
-  badge.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg><span>Custom Practice Hub</span>`;
-
-  const title = doc.createElement('h2');
-  title.className = 'bq-review-title';
-  title.textContent = 'Custom Reviews';
-
+  dashboard.setAttribute('aria-label', 'Custom Reviews');
+  const heading = doc.createElement('h2');
+  heading.className = 'bq-review-title';
+  heading.textContent = 'Custom Reviews';
   const lead = doc.createElement('p');
   lead.className = 'bq-review-lead';
-  lead.textContent = 'Build non-graded practice sets from homework, learning modules, and exam questions to master concepts at your own pace.';
-
-  heroText.append(badge, title, lead);
-  hero.append(heroText);
-
-  // 2. Stats & Progress Card
-  const statsCard = doc.createElement('div');
-  statsCard.className = 'bq-review-stats-card';
-
-  const statsGrid = doc.createElement('div');
-  statsGrid.className = 'bq-review-stats-grid';
-
-  // Completed Count
-  const statCompleted = doc.createElement('div');
-  statCompleted.className = 'bq-review-stat';
-  statCompleted.innerHTML = `
-    <span class="bq-stat-label">Problems Completed</span>
-    <div class="bq-stat-val-group">
-      <span class="bq-stat-val">${completed}</span>
-      <span class="bq-stat-denom">/ ${total}</span>
-    </div>
-    <span class="bq-stat-sub">${total > completed ? `${total - completed} remaining to practice` : 'All available practiced!'}</span>
-  `;
-
-  // Percentage
-  const statPercent = doc.createElement('div');
-  statPercent.className = 'bq-review-stat';
-  statPercent.innerHTML = `
-    <span class="bq-stat-label">Completion Rate</span>
-    <div class="bq-stat-val-group">
-      <span class="bq-stat-val bq-stat-accent">${percent}%</span>
-    </div>
-    <span class="bq-stat-sub">of available problem pool</span>
-  `;
-
-  // Goal Tracker (+6pt Boost)
-  const statGoal = doc.createElement('div');
-  statGoal.className = 'bq-review-stat';
-  statGoal.innerHTML = `
-    <span class="bq-stat-label">Goal for +6pt Boost</span>
-    <div class="bq-stat-val-group">
-      <span class="bq-stat-val ${toGo === 0 ? 'bq-stat-achieved' : 'bq-stat-good'}">${toGo === 0 ? 'Goal Achieved! 🎉' : `${toGo} to go`}</span>
-    </div>
-    <span class="bq-stat-sub">100 problem semester milestone</span>
-  `;
-
-  statsGrid.append(statCompleted, statPercent, statGoal);
-
-  // Progress Bar Container
-  const trackWrapper = doc.createElement('div');
-  trackWrapper.className = 'bq-review-track-wrapper';
-
-  const track = doc.createElement('div');
-  track.className = 'bq-review-track';
-  track.setAttribute('role', 'progressbar');
-  track.setAttribute('aria-valuenow', String(percent));
-  track.setAttribute('aria-valuemin', '0');
-  track.setAttribute('aria-valuemax', '100');
-  track.setAttribute('aria-label', `Review completion: ${percent}%`);
-
-  const fill = doc.createElement('div');
-  fill.className = 'bq-review-fill';
-  fill.style.width = `${Math.min(100, Math.max(percent, percent > 0 ? 3 : 0))}%`;
-
-  const glow = doc.createElement('span');
-  glow.className = 'bq-review-glow';
-  fill.append(glow);
-  track.append(fill);
-
-  // Target marker tick on progress bar if total > 100
-  if (total >= 100) {
-    const targetPercent = Math.min(100, Math.round((100 / total) * 100));
-    const targetTick = doc.createElement('div');
-    targetTick.className = 'bq-review-target-tick';
-    targetTick.style.left = `${targetPercent}%`;
-    targetTick.title = '100 Problem Milestone (+6pt Grade Lift)';
-    targetTick.innerHTML = `<span class="bq-target-tick-line"></span><span class="bq-target-tick-badge">🎯 100</span>`;
-    track.append(targetTick);
+  lead.textContent = 'Practice problems from your homework, learning modules, and exams. Custom Reviews are not graded.';
+  dashboard.append(heading, lead);
+  if (stats) {
+    const progress = doc.createElement('div');
+    progress.className = 'bq-review-progress';
+    const count = doc.createElement('p');
+    count.className = 'bq-review-count';
+    const value = doc.createElement('strong');
+    value.textContent = String(stats.completed);
+    count.append(value, ' of ' + stats.total + ' review problems completed');
+    const percentage = doc.createElement('span');
+    percentage.textContent = stats.percent + '% complete';
+    const track = doc.createElement('div');
+    track.className = 'bq-review-track';
+    track.setAttribute('role', 'progressbar');
+    track.setAttribute('aria-label', 'Review completion');
+    track.setAttribute('aria-valuemin', '0');
+    track.setAttribute('aria-valuemax', '100');
+    track.setAttribute('aria-valuenow', String(stats.percent));
+    const fill = doc.createElement('div');
+    fill.className = 'bq-review-fill';
+    fill.style.width = stats.percent + '%';
+    track.append(fill);
+    const goal = doc.createElement('p');
+    goal.className = 'bq-review-goal';
+    goal.textContent = stats.remainingToGoal > 0
+      ? stats.remainingToGoal + ' more to reach 100 problems this semester.'
+      : 'You have reached 100 problems this semester.';
+    progress.append(count, percentage, track, goal);
+    dashboard.append(progress);
   }
-
-  // Milestones row below progress bar
-  const milestones = doc.createElement('div');
-  milestones.className = 'bq-review-milestones';
-  milestones.innerHTML = `
-    <span class="bq-milestone-item">0 start</span>
-    <span class="bq-milestone-item bq-milestone-highlight">🎯 100 Target (+6pts Course Grade Lift)</span>
-    <span class="bq-milestone-item">${total > 0 ? `${total} Total Available` : ''}</span>
-  `;
-
-  trackWrapper.append(track, milestones);
-  statsCard.append(statsGrid, trackWrapper);
-
-  // 3. Research Insights Grid (3 Cards)
-  const insightsGrid = doc.createElement('div');
-  insightsGrid.className = 'bq-review-insights-grid';
-
-  // Insight 1: 100 Problems
-  const insight1 = doc.createElement('div');
-  insight1.className = 'bq-insight-card';
-  insight1.innerHTML = `
-    <div class="bq-insight-top">
-      <div class="bq-insight-icon bq-icon-accent">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-      </div>
-      <span class="bq-insight-pill bq-pill-accent">+6 Pts Avg Lift</span>
-    </div>
-    <h3 class="bq-insight-title">Target 100+ Problems</h3>
-    <p class="bq-insight-desc">
-      Students who successfully work 100 or more review questions over the semester see an average <strong>6-point lift</strong> in their final course grade.
-    </p>
-  `;
-
-  // Insight 2: Deep Practice
-  const insight2 = doc.createElement('div');
-  insight2.className = 'bq-insight-card';
-  insight2.innerHTML = `
-    <div class="bq-insight-top">
-      <div class="bq-insight-icon bq-icon-good">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      </div>
-      <span class="bq-insight-pill bq-pill-good">&gt;90s Per Item</span>
-    </div>
-    <h3 class="bq-insight-title">Deep Practice Over Speed</h3>
-    <p class="bq-insight-desc">
-      Spend 90+ seconds working through each problem. Working through steps rather than treating them like flashcards builds durable retention.
-    </p>
-  `;
-
-  // Insight 3: Daytime Consistency
-  const insight3 = doc.createElement('div');
-  insight3.className = 'bq-insight-card';
-  insight3.innerHTML = `
-    <div class="bq-insight-top">
-      <div class="bq-insight-icon bq-icon-amber">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="4" r="2"/><path d="M12 8v8"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><circle cx="12" cy="12" r="4"/></svg>
-      </div>
-      <span class="bq-insight-pill bq-pill-amber">8 AM – 11 PM</span>
-    </div>
-    <h3 class="bq-insight-title">Daytime Consistency</h3>
-    <p class="bq-insight-desc">
-      Working a small number of items daily between 8 AM and 11 PM is significantly more effective than late-night cram sessions.
-    </p>
-  `;
-
-  insightsGrid.append(insight1, insight2, insight3);
-
-  dashboard.append(hero, statsCard, insightsGrid);
+  const tips = doc.createElement('details');
+  tips.className = 'bq-review-tips';
+  const summary = doc.createElement('summary');
+  summary.textContent = 'Make your practice count';
+  const research = doc.createElement('p');
+  research.textContent = 'Quest reports an average final-grade lift of about 6 points among students who successfully work 100 or more review problems over a semester.';
+  const list = doc.createElement('ul');
+  for (const text of [
+    'Spend more than 90 seconds working through each problem, instead of using it as a flashcard.',
+    'Work a few problems each day instead of doing 100 in one sitting.',
+    'Aim for 8 AM–11 PM; Quest found less benefit outside those hours.',
+  ]) {
+    const item = doc.createElement('li'); item.textContent = text; list.append(item);
+  }
+  tips.append(summary, research, list);
+  dashboard.append(tips);
   return dashboard;
 }
 
@@ -218,7 +103,7 @@ export function hideRawReviewElements(container: HTMLElement, doc: Document) {
     } else if (node.nodeType === 1) {
       // Element node
       const el = node as HTMLElement;
-      if (el.dataset.betterquest) return;
+      if (el.dataset.betterquest || el.dataset.betterquestReviewRaw) return;
 
       const hasInteractive = Boolean(
         el.querySelector('table, button, a, form, input, select, textarea')
@@ -254,18 +139,20 @@ export function hideRawReviewElements(container: HTMLElement, doc: Document) {
   }
 }
 
+export function findReviewPane(document: Document): HTMLElement | null {
+  return document.querySelector<HTMLElement>('#tabs-review') ||
+    (document.querySelector('#student-review-a.active, #student-review-a[aria-selected="true"]')
+      ? document.querySelector<HTMLElement>('#info-tab-data') : null) ||
+    document.querySelector<HTMLElement>('#main-content [data-betterquest-page="review"]');
+}
+
 export function enhanceCourseReviewTab(document: Document): boolean {
-  const reviewPane = document.querySelector<HTMLElement>('#tabs-review') ||
-    document.querySelector<HTMLElement>('.tab-pane#tabs-review') ||
-    document.querySelector<HTMLElement>('[data-betterquest-page="review"]');
+  const reviewPane = findReviewPane(document);
 
   if (!reviewPane) return false;
 
   const existingDashboard = reviewPane.querySelector<HTMLElement>('[data-betterquest="review-dashboard"]');
-  if (existingDashboard) {
-    // If stats are already present, return true
-    return true;
-  }
+
 
   // Don't format if currently just a loading spinner without review content
   if (reviewPane.querySelector('.preloader-wrapper.active') && !reviewPane.textContent?.includes('Custom Reviews')) {
@@ -273,13 +160,26 @@ export function enhanceCourseReviewTab(document: Document): boolean {
   }
 
   const stats = extractReviewStats(reviewPane);
+  const source = reviewPane.cloneNode(true) as HTMLElement;
+  source.querySelectorAll('[data-betterquest]').forEach(node => node.remove());
+  if (!stats && !/Custom Reviews allow|Our research shows/i.test(source.textContent || '')) return false;
+  const signature = JSON.stringify(stats);
+  if (existingDashboard?.dataset.stats === signature) {
+    hideRawReviewElements(reviewPane, document);
+    return true;
+  }
 
   // Hide raw unstyled text elements safely while preserving buttons, tables, links
   hideRawReviewElements(reviewPane, document);
 
   // Create and mount the new dashboard
   const dashboard = createReviewDashboard(stats, document);
-  reviewPane.prepend(dashboard);
+  dashboard.dataset.stats = signature;
+  if (existingDashboard) {
+    const wasOpen = existingDashboard.querySelector('details')?.open;
+    dashboard.querySelector('details')!.open = Boolean(wasOpen);
+    existingDashboard.replaceWith(dashboard);
+  } else reviewPane.prepend(dashboard);
   reviewPane.dataset.betterquestReviewEnhanced = 'true';
 
   // Elevate any native action buttons or tables inside the review pane

@@ -11,18 +11,7 @@ import { createInteractivePdfViewer } from './pdf-viewer';
 type PdfViewer = ReturnType<typeof createInteractivePdfViewer>;
 type PdfViewerFactory = typeof createInteractivePdfViewer;
 
-const MODE_STORAGE_KEY = 'betterquest_pdf_mode';
-
 type AssessmentMode = 'basic' | 'betterquest';
-
-function getInitialMode(): AssessmentMode {
-  try {
-    const saved = localStorage.getItem(MODE_STORAGE_KEY);
-    if (saved === 'basic' || saved === 'old') return 'basic';
-    if (saved === 'betterquest' || saved === 'new' || saved === 'bottom') return 'betterquest';
-  } catch {}
-  return 'betterquest';
-}
 
 function installStyles(document: Document) {
   document.querySelectorAll('[data-betterquest="assessment-style"]').forEach(node => node.remove());
@@ -78,6 +67,12 @@ function installStyles(document: Document) {
       flex:0 0 auto!important;
       box-sizing:border-box!important;
     }
+    [data-betterquest-pdf-workspace="enhanced"] > br{
+      display:none!important;
+    }
+    [data-betterquest-collapsed-gap="true"]{
+      display:none!important;
+    }
     [data-betterquest-pdf-workspace="enhanced"] [data-betterquest-native-responses]:not([data-betterquest-native-visible="true"]),
     [data-betterquest-pdf-workspace="enhanced"] #view-responses-table-id:not([data-betterquest-native-visible="true"]),
     [data-betterquest-native-responses]:not([data-betterquest-native-visible="true"]),
@@ -118,17 +113,23 @@ function installStyles(document: Document) {
     [data-betterquest-pdf-workspace="enhanced"][data-betterquest-pdf-mode="basic"] > #pdf-frame,
     [data-betterquest-pdf-workspace="enhanced"][data-betterquest-pdf-mode="old"] > #pdf-frame{
       grid-column:1!important;
-      grid-row:1!important;
+      grid-row:2!important;
       width:100%!important;
       min-width:0!important;
     }
     [data-betterquest-pdf-workspace="enhanced"][data-betterquest-pdf-mode="basic"] > [data-betterquest="assessment-rail"],
     [data-betterquest-pdf-workspace="enhanced"][data-betterquest-pdf-mode="old"] > [data-betterquest="assessment-rail"]{
       grid-column:2!important;
-      grid-row:1!important;
+      grid-row:2!important;
       position:sticky!important;
       top:76px!important;
       min-width:0!important;
+    }
+    /* Due row (due date + PDF Download) sits full-width above the PDF, never stranded below. */
+    [data-betterquest-pdf-workspace="enhanced"][data-betterquest-pdf-mode="basic"] > [data-betterquest-due-row],
+    [data-betterquest-pdf-workspace="enhanced"][data-betterquest-pdf-mode="old"] > [data-betterquest-due-row]{
+      grid-column:1 / -1!important;
+      grid-row:1!important;
     }
     [data-betterquest-pdf-workspace="enhanced"][data-betterquest-pdf-mode="basic"] > :not(#pdf-frame):not([data-betterquest="assessment-rail"]){
       grid-column:1 / -1!important;
@@ -322,13 +323,15 @@ function installStyles(document: Document) {
       min-height:100vh!important;
       border:0!important;
     }
-    #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart{background:#fff!important;color:#18253a!important;color-scheme:light;border-radius:10px;isolation:isolate}
+    #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart{background:#fff!important;color:#18253a!important;color-scheme:light;border-radius:10px;isolation:isolate;display:flow-root;padding:18px 24px 24px!important;margin:0 0 16px!important;height:auto!important;min-height:0;box-sizing:border-box}
+    #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart > .bg-light{padding:0!important;margin:0!important;max-width:100%;width:100%}
+    #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart .custom-control:last-child{margin-bottom:0}
     #presentation-div[data-betterquest-slide="enhanced"] .bg-light{background:#fff!important;color:#18253a!important;border-radius:10px;padding:18px 24px!important}
     #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart :where(p,span,label,h1,h2,h3,h4,h5,h6,mjx-container,.MathJax,.MathJax_Display){color:#18253a!important}
     #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart :where(img,svg,canvas){filter:none!important;mix-blend-mode:normal!important;opacity:1;color-scheme:light}
     #presentation-div[data-betterquest-slide="enhanced"] .custom-control{margin:4px 0}
     #presentation-div[data-betterquest-slide="enhanced"] .custom-control-label{display:block!important;min-height:48px;padding:11px 15px 11px 42px!important;border:1px solid #d9d4c9;border-radius:8px;color:#18253a!important;background:#fff;cursor:pointer;transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease}
-    #presentation-div[data-betterquest-slide="enhanced"] .custom-control-label:hover{border-color:#6366f1;box-shadow:0 6px 18px #6366f118;transform:translateY(-1px)}
+    #presentation-div[data-betterquest-slide="enhanced"] .custom-control-label:hover{border-color:#6366f1}
     #presentation-div[data-betterquest-slide="enhanced"] .custom-control-input:checked + .custom-control-label{border-color:#6366f1;box-shadow:0 0 0 3px #6366f124;background:#f5f3ff}
     #presentation-div[data-betterquest-slide="enhanced"] :where(mjx-container,.MathJax,.MathJax_Display){color:#18253a!important}
     #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart .submit-btn{opacity:0;visibility:hidden;pointer-events:none;transform:translateX(-8px);transition:opacity .18s ease,transform .18s ease}
@@ -400,7 +403,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   localStyle.textContent = `
     :host{display:block;color:var(--bq-text,#18253a);font:14px/1.4 ui-rounded,"Avenir Next",sans-serif;color-scheme:light dark;--bq-assessment-muted:color-mix(in srgb,var(--bq-muted,#748491) 70%,var(--bq-text,#18253a));--bq-assessment-accent:color-mix(in srgb,var(--bq-accent,#227ab0) 78%,var(--bq-text,#18253a))}
     *{box-sizing:border-box}
-    .rail{max-height:calc(100vh - 96px);overflow:auto;padding:16px;border:1px solid var(--bq-border,#d7e2f0);border-radius:10px;background:color-mix(in srgb,var(--bq-surface,#fff) 96%,transparent);box-shadow:0 18px 50px #172a3b18;scrollbar-width:thin}
+    .rail{max-height:calc(100vh - 88px);overflow:auto;padding:16px;border:1px solid var(--bq-border,#d7e2f0);border-radius:10px;background:color-mix(in srgb,var(--bq-surface,#fff) 96%,transparent);box-shadow:0 18px 50px #172a3b18;scrollbar-width:thin}
     header{position:sticky;top:-16px;z-index:2;margin:-16px -16px 12px;padding:16px;background:var(--bq-surface,#fff);border-bottom:1px solid var(--bq-border,#d7e2f0)}
     .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
     .title-group{display:flex;align-items:center;gap:12px}
@@ -412,7 +415,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     .mode-btn:focus-visible{outline:2px solid #2563eb;outline-offset:1px}
     .actions{display:flex;gap:6px}
     .focus{border:1px solid var(--bq-border,#d7e2f0);border-radius:6px;background:var(--bq-raised,#eef3f6);color:var(--bq-text,#18253a);padding:7px 9px;font:700 11px/1 inherit;cursor:pointer}
-    .focus:focus-visible,.choice:focus-visible,.submit:focus-visible{outline:2px solid var(--bq-accent,#6366f1);outline-offset:2px}
+    .focus:focus-visible,.choice:focus-visible,.submit:focus-visible,.number:focus-visible{outline:2px solid var(--bq-accent,#6366f1);outline-offset:2px}
     .metrics-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
     .metric-card{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border:1px solid var(--bq-border,#e2e8f0);border-radius:8px;background:var(--bq-raised,#f8fafc)}
     .metric-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--bq-assessment-muted)}
@@ -436,14 +439,16 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     }
 
     .question{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--bq-border,#d7e2f0);border-radius:8px;background:var(--bq-surface,#fff);box-shadow:0 2px 8px #0f172a08;transition:border-color .18s ease,box-shadow .18s ease}
-    .question:hover{border-color:var(--bq-accent,#227ab0);box-shadow:0 4px 16px #2563eb1a}
+    .question:focus-within{border-color:var(--bq-accent,#227ab0)}
     .question-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
-    .number{font-weight:800;font-size:13px;color:var(--bq-text,#18253a)}
+    .number{font-weight:800;font-size:13px;color:var(--bq-text,#18253a);border:0;background:transparent;padding:2px 4px;margin:-2px -4px;border-radius:4px;cursor:pointer;font-family:inherit;text-align:left}
+    .number:hover{color:var(--bq-assessment-accent);text-decoration:underline;text-underline-offset:2px}
+    .number:focus-visible{outline:2px solid var(--bq-accent,#6366f1);outline-offset:2px}
     .selected{color:var(--bq-assessment-muted);font-size:11px;font-weight:600}
     .question-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
     .choices{display:flex;flex-wrap:wrap;gap:6px}
     .choice{width:32px;height:32px;border:1px solid var(--bq-border,#d7e2f0);border-radius:6px;background:var(--bq-raised,#f2f5f7);color:var(--bq-text,#18253a);font:750 12px/1 inherit;cursor:pointer;transition:transform .15s ease,border-color .15s ease,background .15s ease}
-    .choice:hover{transform:translateY(-1px);border-color:var(--bq-accent,#6366f1)}
+    .choice:hover{border-color:var(--bq-accent,#6366f1)}
     .choice[aria-pressed="true"]{border-color:#2563eb;background:#2563eb;color:#fff;box-shadow:0 5px 13px #2563eb33}
     .submit{border:0;border-radius:6px;background:#2563eb;color:#fff;padding:8px 14px;font:750 11px/1 inherit;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;margin-left:auto}
     .submit:hover{transform:translateY(-1px);background:#1d4ed8;box-shadow:0 4px 12px #2563eb40}
@@ -460,7 +465,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   const titleGroup = document.createElement('div'); titleGroup.className = 'title-group';
   const title = document.createElement('h2'); title.textContent = 'Response desk';
 
-  let currentMode: AssessmentMode = getInitialMode();
+  let currentMode: AssessmentMode = 'betterquest';
+  let responseSignature = '';
   const modeSwitcher = document.createElement('div');
   modeSwitcher.className = 'mode-switcher';
   modeSwitcher.setAttribute('role', 'radiogroup');
@@ -484,8 +490,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
 
   function applyMode(mode: AssessmentMode) {
     currentMode = mode;
-    try { localStorage.setItem(MODE_STORAGE_KEY, mode); } catch {}
+
     updateModeButtons();
+    syncModeChrome();
     syncPdfVisibility(mode === 'betterquest' && pdfViewerReady !== false);
   }
 
@@ -538,6 +545,14 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
 
   const questions = document.createElement('div'); questions.className = 'questions';
   header.append(top, metricsGrid, progressWrap); rail.append(header, questions); shadow.append(localStyle, rail);
+
+  function syncModeChrome() {
+    // BetterQuest view is an info strip under the PDF; answering happens on the PDF itself.
+    questions.style.display = currentMode === 'betterquest' ? 'none' : '';
+    // Basic view keeps the full answer panels but drops the fullscreen control.
+    focus.style.display = currentMode === 'basic' ? 'none' : '';
+  }
+  syncModeChrome();
 
   let disposed = false;
   let pdfViewer: PdfViewer | undefined;
@@ -623,7 +638,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         ...document.querySelectorAll<HTMLElement>('#presentation-pdf-frame'),
       ];
       for (const pres of new Set(presentations)) {
-        pres.hidden = true;
+        if (!pres.hidden) pres.hidden = true;
         pres.style.setProperty('display', 'none', 'important');
         pres.style.setProperty('visibility', 'hidden', 'important');
         pres.style.setProperty('height', '0px', 'important');
@@ -635,7 +650,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       ];
       if (elements.iframe) iframes.push(elements.iframe);
       for (const ifr of new Set(iframes)) {
-        ifr.hidden = true;
+        if (!ifr.hidden) ifr.hidden = true;
         ifr.style.setProperty('display', 'none', 'important');
         ifr.style.setProperty('visibility', 'hidden', 'important');
         ifr.style.setProperty('height', '0px', 'important');
@@ -651,7 +666,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         ...document.querySelectorAll<HTMLElement>('#presentation-pdf-frame'),
       ];
       for (const pres of new Set(presentations)) {
-        pres.hidden = false;
+        if (pres.hidden) pres.hidden = false;
         pres.style.removeProperty('display');
         pres.style.removeProperty('visibility');
         pres.style.removeProperty('height');
@@ -663,7 +678,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       ];
       if (elements.iframe) iframes.push(elements.iframe);
       for (const ifr of new Set(iframes)) {
-        ifr.hidden = false;
+        if (ifr.hidden) ifr.hidden = false;
         ifr.style.removeProperty('display');
         ifr.style.removeProperty('visibility');
         ifr.style.removeProperty('height');
@@ -771,6 +786,64 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     });
   }
 
+  function scrollToQuestion(questionNumber: number, card: HTMLElement) {
+    const hit = pdfViewer?.element.shadowRoot?.querySelector<HTMLElement>(
+      `.option-hit[data-question="${questionNumber}"]`,
+    );
+    if (hit) {
+      hit.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+      hit.focus?.({ preventScroll: true });
+      return;
+    }
+    card.querySelector<HTMLButtonElement>('.choice')?.focus?.({ preventScroll: true });
+    card.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' } as ScrollIntoViewOptions);
+  }
+
+  function isLeadingGap(node: Node, pdfFrame: HTMLElement): boolean {
+    if (node.nodeType !== 1) return false;
+    const el = node as HTMLElement;
+    if (el === host || el === pdfFrame) return false;
+    if (el.hasAttribute('data-betterquest-due-row') || el.hasAttribute('data-betterquest')) return false;
+    if (el.closest('[data-betterquest]')) return false;
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'style' || tag === 'script' || tag === 'link') return false;
+    if (tag === 'br') return true;
+    if (el.id === 'pdf-frame' || el.id === 'view-responses-table-id' || el.id === 'tally-div') return false;
+    if (el.querySelector('table, iframe, canvas, select, button, input, textarea, img, svg, audio, video, embed, object, a[href], [data-betterquest]')) {
+      const link = el.querySelector('a[href]');
+      if (!link) return false;
+      // A due row wrapping only an empty link is still a gap; anything else with a link is content.
+      if ((el.textContent || '').replace(/[\s\u00a0]/g, '').length > 0) return false;
+    } else if ((el.textContent || '').replace(/[\s\u00a0]/g, '').length > 0) {
+      return false;
+    }
+    return true;
+  }
+
+  const collapsedGaps = new Set<HTMLElement>();
+
+  function restoreGap(el: HTMLElement) {
+    el.style.removeProperty('display');
+    el.removeAttribute('data-betterquest-collapsed-gap');
+    collapsedGaps.delete(el);
+  }
+
+  function reconcileLeadingGaps(pdfFrame: HTMLElement) {
+    // Native content can load late into a previously empty spacer; restore those.
+    for (const el of [...collapsedGaps]) {
+      if (!el.isConnected || !isLeadingGap(el, pdfFrame)) restoreGap(el);
+    }
+    for (let node: Node | null = root.firstChild; node && node !== pdfFrame && node !== host; node = node.nextSibling) {
+      if (node.nodeType !== 1 || collapsedGaps.has(node as HTMLElement)) continue;
+      const el = node as HTMLElement;
+      if (isLeadingGap(el, pdfFrame)) {
+        el.dataset.betterquestCollapsedGap = 'true';
+        el.style.setProperty('display', 'none', 'important');
+        collapsedGaps.add(el);
+      }
+    }
+  }
+
   function render() {
     if (disposed) return;
     const elements = findPdfAssessment(document); if (!elements || elements.root !== root) { host.remove(); return; }
@@ -781,7 +854,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     root.dataset.betterquestPdfMode = currentMode;
     host.dataset.layout = currentMode === 'basic' ? 'sidebar' : 'bottom';
     rail.dataset.layout = currentMode === 'basic' ? 'sidebar' : 'bottom';
+    syncModeChrome();
     if (host.parentElement !== root || host.previousElementSibling !== elements.pdfFrame) elements.pdfFrame.after(host);
+    reconcileLeadingGaps(elements.pdfFrame);
     const bindings = withNativeResponsesVisible(elements, () => readAssessmentResponses(elements.table));
     elements.responseRoot.dataset.betterquestNativeResponses = 'true';
     hideNativeStatsElements(document, root);
@@ -792,11 +867,22 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     );
     pdfViewer?.setAnsweredQuestions?.(answeredQuestions);
     syncPdfVisibility(currentMode === 'betterquest' && pdfViewerReady !== false);
+    // Native presentation changes can trigger refreshes without changing answers.
+    // Keep live buttons in place so hover, focus and pointer clicks are not interrupted.
+    const signature = JSON.stringify(bindings.map(binding => [
+      binding.id, binding.number, binding.select.value, binding.options,
+      binding.attempts, binding.answered, isNativeControlAvailable(binding.select),
+      isNativeControlAvailable(binding.submit),
+    ]));
+    if (signature === responseSignature) return;
+    responseSignature = signature;
     questions.replaceChildren();
     for (const binding of bindings) {
       const card = document.createElement('article'); card.className = 'question'; card.dataset.questionId = binding.id;
       const cardTop = document.createElement('div'); cardTop.className = 'question-top';
-      const number = document.createElement('span'); number.className = 'number'; number.textContent = `Question ${binding.number}`;
+      const number = document.createElement('button'); number.type = 'button'; number.className = 'number'; number.textContent = `Question ${binding.number}`;
+      number.setAttribute('aria-label', `Go to question ${binding.number} in the PDF`);
+      number.addEventListener('click', () => scrollToQuestion(Number(binding.number), card));
       const selected = document.createElement('span'); selected.className = 'selected';
 
       if (binding.answered) {
@@ -859,6 +945,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       (el as HTMLElement).style.removeProperty('display');
       el.removeAttribute('data-betterquest-native-stats');
     });
+    for (const el of [...collapsedGaps]) restoreGap(el);
     syncPdfVisibility(false);
     if (elements) elements.iframe.hidden = false;
     if (elements?.pdfFrame.dataset.betterquestSynthesized === 'true') elements.pdfFrame.remove();
@@ -874,7 +961,43 @@ export function createSlideAssessmentEnhancement(presentation: HTMLElement) {
   });
   const style = installStyles(document);
   presentation.dataset.betterquestSlide = 'enhanced';
+  // Slides pages never mount the PDF workspace, so collapse the same native
+  // spacer junk (stray breaks, empty paragraphs) between the header and the
+  // first question here instead.
+  const collapsed = new Set<HTMLElement>();
+  const scope = presentation.parentElement;
+  const isGap = (el: HTMLElement): boolean => {
+    if (el === presentation) return false;
+    if (el.hasAttribute('data-betterquest') || el.hasAttribute('data-betterquest-due-row')) return false;
+    if (el.closest('[data-betterquest]')) return false;
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'style' || tag === 'script' || tag === 'link') return false;
+    if (tag === 'br') return true;
+    if (el.id === 'presentation-div' || el.id === 'pdf-frame' || el.id === 'view-responses-table-id' || el.id === 'tally-div') return false;
+    if (el.querySelector('table, iframe, canvas, select, button, input, textarea, img, svg, audio, video, embed, object, a[href], [data-betterquest]')) return false;
+    return (el.textContent || '').replace(/[\s\u00a0]/g, '').length === 0;
+  };
+  const reconcileGaps = () => {
+    if (!scope || presentation.parentElement !== scope) return;
+    for (const el of [...collapsed]) {
+      if (!el.isConnected || !isGap(el)) {
+        el.style.removeProperty('display');
+        el.removeAttribute('data-betterquest-collapsed-gap');
+        collapsed.delete(el);
+      }
+    }
+    for (let node: Node | null = scope.firstChild; node && node !== presentation; node = node.nextSibling) {
+      if (node.nodeType !== 1 || collapsed.has(node as HTMLElement)) continue;
+      const el = node as HTMLElement;
+      if (isGap(el)) {
+        el.dataset.betterquestCollapsedGap = 'true';
+        el.style.setProperty('display', 'none', 'important');
+        collapsed.add(el);
+      }
+    }
+  };
   const paint = () => {
+    reconcileGaps();
     for (const item of submits) {
       if (!item.group) continue;
       const ready = withSlideEnhancementDisabled(presentation, () => isNativeControlAvailable(item.button)) &&
@@ -885,6 +1008,11 @@ export function createSlideAssessmentEnhancement(presentation: HTMLElement) {
   presentation.addEventListener('change', paint); paint();
   return { reconcile: paint, dispose() {
     presentation.removeEventListener('change', paint); presentation.removeAttribute('data-betterquest-slide');
+    for (const el of [...collapsed]) {
+      el.style.removeProperty('display');
+      el.removeAttribute('data-betterquest-collapsed-gap');
+    }
+    collapsed.clear();
     for (const item of submits) { item.group?.removeAttribute('data-betterquest-question-ready'); item.button.hidden = item.hidden; } style.remove();
   } };
 }

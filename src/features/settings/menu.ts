@@ -6,7 +6,7 @@ import type { QuestNavigationLink } from '../../content/navigation';
 
 export type MenuView = 'betterquest' | 'quest';
 
-const HOVER_CLOSE_DELAY_MS = 0;
+const HOVER_CLOSE_DELAY_MS = 250;
 
 export function createSettingsMenu(
   host: HTMLElement,
