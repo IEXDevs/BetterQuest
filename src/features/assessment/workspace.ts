@@ -697,21 +697,98 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     meterValue.style.setProperty('--progress', `${bindings.length ? submitted / bindings.length * 100 : 0}%`);
   }
 
+  let pendingSubmit: { questionNumber: number; optionValue: string; attempts: number; viaBetterQuest: boolean; timer: ReturnType<typeof setTimeout> | undefined } | null = null;
+
+  /** Wrong options observed through our own submit flow, this session only. */
+  const wrongMarks = new Map<number, Set<string>>();
+  /** Questions already styled as correct on the PDF. */
+  const markedCorrect = new Set<number>();
+  let lastBindings: ReturnType<typeof readAssessmentResponses> = [];
+
+  function readOutcome(table: HTMLTableElement, binding: { id: string }): 'correct' | 'exhausted' | null {
+    const row = table.querySelector<HTMLElement>(`tr[data-id="${binding.id}"]`) ||
+      table.querySelector<HTMLElement>(`#row-${binding.id}`);
+    if (!row) return null;
+    const status = row.querySelector('.status');
+    const statusText = status?.textContent || '';
+    const success = Boolean(status?.querySelector('.text-success, [class*="text-success"]'));
+    if (success || (/\bcorrect\b/i.test(statusText) && !/\b(?:incorrect|not correct)\b/i.test(statusText))) return 'correct';
+    const prev = row.querySelector('.previous')?.textContent || '';
+    const match = prev.match(/(\d+)\s*\/\s*(\d+)/);
+    if (match && Number(match[2]) > 0 && Number(match[1]) >= Number(match[2])) return 'exhausted';
+    return null;
+  }
+
+  function applyMarks(bindings: ReturnType<typeof readAssessmentResponses>) {
+    for (const binding of bindings) {
+      const qn = Number(binding.number);
+      if (!Number.isInteger(qn)) continue;
+      if (binding.answered) {
+        if (binding.select.value && !markedCorrect.has(qn)) {
+          const table = findPdfAssessment(document)?.table;
+          if (table && readOutcome(table, binding) === 'correct') {
+            markedCorrect.add(qn);
+            void pdfViewer?.ready?.then(ok => {
+              if (!disposed && ok) pdfViewer?.celebrate?.(qn, binding.select.value, false);
+            });
+          }
+        }
+      } else {
+        const marked = wrongMarks.get(qn);
+        if (marked) for (const value of marked) pdfViewer?.markWrong?.(qn, value);
+      }
+    }
+  }
+
+  function clearPendingSubmit() {
+    if (pendingSubmit?.timer !== undefined) clearTimeout(pendingSubmit.timer);
+    pendingSubmit = null;
+  }
+
+  function submitWarn(questionNumber: number, reason: string) {
+    console.warn(`[BetterQuest] Answer for question ${questionNumber} was not sent to Quest: ${reason} Switch to Basic View to submit.`);
+  }
+
   function submitNative(questionNumber: number): boolean {
-    const elements = findPdfAssessment(document); if (!elements) return false;
+    const elements = findPdfAssessment(document);
+    if (!elements) { submitWarn(questionNumber, 'Response table not found.'); return false; }
     return withNativeResponsesVisible(elements, () => {
       const bindings = readAssessmentResponses(elements.table);
       const binding = bindings.find(item => Number(item.number) === questionNumber);
-      if (!binding) return false;
+      if (!binding) { submitWarn(questionNumber, 'No response row found.'); return false; }
       const available = isNativeControlAvailable(binding.select) && isNativeControlAvailable(binding.submit);
       const selectedOption = binding.select.selectedOptions[0] ||
         [...binding.select.options].find(opt => opt.value === binding.select.value);
-      if (available && selectedOption && isResponseOptionAvailable(selectedOption)) {
-        binding.submit.focus();
-        binding.submit.click();
-        return true;
+      if (!available || !selectedOption || !isResponseOptionAvailable(selectedOption)) {
+        submitWarn(questionNumber, !selectedOption ? 'No answer selected.' : 'Submit control unavailable.');
+        return false;
       }
-      return false;
+      binding.submit.focus();
+      const submitRow = binding.submit.closest('tr');
+      const submitRowNumber = submitRow && submitRow.parentElement?.tagName !== 'THEAD'
+        ? Number((submitRow.cells[0]?.textContent || '').replace(/\.$/, '').trim())
+        : NaN;
+      if (submitRowNumber !== questionNumber) {
+        console.warn(`[BetterQuest] Submit control for question ${questionNumber} is outside its response row; trying anyway.`);
+      }
+      binding.submit.click();
+      clearPendingSubmit();
+      const optionValue = selectedOption.value;
+      const attempts = binding.attempts;
+      const viaBetterQuest = currentMode === 'betterquest';
+      const timer = setTimeout(() => {
+        // Quest never reflected the submit: verify before handing control back.
+        const els = disposed ? null : findPdfAssessment(document);
+        const current = els ? withNativeResponsesVisible(els, () => readAssessmentResponses(els.table)) : [];
+        const target = current.find(item => Number(item.number) === questionNumber);
+        if (target && !target.answered && target.attempts === attempts) {
+          submitWarn(questionNumber, 'No result appeared.');
+          pdfViewer?.setSelected(questionNumber, optionValue);
+        }
+        if (pendingSubmit?.questionNumber === questionNumber) clearPendingSubmit();
+      }, 10000);
+      pendingSubmit = { questionNumber, optionValue, attempts, viaBetterQuest, timer };
+      return true;
     });
   }
 
@@ -772,7 +849,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       optionMaximums,
       answeredQuestions,
       onChoose: (questionNumber, optionValue) => { chooseNative(questionNumber, optionValue); },
-      onSubmit: (questionNumber) => { submitNative(questionNumber); },
+      onSubmit: (questionNumber) => submitNative(questionNumber),
     });
     syncPdfVisibility(currentMode === 'betterquest');
     void pdfViewer.ready.then(ready => {
@@ -783,6 +860,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         return;
       }
       syncPdfVisibility(currentMode === 'betterquest' && pdfViewerReady !== false);
+      applyMarks(lastBindings);
     });
   }
 
@@ -866,6 +944,34 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       bindings.filter(b => b.answered).map(b => Number(b.number)).filter(Number.isInteger)
     );
     pdfViewer?.setAnsweredQuestions?.(answeredQuestions);
+    if (pendingSubmit) {
+      const target = bindings.find(item => Number(item.number) === pendingSubmit!.questionNumber);
+      if (!target || target.answered || target.attempts !== pendingSubmit.attempts) {
+        // Quest reflected the submit (answered or attempts moved).
+        const was = pendingSubmit;
+        clearPendingSubmit();
+        if (target) {
+          const qn = Number(target.number);
+          if (!target.answered && target.attempts > was.attempts) {
+            if (was.viaBetterQuest && Number.isInteger(qn)) {
+              let marked = wrongMarks.get(qn);
+              if (!marked) { marked = new Set(); wrongMarks.set(qn, marked); }
+              marked.add(was.optionValue);
+            }
+          } else if (target.answered && target.select.value && Number.isInteger(qn) && !markedCorrect.has(qn)) {
+            if (readOutcome(elements.table, target) === 'correct') {
+              markedCorrect.add(qn);
+              const value = target.select.value;
+              void pdfViewer?.ready?.then(ok => {
+                if (!disposed && ok) pdfViewer?.celebrate?.(qn, value, true);
+              });
+            }
+          }
+        }
+      }
+    }
+    lastBindings = bindings;
+    applyMarks(bindings);
     syncPdfVisibility(currentMode === 'betterquest' && pdfViewerReady !== false);
     // Native presentation changes can trigger refreshes without changing answers.
     // Keep live buttons in place so hover, focus and pointer clicks are not interrupted.
@@ -927,6 +1033,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
 
   return { reconcile: render, dispose() {
     disposed = true; const elements = findPdfAssessment(document);
+    clearPendingSubmit();
     document.removeEventListener('fullscreenchange', syncFs);
     document.removeEventListener('keydown', handleKeydown);
     syncPdfVisibility(false);

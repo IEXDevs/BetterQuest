@@ -19,7 +19,7 @@ export interface InteractivePdfOptions {
   optionMaximums: ReadonlyMap<number, number>;
   answeredQuestions?: ReadonlySet<number>;
   onChoose: (questionNumber: number, optionValue: number) => void;
-  onSubmit?: (questionNumber: number) => void;
+  onSubmit?: (questionNumber: number) => boolean;
   openDocument?: OpenInteractivePdf;
 }
 
@@ -205,7 +205,11 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     .toolbar-actions{display:flex;align-items:center;gap:6px}
     .tool-btn{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 10px;border:1px solid var(--bq-border,#d7e2f0);border-radius:6px;background:var(--bq-raised,#eef3f6);color:var(--bq-text,#18253a);font:700 12px/1 inherit;cursor:pointer;transition:background .15s ease}
     .tool-btn:hover{background:color-mix(in srgb,var(--bq-raised,#eef3f6) 72%,var(--bq-accent,#2563eb))}
-    .tool-btn:focus-visible,.zoom button:focus-visible,.option-hit:focus-visible,.pdf-submit-btn:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
+    .tool-btn:focus-visible,.zoom button:focus-visible,.option-hit:focus-visible,.pdf-submit-btn:focus-visible,.submit-pill:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
+    .submit-pill{border:0;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;white-space:nowrap}
+    .submit-pill:hover{background:linear-gradient(135deg,#4f46e5,#4338ca)}
+    .submit-pill[hidden]{display:none}
+    .submit-pill[data-failed="true"]{background:linear-gradient(135deg,#b45309,#92400e)}
     .zoom{display:flex;align-items:center;gap:6px}
     .zoom button{width:32px;height:32px;border:1px solid var(--bq-border,#d7e2f0);border-radius:6px;background:var(--bq-raised,#eef3f6);color:var(--bq-text,#18253a);font:800 16px/1 inherit;cursor:pointer}
     .pages{
@@ -287,11 +291,81 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       opacity:1;
       box-shadow:0 2px 8px rgba(49,46,129,.6)
     }
+    .option-hit.is-wrong{
+      border:1.5px solid #dc2626;
+      background:rgba(220,38,38,.10);
+    }
+    .option-hit.is-wrong::before{
+      background:#b91c1c;
+      text-decoration:line-through;
+    }
+    .option-hit.is-wrong::after{
+      content:'✕';
+      position:absolute;
+      right:4px;
+      top:50%;
+      display:grid;
+      place-items:center;
+      width:22px;
+      height:22px;
+      border-radius:50%;
+      background:#dc2626;
+      color:#fff;
+      font:800 12px/1 ui-rounded,"Avenir Next",sans-serif;
+      transform:translateY(-50%);
+      box-shadow:0 2px 6px rgba(220,38,38,.45);
+      pointer-events:none;
+    }
+    .option-hit.is-correct{
+      border:2px solid #16a34a;
+      background:rgba(22,163,74,.16);
+      animation:bq-rainbow 2.4s linear infinite;
+    }
+    .option-hit.is-correct::before{
+      background:#16a34a;
+      box-shadow:0 2px 6px rgba(22,163,74,.5);
+    }
+    .option-hit.is-correct::after{
+      content:'✓';
+      position:absolute;
+      right:4px;
+      top:50%;
+      display:grid;
+      place-items:center;
+      width:22px;
+      height:22px;
+      border-radius:50%;
+      background:#16a34a;
+      color:#fff;
+      font:800 13px/1 ui-rounded,"Avenir Next",sans-serif;
+      transform:translateY(-50%);
+      box-shadow:0 2px 8px rgba(22,163,74,.55);
+      pointer-events:none;
+    }
+    @keyframes bq-rainbow{
+      0%,100%{box-shadow:0 0 0 3px rgba(245,158,11,.45),0 0 14px rgba(245,158,11,.5)}
+      25%{box-shadow:0 0 0 3px rgba(34,197,94,.5),0 0 14px rgba(34,197,94,.55)}
+      50%{box-shadow:0 0 0 3px rgba(59,130,246,.5),0 0 14px rgba(59,130,246,.55)}
+      75%{box-shadow:0 0 0 3px rgba(168,85,247,.5),0 0 14px rgba(168,85,247,.55)}
+    }
+    .confetti-bit{
+      position:absolute;
+      z-index:40;
+      width:6px;
+      height:6px;
+      border-radius:2px;
+      pointer-events:none;
+      animation:bq-confetti-fall 1.1s ease-out forwards;
+    }
+    @keyframes bq-confetti-fall{
+      to{transform:translate(var(--dx),var(--dy)) rotate(540deg);opacity:0}
+    }
+    @media(prefers-reduced-motion:reduce){.option-hit.is-correct{animation:none}.confetti-bit{display:none}}
     .loading,.error{display:grid;place-items:center;min-height:280px;padding:28px;text-align:center;color:var(--bq-text,#18253a)}
     .error{color:var(--bq-warning,#a96645)}
     .pdf-submit-btn{
       position:absolute;
-      z-index:10;
+      z-index:30;
       display:inline-flex;
       align-items:center;
       gap:6px;
@@ -311,6 +385,8 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     .pdf-submit-btn:hover{background:linear-gradient(135deg,#4f46e5,#4338ca);transform:translateY(-1px) scale(1.02);box-shadow:0 6px 18px rgba(99,102,241,.5),0 3px 6px rgba(0,0,0,.25)}
     .pdf-submit-btn:active{transform:translateY(0) scale(.98)}
     .pdf-submit-btn[disabled]{opacity:.75;cursor:not-allowed}
+    .pdf-submit-btn[data-failed="true"]{background:linear-gradient(135deg,#b45309,#92400e)}
+    .pdf-submit-btn[data-failed="true"]:hover{background:linear-gradient(135deg,#92400e,#78350a)}
     @keyframes pdf-pop-in{from{opacity:0;transform:translateY(-4px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
     @media(prefers-reduced-motion:reduce){.option-hit,.option-hit::before,.pdf-submit-btn{transition:none;animation:none}}
   `;
@@ -361,7 +437,34 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   const zoomOut = document.createElement('button'); zoomOut.type = 'button'; zoomOut.textContent = '−'; zoomOut.setAttribute('aria-label', 'Zoom out');
   const zoomIn = document.createElement('button'); zoomIn.type = 'button'; zoomIn.textContent = '+'; zoomIn.setAttribute('aria-label', 'Zoom in');
   const zoomValue = document.createElement('output'); zoomValue.setAttribute('aria-label', 'PDF zoom');
-  zoom.append(zoomOut, zoomValue, zoomIn); toolbarActions.append(fullscreenBtn, zoom); toolbar.append(copy, toolbarActions);
+  // Always-visible submit for the selected question: the floating Confirm can
+  // sit off-screen or under folds, especially in fullscreen.
+  const submitPill = document.createElement('button');
+  submitPill.type = 'button';
+  submitPill.className = 'tool-btn submit-pill';
+  submitPill.hidden = true;
+  let pillQn: number | null = null;
+  function paintPill(state: 'ask' | 'sending' | 'failed' | null) {
+    if (state === null || pillQn === null) {
+      pillQn = null;
+      submitPill.hidden = true;
+      return;
+    }
+    submitPill.hidden = false;
+    submitPill.disabled = state === 'sending';
+    delete submitPill.dataset.failed;
+    if (state === 'ask') submitPill.textContent = `Submit Q${pillQn}`;
+    else if (state === 'sending') submitPill.textContent = `Submitting Q${pillQn}…`;
+    else {
+      submitPill.textContent = `Retry Q${pillQn}`;
+      submitPill.dataset.failed = 'true';
+    }
+    submitPill.setAttribute('aria-label', state === 'failed'
+      ? `Submit question ${pillQn} did not reach Quest. Activate to try again.`
+      : `Submit question ${pillQn}`);
+  }
+  submitPill.addEventListener('click', () => { if (pillQn !== null) attemptSubmit(pillQn); });
+  zoom.append(zoomOut, zoomValue, zoomIn); toolbarActions.append(submitPill, fullscreenBtn, zoom); toolbar.append(copy, toolbarActions);
   const pages = document.createElement('div'); pages.className = 'pages';
   const loading = document.createElement('div'); loading.className = 'loading'; loading.textContent = 'Loading clickable choices…'; pages.append(loading);
   shell.append(toolbar, pages); shadow.append(style, shell); container.append(element);
@@ -379,6 +482,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       btn.remove();
       submitButtons.delete(qNum);
     }
+    paintPill(null);
   }
 
   const handleGlobalClick = (event: MouseEvent) => {
@@ -561,6 +665,64 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     }
   })();
 
+  const keptCorrect = new Set<number>();
+
+  function refreshMeta() {
+    const activeHits = shadow.querySelectorAll<HTMLButtonElement>('.option-hit');
+    const pageLabel = `${pageElements.size} ${pageElements.size === 1 ? 'page' : 'pages'}`;
+    const choiceLabel = activeHits.length > 0
+      ? `${activeHits.length} answer ${activeHits.length === 1 ? 'choice' : 'choices'}`
+      : 'All questions completed';
+    meta.textContent = `${pageLabel} · ${choiceLabel}`;
+  }
+
+  function attemptSubmit(questionNumber: number) {
+    const btn = submitButtons.get(questionNumber);
+    if (pillQn === questionNumber) paintPill('sending');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Submitting…';
+      delete btn.dataset.failed;
+    }
+    let sent = false;
+    try {
+      sent = options.onSubmit?.(questionNumber) ?? false;
+    } catch {
+      sent = false;
+    }
+    if (!sent) {
+      // The answer never reached Quest: hand control back instead of
+      // leaving a stuck control.
+      if (btn) {
+        btn.disabled = false;
+        btn.dataset.failed = 'true';
+        btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg> Try again`;
+        btn.setAttribute('aria-label', `Submit question ${questionNumber} did not reach Quest. Activate to try again, or switch to Basic View to submit.`);
+      }
+      if (pillQn === questionNumber) paintPill('failed');
+    }
+  }
+
+  function burst(pageEl: HTMLElement) {
+    if (document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+    const colors = ['#f43f5e', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+    const originLeft = 50, originTop = 30;
+    for (let i = 0; i < 24; i++) {
+      const bit = document.createElement('span');
+      bit.className = 'confetti-bit';
+      bit.setAttribute('aria-hidden', 'true');
+      const angle = (i / 24) * Math.PI * 2 + Math.random() * 0.5;
+      const distance = 40 + Math.random() * 70;
+      bit.style.left = `${originLeft}%`;
+      bit.style.top = `${originTop}%`;
+      bit.style.background = colors[i % colors.length];
+      bit.style.setProperty('--dx', `${Math.cos(angle) * distance}px`);
+      bit.style.setProperty('--dy', `${Math.sin(angle) * distance - 30}px`);
+      pageEl.append(bit);
+      setTimeout(() => bit.remove(), 1300);
+    }
+  }
+
   return {
     element,
     ready,
@@ -578,6 +740,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         btn.remove();
         submitButtons.delete(qNum);
       }
+      paintPill(null);
       if (optionValue) {
         const activeHit = shadow.querySelector<HTMLButtonElement>(
           `.option-hit[data-question="${questionNumber}"][data-option="${optionValue}"]`
@@ -593,18 +756,48 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           const topPct = Number.parseFloat(activeHit.style.top) || 0;
           const widthPct = Number.parseFloat(activeHit.style.width) || 0;
           const heightPct = Number.parseFloat(activeHit.style.height) || 0;
-          btn.style.left = `calc(${Math.min(84, leftPct + widthPct)}% + 10px)`;
+          if (leftPct + widthPct > 78) {
+            btn.style.right = '8px';
+          } else {
+            btn.style.left = `calc(${Math.min(84, leftPct + widthPct)}% + 10px)`;
+          }
           btn.style.top = `calc(${topPct + heightPct / 2}% - 14px)`;
           btn.addEventListener('click', (event) => {
             event.stopPropagation();
-            btn.disabled = true;
-            btn.textContent = 'Submitting…';
-            options.onSubmit?.(questionNumber);
+            attemptSubmit(questionNumber);
           });
           activeHit.parentElement.append(btn);
           submitButtons.set(questionNumber, btn);
+          pillQn = questionNumber;
+          paintPill('ask');
         }
       }
+    },
+    markWrong(questionNumber: number, optionValue: string) {
+      if (currentAnswered.has(questionNumber) || keptCorrect.has(questionNumber)) return;
+      const box = shadow.querySelector<HTMLElement>(
+        `.option-hit[data-question="${questionNumber}"][data-option="${optionValue}"]`
+      );
+      box?.classList.add('is-wrong');
+    },
+    celebrate(questionNumber: number, optionValue: string, party: boolean) {
+      const boxes = [...shadow.querySelectorAll<HTMLElement>(`.option-hit[data-question="${questionNumber}"]`)];
+      const target = boxes.find(box => box.dataset.option === optionValue);
+      if (!target) return;
+      keptCorrect.add(questionNumber);
+      for (const box of boxes) {
+        if (box !== target) box.remove();
+      }
+      target.classList.remove('is-wrong');
+      target.classList.add('is-correct');
+      target.setAttribute('aria-pressed', 'true');
+      target.setAttribute('aria-label', `Question ${questionNumber}: option ${optionValue} is correct`);
+      const confirm = submitButtons.get(questionNumber);
+      confirm?.remove();
+      submitButtons.delete(questionNumber);
+      if (pillQn === questionNumber) paintPill(null);
+      refreshMeta();
+      if (party && target.parentElement) burst(target.parentElement);
     },
     setFullscreen(active: boolean) {
       if (active) {
@@ -618,7 +811,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       currentAnswered = new Set(answered);
       for (const button of shadow.querySelectorAll<HTMLButtonElement>('.option-hit')) {
         const q = Number(button.dataset.question);
-        if (currentAnswered.has(q)) {
+        if (currentAnswered.has(q) && !keptCorrect.has(q)) {
           button.remove();
         }
       }
@@ -626,14 +819,10 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         if (currentAnswered.has(qNum)) {
           btn.remove();
           submitButtons.delete(qNum);
+          if (pillQn === qNum) paintPill(null);
         }
       }
-      const activeHits = shadow.querySelectorAll<HTMLButtonElement>('.option-hit');
-      const pageLabel = `${pageElements.size} ${pageElements.size === 1 ? 'page' : 'pages'}`;
-      const choiceLabel = activeHits.length > 0
-        ? `${activeHits.length} answer ${activeHits.length === 1 ? 'choice' : 'choices'}`
-        : 'All questions completed';
-      meta.textContent = `${pageLabel} · ${choiceLabel}`;
+      refreshMeta();
     },
     dispose() {
       if (disposed) return;

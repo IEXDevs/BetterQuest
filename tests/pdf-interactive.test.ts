@@ -177,7 +177,7 @@ test('interactive PDF floating submit button invokes onSubmit with the chosen qu
     url: '/student/images/download_pdf?instance=courseuserassignment_1',
     optionMaximums: new Map([[1, 2]]),
     onChoose: () => {},
-    onSubmit: (qNum) => submittedQuestions.push(qNum),
+    onSubmit: (qNum) => { submittedQuestions.push(qNum); return true; },
     openDocument: async () => ({
       pageCount: 1,
       renderPage: async () => ({
@@ -194,6 +194,110 @@ test('interactive PDF floating submit button invokes onSubmit with the chosen qu
     assert.ok(submitBtn);
     submitBtn.click();
     assert.deepEqual(submittedQuestions, [1]);
+    assert.equal(submitBtn.disabled, true, 'Successful submit keeps the control busy');
+    assert.match(submitBtn.textContent || '', /Submitting/);
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('interactive PDF failed submit restores the confirm control for retry', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    onSubmit: () => false,
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    viewer.setSelected(1, '1');
+    const submitBtn = viewer.element.shadowRoot!.querySelector<HTMLButtonElement>('.pdf-submit-btn')!;
+    assert.ok(submitBtn);
+    submitBtn.click();
+    assert.equal(submitBtn.disabled, false, 'Failed submit must hand control back');
+    assert.equal(submitBtn.dataset.failed, 'true');
+    assert.match(submitBtn.getAttribute('aria-label') || '', /did not reach Quest/);
+    assert.ok(viewer.element.shadowRoot!.querySelector('.pdf-submit-btn'), 'Confirm must remain for retry');
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('interactive PDF toolbar pill submits the selected question', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const submitted: number[] = [];
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    onSubmit: (qNum) => { submitted.push(qNum); return true; },
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    const pill = viewer.element.shadowRoot!.querySelector<HTMLButtonElement>('.submit-pill')!;
+    assert.equal(pill.hidden, true, 'No pill before a selection');
+    viewer.setSelected(1, '2');
+    assert.equal(pill.hidden, false, 'Pill appears with the selection in every view mode');
+    assert.match(pill.textContent || '', /Q1/);
+    pill.click();
+    assert.deepEqual(submitted, [1], 'Toolbar pill submits the selected question');
+    assert.equal(pill.disabled, true);
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('interactive PDF marks wrong answers and celebrates correct ones', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 3]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160), textRun('3.', 220)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    viewer.markWrong(1, '2');
+    const wrongBox = viewer.element.shadowRoot!.querySelector<HTMLElement>('.option-hit[data-option="2"]')!;
+    assert.ok(wrongBox.classList.contains('is-wrong'), 'Wrong answer gets struck through with an X');
+
+    viewer.celebrate(1, '1', true);
+    const boxes = viewer.element.shadowRoot!.querySelectorAll<HTMLElement>('.option-hit[data-question="1"]');
+    assert.equal(boxes.length, 1, 'Other options disappear once answered correctly');
+    assert.ok(boxes[0].classList.contains('is-correct'), 'Correct answer is highlighted green');
+    assert.ok(!boxes[0].classList.contains('is-wrong'));
+    assert.ok(viewer.element.shadowRoot!.querySelectorAll('.confetti-bit').length > 0, 'Correct answer bursts confetti');
+    assert.match(viewer.element.shadowRoot!.querySelector('.meta')!.textContent!, /1 answer choice/, 'Kept correct answer stays counted');
   } finally {
     viewer.dispose();
     dom.window.close();

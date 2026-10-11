@@ -23,7 +23,7 @@ function mount(dom: JSDOM) {
     const element = doc.createElement('section');
     element.dataset.betterquest = 'interactive-pdf';
     container.append(element);
-    return { element, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {}, dispose() { element.remove(); } };
+    return { element, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {}, markWrong() {}, celebrate() {}, dispose() { element.remove(); } };
   } });
   workspace.reconcile();
   return { root, workspace, rail: () => doc.querySelector('[data-betterquest="assessment-rail"]')!.shadowRoot! };
@@ -181,6 +181,81 @@ test('betterquest view shows info only while basic view shows answer panels with
     assert.match(css, /due-row\][^{]*\{[^}]*grid-row:1/, 'Due row must sit in the top grid row in basic view');
     const railCss = rail().querySelector('style')!.textContent!;
     assert.match(railCss, /max-height:calc\(100vh - 88px\)/, 'Sidebar must fit the viewport height');
+  } finally { workspace.dispose(); dom.window.close(); }
+});
+
+test('submit targets the real response button, never the history toggle', () => {
+  const dom = new JSDOM('<main id="main-content"><div id="target">' +
+    '<p id="due">Due date 10/14/26 11:59 PM</p>' +
+    '<div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF" src="/student/images/problem_pdf?instance=courseuserassignment_1"></iframe></div></div>' +
+    '<div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody>' +
+    '<tr data-id="cuaip_1"><td>1.</td><td><select name="response"><option value=""></option><option value="1">1</option><option value="2">2</option></select></td><td class="status"></td>' +
+    '<td class="previous"><button type="button" aria-label="Toggle response history"><span>0 / 4</span></button></td><td class="correct"></td>' +
+    '<td><button type="button" aria-label="Submit response">Submit</button></td></tr>' +
+    '</tbody></table></div></div></main>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
+  const doc = dom.window.document;
+  const { workspace, rail } = mount(dom);
+  try {
+    let historyClicked = false, realClicked = false;
+    doc.querySelector('[aria-label="Toggle response history"]')!.addEventListener('click', () => { historyClicked = true; });
+    doc.querySelector('[aria-label="Submit response"]')!.addEventListener('click', () => { realClicked = true; });
+    rail().querySelector<HTMLButtonElement>('[data-value="2"]')!.click();
+    rail().querySelector<HTMLButtonElement>('.submit')!.click();
+    assert.equal(realClicked, true, 'Submit must reach the real response button');
+    assert.equal(historyClicked, false, 'History toggle must never receive the submit');
+  } finally { workspace.dispose(); dom.window.close(); }
+});
+
+test('a reflected wrong submit strikes through the answer on the PDF', () => {
+  const dom = homework();
+  const doc = dom.window.document;
+  const root = doc.querySelector<HTMLElement>('#target')!;
+  const wrongCalls: Array<[number, string]> = [];
+  const workspace = createPdfAssessmentWorkspace(root, { createPdfViewer: container => {
+    const element = doc.createElement('section');
+    element.dataset.betterquest = 'interactive-pdf';
+    container.append(element);
+    return { element, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {},
+      markWrong(qn: number, opt: string) { wrongCalls.push([qn, opt]); },
+      celebrate() {}, dispose() { element.remove(); } };
+  } });
+  workspace.reconcile();
+  try {
+    const rail = doc.querySelector('[data-betterquest="assessment-rail"]')!.shadowRoot!;
+    rail.querySelector<HTMLButtonElement>('[data-value="2"]')!.click();
+    let nativeSubmits = 0;
+    doc.querySelector('button[aria-label="Submit response"]')!.addEventListener('click', () => { nativeSubmits++; });
+    rail.querySelector<HTMLButtonElement>('.submit')!.click();
+    assert.equal(nativeSubmits, 1);
+    doc.querySelector('.previous')!.textContent = '2 / 3';
+    workspace.reconcile();
+    assert.deepEqual(wrongCalls, [[1, '2']], 'Reflected wrong attempt must strike through the PDF answer');
+  } finally { workspace.dispose(); dom.window.close(); }
+});
+
+test('a natively correct answer is celebrated on the PDF without confetti', async () => {
+  const dom = new JSDOM('<main id="main-content"><div id="target">' +
+    '<p id="due">Due date 10/14/26 11:59 PM</p>' +
+    '<div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF" src="/student/images/problem_pdf?instance=courseuserassignment_1"></iframe></div></div>' +
+    '<div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody>' +
+    '<tr data-id="cuaip_1"><td>1.</td><td><select name="response" disabled><option value=""></option><option value="3" selected>3</option></select></td>' +
+    '<td class="status"><span class="text-success">Correct</span></td><td class="previous">1 / 3</td><td><button type="button" aria-label="Submit response">Submit</button></td></tr>' +
+    '</tbody></table></div></div></main>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
+  const doc = dom.window.document;
+  const root = doc.querySelector<HTMLElement>('#target')!;
+  const celebrateCalls: Array<[number, string, boolean]> = [];
+  const workspace = createPdfAssessmentWorkspace(root, { createPdfViewer: container => {
+    const element = doc.createElement('section');
+    element.dataset.betterquest = 'interactive-pdf';
+    container.append(element);
+    return { element, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {}, markWrong() {},
+      celebrate(qn: number, opt: string, party: boolean) { celebrateCalls.push([qn, opt, party]); },
+      dispose() { element.remove(); } };
+  } });
+  workspace.reconcile();
+  try {
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(celebrateCalls, [[1, '3', false]], 'Correct answers get highlighted without replaying confetti on load');
   } finally { workspace.dispose(); dom.window.close(); }
 });
 

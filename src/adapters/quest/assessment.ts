@@ -322,7 +322,12 @@ export function readAssessmentResponses(table: HTMLTableElement): AssessmentResp
     if (!isElementVisible(row)) continue;
 
     const select = row.querySelector<HTMLSelectElement>('select[name="response"], select[aria-label="Select your response"], select');
-    const rowSubmit = row.querySelector<HTMLButtonElement>('button[aria-label="Submit response"], button[type="submit"], input[type="submit"], button, input[value*="Submit" i]');
+    // Never match per-row history toggles or other non-submit buttons: only
+    // explicit submit controls qualify, and anything history-related is out.
+    const submitCandidates = [...row.querySelectorAll<HTMLButtonElement>(
+      'button[aria-label="Submit response"], button[type="submit"], input[type="submit"], input[value*="Submit" i]',
+    )];
+    const rowSubmit = submitCandidates.find(el => !/history/i.test(el.getAttribute('aria-label') || el.textContent || '')) || null;
     const submit = rowSubmit ||
       table.querySelector<HTMLButtonElement>('button[type="submit"], input[type="submit"]') ||
       table.closest('form')?.querySelector<HTMLButtonElement>('button[type="submit"], input[type="submit"], input[value*="Submit" i], button[value*="Submit" i]') ||
