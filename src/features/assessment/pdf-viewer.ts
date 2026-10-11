@@ -1,4 +1,4 @@
-import { mapPdfOptionLabels, parseQuestionBoundary, clean, type PdfOptionTarget, type PdfTextRun } from '../../adapters/quest/assessment';
+import { mapPdfOptionLabels, parseQuestionBoundary, extractQuestionPoints, clean, type PdfOptionTarget, type PdfTextRun } from '../../adapters/quest/assessment';
 
 export interface InteractivePdfPage {
   width: number;
@@ -20,6 +20,7 @@ export interface InteractivePdfOptions {
   answeredQuestions?: ReadonlySet<number>;
   onChoose: (questionNumber: number, optionValue: number) => void;
   onSubmit?: (questionNumber: number) => boolean;
+  onPoints?: (points: ReadonlyMap<number, number>) => void;
   openDocument?: OpenInteractivePdf;
 }
 
@@ -176,8 +177,8 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       width:100%!important;
       max-width:100%!important;
       min-width:100%!important;
-      height:calc(100vh - 104px)!important;
-      min-height:760px!important;
+      height:100%!important;
+      min-height:0!important;
       background:var(--bq-raised,#eef3f6);
       color:var(--bq-text,#18253a);
       font:13px/1.4 ui-rounded,"Avenir Next",sans-serif;
@@ -492,7 +493,21 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   const submitButtons = new Map<number, HTMLButtonElement>();
   let source: InteractivePdfDocument | undefined;
   let disposed = false;
-  let zoomLevel = 1;
+  const ZOOM_KEY = 'betterquest_pdf_zoom';
+  const readZoom = (): number => {
+    try {
+      const raw = document.defaultView?.localStorage?.getItem(ZOOM_KEY);
+      if (raw !== null && raw !== undefined) {
+        const value = Number(raw);
+        if (Number.isFinite(value)) return Math.min(2.5, Math.max(0.1, value));
+      }
+    } catch { /* private mode etc: fall through to default */ }
+    return 1;
+  };
+  const writeZoom = (value: number) => {
+    try { document.defaultView?.localStorage?.setItem(ZOOM_KEY, String(value)); } catch { /* zoom still applies for this session */ }
+  };
+  let zoomLevel = readZoom();
   let fitScale = 1;
   let currentAnswered = new Set<number>(options.answeredQuestions ?? []);
 
@@ -540,8 +555,8 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     paintZoom();
   }
 
-  zoomOut.addEventListener('click', () => { zoomLevel = Math.max(.1, zoomLevel - .1); paintZoom(); });
-  zoomIn.addEventListener('click', () => { zoomLevel = Math.min(2.5, zoomLevel + .1); paintZoom(); });
+  zoomOut.addEventListener('click', () => { zoomLevel = Math.max(.1, zoomLevel - .1); writeZoom(zoomLevel); paintZoom(); });
+  zoomIn.addEventListener('click', () => { zoomLevel = Math.min(2.5, zoomLevel + .1); writeZoom(zoomLevel); paintZoom(); });
   document.defaultView?.addEventListener('resize', fitPagesToViewer);
   const ResizeObserverCtor = document.defaultView?.ResizeObserver;
   const resizeObserver = ResizeObserverCtor ? new ResizeObserverCtor(() => fitPagesToViewer()) : undefined;
@@ -563,6 +578,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       }
       fitPagesToViewer();
       const targets = mapPdfOptionLabels(runs, options.optionMaximums);
+      try {
+        options.onPoints?.(extractQuestionPoints(runs));
+      } catch { /* points are a bonus; never break choice mapping */ }
 
       // Ensure boxes for ALL answers possible for every unanswered question
       for (const [qNum, max] of options.optionMaximums.entries()) {
@@ -716,7 +734,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         btn.disabled = false;
         btn.dataset.failed = 'true';
         btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg> Try again`;
-        btn.setAttribute('aria-label', `Submit question ${questionNumber} did not reach Quest. Activate to try again, or switch to Basic View to submit.`);
+        btn.setAttribute('aria-label', `Submit question ${questionNumber} did not reach Quest. Activate to try again, or answer from the sidebar.`);
       }
       if (pillQn === questionNumber) paintPill('failed');
     }

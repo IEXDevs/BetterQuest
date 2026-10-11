@@ -367,6 +367,48 @@ test('interactive PDF image answers get full-territory boxes', async () => {
   }
 });
 
+test('interactive PDF zoom persists across viewer sessions', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div><div id="mount2"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  dom.window.localStorage.setItem('betterquest_pdf_zoom', '2.5');
+  const openDocument = async () => ({
+    pageCount: 1,
+    renderPage: async () => ({
+      width: 600, height: 800,
+      runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+    }),
+    destroy: () => {},
+  });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument,
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    assert.match(viewer.element.shadowRoot!.querySelector('output')!.textContent || '', /250%/, 'Restores the saved zoom');
+    viewer.element.shadowRoot!.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
+    assert.equal(dom.window.localStorage.getItem('betterquest_pdf_zoom'), '2.4');
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('PDF points extraction reads per-question points possible', async () => {
+  const { extractQuestionPoints } = await import('../src/adapters/quest/assessment');
+  const runs = [
+    textRun('008', 50),
+    textRun('8. CalC3i08s 10 pts possible', 80),
+    textRun('1.', 130),
+    textRun('2.', 190),
+    textRun('009', 260),
+    textRun('9. Something 5 points possible', 290),
+  ];
+  assert.deepEqual([...extractQuestionPoints(runs)], [[8, 10], [9, 5]]);
+});
+
 test('interactive PDF options spanning page breaks are mapped to their respective pages and remain selectable', async () => {
   const module = await import('../src/features/assessment/pdf-viewer');
   const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });

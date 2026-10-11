@@ -19,7 +19,7 @@ import { findPdfAssessment, findSlideAssessment } from '../adapters/quest/assess
 import { createPdfAssessmentWorkspace, createSlideAssessmentEnhancement } from '../features/assessment/workspace';
 import { createAssessmentHeader } from '../features/assessment/header';
 import { createCourseDetailsFacelift, isCourseShowPage } from '../features/courses/details-enhancer';
-import { enhanceCourseReviewTab, findReviewPane } from '../features/courses/review-enhancer';
+import { enhanceCourseReviewTab, findReviewPane, disposeReviewSliders } from '../features/courses/review-enhancer';
 import { execute, subscribeLocal, type Execute } from '../shared/client';
 
 /** Composition point: null adapters create no controls, observers, RPCs, or CSS. */
@@ -115,6 +115,7 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
           enhanceCourseReviewTab(root.ownerDocument);
         },
         dispose: () => {
+          disposeReviewSliders(root.ownerDocument);
           const existing = root.querySelector('[data-betterquest="review-dashboard"]');
           existing?.remove();
           root.querySelectorAll<HTMLElement>('[data-betterquest-review-raw]').forEach(el => {

@@ -146,6 +146,113 @@ export function findReviewPane(document: Document): HTMLElement | null {
     document.querySelector<HTMLElement>('#main-content [data-betterquest-page="review"]');
 }
 
+const REVIEW_SLIDER_STYLES = `
+  #tabs-review .slidecontainer,
+  [data-betterquest-page="review"] .slidecontainer{position:relative;padding-bottom:34px}
+  #tabs-review input[type="range"].bq-slider,
+  [data-betterquest-page="review"] input[type="range"].bq-slider{-webkit-appearance:none;appearance:none;width:100%;height:26px;margin:0;background:transparent;cursor:pointer;--bq-fill:50%}
+  #tabs-review input[type="range"].bq-slider::-webkit-slider-runnable-track,
+  [data-betterquest-page="review"] input[type="range"].bq-slider::-webkit-slider-runnable-track{height:8px;border-radius:999px;background:linear-gradient(to right,var(--bq-accent,#227ab0) var(--bq-fill),var(--bq-raised,#e6ebf0) var(--bq-fill))}
+  #tabs-review input[type="range"].bq-slider::-webkit-slider-thumb,
+  [data-betterquest-page="review"] input[type="range"].bq-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;margin-top:-7px;border-radius:50%;background:#fff;border:3px solid var(--bq-accent,#227ab0);box-shadow:0 2px 8px #10203333;transition:transform .15s ease,box-shadow .15s ease}
+  #tabs-review input[type="range"].bq-slider:active::-webkit-slider-thumb,
+  [data-betterquest-page="review"] input[type="range"].bq-slider:active::-webkit-slider-thumb{transform:scale(1.15);box-shadow:0 0 0 5px color-mix(in srgb,var(--bq-accent,#227ab0) 22%,transparent)}
+  #tabs-review input[type="range"].bq-slider::-moz-range-track,
+  [data-betterquest-page="review"] input[type="range"].bq-slider::-moz-range-track{height:8px;border-radius:999px;background:var(--bq-raised,#e6ebf0)}
+  #tabs-review input[type="range"].bq-slider::-moz-range-progress,
+  [data-betterquest-page="review"] input[type="range"].bq-slider::-moz-range-progress{height:8px;border-radius:999px;background:var(--bq-accent,#227ab0)}
+  #tabs-review input[type="range"].bq-slider::-moz-range-thumb,
+  [data-betterquest-page="review"] input[type="range"].bq-slider::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--bq-accent,#227ab0);box-shadow:0 2px 8px #10203333}
+  #tabs-review input[type="range"].bq-slider:focus-visible,
+  [data-betterquest-page="review"] input[type="range"].bq-slider:focus-visible{outline:2px solid var(--bq-accent,#227ab0);outline-offset:6px;border-radius:999px}
+  #tabs-review .slidecontainer > .thumb,
+  [data-betterquest-page="review"] .slidecontainer > .thumb{display:none!important}
+  #tabs-review .bq-slider-value,
+  [data-betterquest-page="review"] .bq-slider-value{display:block;text-align:center;font-weight:750;font-size:15px;margin:8px 0 0;color:var(--bq-text,#26384a);font-variant-numeric:tabular-nums}
+  @media(prefers-reduced-motion:reduce){
+    #tabs-review input[type="range"].bq-slider::-webkit-slider-thumb,
+    [data-betterquest-page="review"] input[type="range"].bq-slider::-webkit-slider-thumb{transition:none}
+  }
+`;
+
+function ensureSliderStyles(doc: Document) {
+  if (doc.querySelector('[data-betterquest="review-slider-styles"]')) return;
+  const style = doc.createElement('style');
+  style.dataset.betterquest = 'review-slider-styles';
+  style.textContent = REVIEW_SLIDER_STYLES;
+  doc.head.append(style);
+}
+
+function sliderInputAlive(pane: HTMLElement, output: HTMLElement): boolean {
+  const key = output.dataset.sliderFor;
+  if (!key) return false;
+  const doc = pane.ownerDocument;
+  const byId = doc.getElementById(key);
+  if (byId && byId.tagName === 'INPUT' && (byId as HTMLInputElement).type === 'range' && pane.contains(byId)) return true;
+  return Boolean(pane.querySelector(`input[type="range"][name="${key.replace(/"/g, '')}"]`));
+}
+
+function paintSlider(input: HTMLInputElement) {
+  const min = Number(input.min || 0);
+  const max = Number(input.max || 100);
+  const value = Number(input.value);
+  const pct = max > min ? Math.min(100, Math.max(0, (value - min) / (max - min) * 100)) : 0;
+  input.style.setProperty('--bq-fill', `${pct}%`);
+  const key = input.id || input.name;
+  const host = input.closest('.slidecontainer') || input.parentElement;
+  let output = host?.querySelector<HTMLElement>(
+    `:scope > [data-betterquest="slider-value"][data-slider-for="${key}"]`);
+  if (!output && host) {
+    output = input.ownerDocument.createElement('output');
+    output.dataset.betterquest = 'slider-value';
+    output.dataset.sliderFor = key;
+    output.setAttribute('aria-label', `${input.getAttribute('aria-label') || 'Slider'} value`);
+    host.append(output);
+  }
+  if (output) output.textContent = input.value;
+}
+
+export function enhanceReviewSliders(pane: HTMLElement): void {
+  const doc = pane.ownerDocument;
+  ensureSliderStyles(doc);
+  for (const input of pane.querySelectorAll<HTMLInputElement>('input[type="range"]')) {
+    if (input.closest('[data-betterquest="review-dashboard"]')) continue;
+    if (input.dataset.betterquestSlider !== 'true') {
+      input.dataset.betterquestSlider = 'true';
+      input.dataset.betterquestOriginalStep = input.getAttribute('step') || '';
+      // Free values within Quest's min/max instead of snapping between notches.
+      input.setAttribute('step', '1');
+      input.classList.add('bq-slider');
+    }
+    paintSlider(input);
+    if (!input.dataset.betterquestSliderBound) {
+      input.dataset.betterquestSliderBound = 'true';
+      const repaint = () => paintSlider(input);
+      input.addEventListener('input', repaint);
+      input.addEventListener('change', repaint);
+    }
+  }
+  // Drop readouts whose inputs Quest re-rendered away.
+  for (const output of [...pane.querySelectorAll<HTMLElement>('[data-betterquest="slider-value"]')]) {
+    if (!sliderInputAlive(pane, output)) output.remove();
+  }
+}
+
+export function disposeReviewSliders(document: Document): void {
+  document.querySelector('[data-betterquest="review-slider-styles"]')?.remove();
+  for (const input of document.querySelectorAll<HTMLInputElement>('input[type="range"][data-betterquest-slider]')) {
+    const original = input.dataset.betterquestOriginalStep;
+    if (original) input.setAttribute('step', original);
+    else input.removeAttribute('step');
+    input.classList.remove('bq-slider');
+    input.style.removeProperty('--bq-fill');
+    delete input.dataset.betterquestSlider;
+    delete input.dataset.betterquestOriginalStep;
+    delete input.dataset.betterquestSliderBound;
+  }
+  document.querySelectorAll('[data-betterquest="slider-value"]').forEach(el => el.remove());
+}
+
 export function enhanceCourseReviewTab(document: Document): boolean {
   const reviewPane = findReviewPane(document);
 
@@ -166,6 +273,7 @@ export function enhanceCourseReviewTab(document: Document): boolean {
   const signature = JSON.stringify(stats);
   if (existingDashboard?.dataset.stats === signature) {
     hideRawReviewElements(reviewPane, document);
+    enhanceReviewSliders(reviewPane);
     return true;
   }
 
@@ -197,6 +305,7 @@ export function enhanceCourseReviewTab(document: Document): boolean {
     }
   }
 
+  enhanceReviewSliders(reviewPane);
   return true;
 }
 
@@ -227,6 +336,7 @@ export function createCourseReviewObserver(document: Document) {
     dispose() {
       disposed = true;
       observer.disconnect();
+      disposeReviewSliders(document);
       const existing = document.querySelector('[data-betterquest="review-dashboard"]');
       existing?.remove();
       document.querySelectorAll<HTMLElement>('[data-betterquest-review-raw]').forEach(el => {

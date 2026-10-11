@@ -70,6 +70,45 @@ export function parseQuestionBoundary(text: string): number | null {
 }
 
 /**
+ * Points possible per question from headers like "8. CalC3i08s 10 pts
+ * possible". First match wins per question; option text mentioning points is
+ * ignored because headers carry the number up front.
+ */
+export function extractQuestionPoints(runs: PdfTextRun[]): Map<number, number> {
+  const points = new Map<number, number>();
+  let current: number | null = null;
+  let buffer = '';
+  const flush = () => {
+    if (current !== null && !points.has(current)) {
+      const match = buffer.match(/(\d+(?:\.\d+)?)\s*(?:points|pts)\b/i);
+      if (match) points.set(current, Number(match[1]));
+    }
+    buffer = '';
+  };
+  for (const run of runs) {
+    const text = clean(run.text);
+    const boundary = parseQuestionBoundary(text);
+    if (boundary !== null) {
+      flush();
+      current = boundary;
+      continue;
+    }
+    // Headers the boundary parser skips, e.g. "8. CalC3i08s 10 pts possible".
+    const header = text.match(/^0*([1-9]\d{0,2})[.)]?\s[\s\S]{0,40}?(\d+(?:\.\d+)?)\s*(?:points|pts)\b/i);
+    if (header) {
+      flush();
+      current = Number(header[1]);
+      if (!points.has(current)) points.set(current, Number(header[2]));
+      continue;
+    }
+    if (current === null) continue;
+    if (buffer.length < 200) buffer += ' ' + text;
+  }
+  flush();
+  return points;
+}
+
+/**
  * Quest PDFs delimit questions with zero-padded three-digit markers or headers.
  * Within each boundary, accept valid choice sequences 1..N.
  */

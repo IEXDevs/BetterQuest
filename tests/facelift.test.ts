@@ -125,24 +125,12 @@ test('PDF assessment workspace synchronizes answer chips with native controls wi
     features.reconcile(); await pause();
     const host = dom.window.document.querySelector<HTMLElement>('[data-betterquest="assessment-rail"]')!;
     assert.ok(host);
+    assert.equal(host.shadowRoot!.querySelector('.mode-switcher'), null, 'Single unified view has no mode switcher');
     assert.match(host.shadowRoot!.querySelector('.progress-copy')!.textContent!, /1 of 2 submitted/);
-    assert.match(host.shadowRoot!.querySelector('.points')!.textContent!, /40 \/ 200 points/);
+    assert.match(host.shadowRoot!.querySelector('.points')!.textContent!, /40 \/ 200 \(20%\)/);
     assert.equal(host.shadowRoot!.querySelector('.class-avg')!.textContent, 'Not available');
     assert.equal(host.shadowRoot!.querySelector('.std-dev')!.textContent, 'Not available');
-
-    const basicModeBtn = host.shadowRoot!.querySelector<HTMLButtonElement>('.mode-btn[data-mode="basic"]')!;
-    assert.ok(basicModeBtn);
-    assert.equal(basicModeBtn.textContent, 'Basic View');
-    basicModeBtn.click();
-    assert.equal(dom.window.document.querySelector('#target')?.getAttribute('data-betterquest-pdf-mode'), 'basic');
-    assert.equal(host.dataset.layout, 'sidebar');
-
-    const bqModeBtn = host.shadowRoot!.querySelector<HTMLButtonElement>('.mode-btn[data-mode="betterquest"]')!;
-    assert.ok(bqModeBtn);
-    assert.equal(bqModeBtn.textContent, 'BetterQuest View');
-    bqModeBtn.click();
     assert.equal(dom.window.document.querySelector('#target')?.getAttribute('data-betterquest-pdf-mode'), 'betterquest');
-    assert.equal(host.dataset.layout, 'bottom');
 
     const first = host.shadowRoot!.querySelector<HTMLElement>('[data-question-id="cuaip_1"]')!;
     assert.ok(first.querySelector('.question-bottom'), 'Choices and submit must be wrapped in question-bottom for 2-column layout');
@@ -272,8 +260,8 @@ test('PDF assessment workspace mounts when PDF is provided as a problem_pdf link
     const shadow = host.shadowRoot!;
     const fullscreenBtn = shadow.querySelector<HTMLButtonElement>('.fullscreen-btn')!;
     assert.ok(fullscreenBtn, 'Full screen button must exist');
-    assert.match(shadow.querySelector('.points')!.textContent!, /0 out of 200 points|0 \/ 200 points/);
-    assert.match(shadow.querySelector('.class-avg')!.textContent!, /85.08 points \/ 42.54%/);
+    assert.match(shadow.querySelector('.points')!.textContent!, /0 \/ 200 \(0%\)/);
+    assert.match(shadow.querySelector('.class-avg')!.textContent!, /85\.08 \/ 42\.54%/);
     assert.match(shadow.querySelector('.std-dev')!.textContent!, /68.65/);
     const pdfFrame = dom.window.document.querySelector<HTMLElement>('#pdf-frame');
     assert.ok(pdfFrame, 'Synthesized PDF frame must be injected');
@@ -366,6 +354,98 @@ test('slide submit readiness ignores BetterQuest-managed hiding', () => {
   btn.disabled = true;
   assert.equal(isSlideSubmitRevealed(btn), false, 'Disabled submit still counts');
   dom.window.close();
+});
+
+test('slide option states cross-fade together without sticky touch hover', () => {
+  const dom = new JSDOM(`<html><head></head><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target"><div id="presentation-div">
+    <div class="instanceitempart" id="part-one"><div class="bg-light"><input id="one" type="radio" name="response_one" value="1"><label class="custom-control-label" for="one">One</label></div><button class="submit-btn">Submit one</button></div>
+  </div></div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/administer?instance=courseuserassignment_1', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store(); const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile();
+    const css = dom.window.document.querySelector('[data-betterquest="assessment-style"]')!.textContent!;
+    assert.match(css, /background-color \.18s ease/, 'Deselect must fade together instead of flashing');
+    assert.match(css, /@media\(hover:hover\) and \(pointer:fine\)/, 'Hover must not stick on touch screens');
+    assert.match(css, /linear-gradient\(135deg,#eef2ff/, 'Selected option gets a distinctive fill');
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('slides announce wrong and correct verdicts on the picked option', async () => {
+  const dom = new JSDOM(`<html><head></head><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target"><div id="presentation-div">
+    <div class="instanceitempart" id="part-one"><div class="bg-light">
+      <div class="custom-control custom-radio instanceitempart-choice"><div class="d-flex justify-content-start"><input id="one" type="radio" name="response_one" value="1"><label class="custom-control-label" for="one">One</label></div></div>
+      <div class="custom-control custom-radio instanceitempart-choice"><div class="d-flex justify-content-start"><input id="two" type="radio" name="response_one" value="2"><label class="custom-control-label" for="two">Two</label></div></div>
+    </div>
+    <div class="row instanceitempart-feedback"><div class="text-center feedback d-none" role="status" aria-live="polite"><i class="feedback_img feedback_img_wrong d-none material-icons text-danger">clear</i><i class="feedback_img feedback_img_right d-none material-icons text-success">check</i><span class="feedback_msg"></span></div></div>
+    <div class="row instanceitempart-controls"><button class="submit-btn">Submit</button></div></div>
+  </div></div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/administer?instance=courseuserassignment_1', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store(); const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    const doc = dom.window.document;
+    const part = doc.querySelector<HTMLElement>('#part-one')!;
+    const radio = doc.querySelector<HTMLInputElement>('#two')!;
+    radio.checked = true;
+    radio.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    await pause();
+    assert.equal(part.hasAttribute('data-betterquest-verdict'), false, 'No verdict before Quest responds');
+    const feedback = part.querySelector<HTMLElement>('.feedback')!;
+    const wrongIcon = part.querySelector<HTMLElement>('.feedback_img_wrong')!;
+    const rightIcon = part.querySelector<HTMLElement>('.feedback_img_right')!;
+    feedback.classList.remove('d-none');
+    wrongIcon.classList.remove('d-none');
+    part.querySelector('.feedback_msg')!.textContent = 'Incorrect';
+    await pause();
+    assert.equal(part.dataset.betterquestVerdict, 'wrong');
+    assert.equal(doc.querySelectorAll('.bq-slide-verdict').length, 1);
+    assert.match(doc.querySelector('.bq-slide-verdict')!.textContent || '', /Incorrect/);
+    wrongIcon.classList.add('d-none');
+    rightIcon.classList.remove('d-none');
+    part.querySelector('.feedback_msg')!.textContent = 'Correct';
+    await pause();
+    assert.equal(part.dataset.betterquestVerdict, 'correct');
+    assert.equal(doc.querySelectorAll('.bq-slide-verdict').length, 1, 'Only one verdict shows at a time');
+    assert.match(doc.querySelector('.bq-slide-verdict')!.textContent || '', /Correct/);
+    feedback.classList.add('d-none');
+    await pause();
+    assert.equal(part.hasAttribute('data-betterquest-verdict'), false, 'Verdict clears with the feedback');
+    const css = doc.querySelector('[data-betterquest="assessment-style"]')!.textContent!;
+    assert.match(css, /data-betterquest-verdict="correct"/, 'Correct answers get a checkmark style');
+    assert.match(css, /data-betterquest-verdict="wrong"/, 'Wrong answers get strikethrough and X styles');
+    assert.match(css, /bq-correct-pop/, 'Correct answers pop');
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('slides show assignment metrics under each question when available', async () => {
+  const dom = new JSDOM(`<html><head></head><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target"><div id="presentation-div">
+    <div class="instanceitempart" id="part-one"><div class="bg-light"><input id="one" type="radio" name="response_one" value="1"><label class="custom-control-label" for="one">One</label></div><button class="submit-btn">Submit one</button></div>
+  </div><p>Class Average 84.69 points</p><p>Standard Deviation 65.97</p></div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/administer?instance=courseuserassignment_1', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store(); const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    const bar = dom.window.document.querySelector<HTMLElement>('#part-one > .bq-slide-metrics');
+    assert.ok(bar, 'Metrics strip appears under the question');
+    assert.match(bar!.textContent || '', /Class Average/);
+    assert.match(bar!.textContent || '', /84\.69/);
+    assert.doesNotMatch(bar!.textContent || '', /Your Score/, 'Unavailable metrics stay out');
+    features.dispose();
+    assert.equal(dom.window.document.querySelector('.bq-slide-metrics'), null, 'Dispose removes the strip');
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('slides skip the metrics strip when Quest exposes nothing', async () => {
+  const dom = new JSDOM(`<html><head></head><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target"><div id="presentation-div">
+    <div class="instanceitempart" id="part-one"><div class="bg-light"><input id="one" type="radio" name="response_one" value="1"><label class="custom-control-label" for="one">One</label></div><button class="submit-btn">Submit one</button></div>
+  </div></div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/administer?instance=courseuserassignment_1', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store(); const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    assert.equal(dom.window.document.querySelector('.bq-slide-metrics'), null, 'No strip of unavailable metrics');
+  } finally { features.dispose(); dom.window.close(); }
 });
 
 test('slides move the submit beside the selected option', async () => {
@@ -941,7 +1021,7 @@ test('PDF workspace hides choice selectors for answered questions and renders al
   }
 });
 
-test('PDF workspace shows strictly one type of PDF depending on view mode and toggles without stacking', async () => {
+test('PDF workspace always shows the interactive PDF and never the native frame', async () => {
   const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target">
     <div id="pdf-frame"><div id="presentation-pdf-frame"><iframe src="/student/images/download_pdf?instance=courseuserassignment_1" title="Assignment PDF"></iframe></div></div>
     <div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody>
@@ -967,39 +1047,17 @@ test('PDF workspace shows strictly one type of PDF depending on view mode and to
     const iframe = dom.window.document.querySelector<HTMLIFrameElement>('#presentation-pdf-frame iframe')!;
     const bqViewer = pdfFrame.querySelector<HTMLElement>('[data-betterquest="interactive-pdf"]');
 
-    // 1. In default BetterQuest View: native iframe and presentation frame are strictly hidden
-    assert.equal(pres.hidden, true, 'Native presentation frame must be hidden in BetterQuest view');
-    assert.equal(iframe.hidden, true, 'Native iframe must be hidden in BetterQuest view');
+    // Native iframe and presentation frame stay hidden; there is no other view.
+    assert.equal(host.shadowRoot!.querySelector('.mode-switcher'), null, 'No view switcher in the unified view');
+    assert.equal(pres.hidden, true, 'Native presentation frame must stay hidden');
+    assert.equal(iframe.hidden, true, 'Native iframe must stay hidden');
     assert.equal(pres.style.display, 'none');
     assert.equal(iframe.style.display, 'none');
     if (bqViewer) {
-      assert.equal(bqViewer.hidden, false, 'BetterQuest interactive viewer must be visible');
+      assert.equal(bqViewer.hidden, false, 'Interactive viewer must be visible');
       assert.equal(bqViewer.style.display, 'block');
     }
-
-    // 2. Switch to Basic View: native frame is visible, BetterQuest viewer is strictly hidden
-    const basicBtn = host.shadowRoot!.querySelector<HTMLButtonElement>('.mode-btn[data-mode="basic"]')!;
-    basicBtn.click();
-    assert.equal(pres.hidden, false, 'Native presentation frame must be visible in Basic view');
-    assert.equal(iframe.hidden, false, 'Native iframe must be visible in Basic view');
-    assert.equal(pres.style.display, '');
-    assert.equal(iframe.style.display, '');
-    if (bqViewer) {
-      assert.equal(bqViewer.hidden, true, 'BetterQuest viewer must be hidden in Basic view');
-      assert.equal(bqViewer.style.display, 'none');
-    }
-
-    // 3. Switch back to BetterQuest View: native frame is hidden again, BetterQuest viewer is visible
-    const bqBtn = host.shadowRoot!.querySelector<HTMLButtonElement>('.mode-btn[data-mode="betterquest"]')!;
-    bqBtn.click();
-    assert.equal(pres.hidden, true, 'Native presentation frame must be hidden when switching back');
-    assert.equal(iframe.hidden, true, 'Native iframe must be hidden when switching back');
-    assert.equal(pres.style.display, 'none');
-    assert.equal(iframe.style.display, 'none');
-    if (bqViewer) {
-      assert.equal(bqViewer.hidden, false);
-      assert.equal(bqViewer.style.display, 'block');
-    }
+    assert.equal(dom.window.document.querySelector('#target')?.getAttribute('data-betterquest-pdf-mode'), 'betterquest');
   } finally {
     features.dispose();
     dom.window.close();
