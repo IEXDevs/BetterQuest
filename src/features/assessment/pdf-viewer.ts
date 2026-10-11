@@ -421,6 +421,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   };
   const handleFsChange = () => {
     syncFs();
+    fitPagesToViewer();
     const boxes = shadow.querySelectorAll('.option-hit').length;
     console.info(`[BetterQuest] Fullscreen changed. Answer boxes on PDF: ${boxes}.`);
   };
@@ -452,6 +453,8 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         syncFs();
       }
     }
+    // The fallback attribute path fires no fullscreenchange, so refit here.
+    fitPagesToViewer();
   });
   const zoom = document.createElement('div'); zoom.className = 'zoom';
   const zoomOut = document.createElement('button'); zoomOut.type = 'button'; zoomOut.textContent = '−'; zoomOut.setAttribute('aria-label', 'Zoom out');

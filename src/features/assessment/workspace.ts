@@ -271,14 +271,17 @@ function installStyles(document: Document) {
       border-radius:0!important;
       background:#0f172a!important;
     }
-    :fullscreen :is([data-betterquest-pdf-mode="betterquest"], [data-betterquest-pdf-mode="new"]) #presentation-pdf-frame,
-    [data-betterquest-fullscreen="true"] :is([data-betterquest-pdf-mode="betterquest"], [data-betterquest-pdf-mode="new"]) #presentation-pdf-frame,
-    :fullscreen :is([data-betterquest-pdf-mode="betterquest"], [data-betterquest-pdf-mode="new"]) iframe,
-    [data-betterquest-fullscreen="true"] :is([data-betterquest-pdf-mode="betterquest"], [data-betterquest-pdf-mode="new"]) iframe,
-    :fullscreen #pdf-frame[data-betterquest-pdf-mode="betterquest"] #presentation-pdf-frame,
-    [data-betterquest-fullscreen="true"] #pdf-frame[data-betterquest-pdf-mode="betterquest"] #presentation-pdf-frame,
-    :fullscreen #pdf-frame[data-betterquest-pdf-mode="betterquest"] iframe,
-    [data-betterquest-fullscreen="true"] #pdf-frame[data-betterquest-pdf-mode="betterquest"] iframe{
+    /* In fullscreen, ONLY the interactive viewer may live inside #pdf-frame.
+       Quest re-seeds its native PDF frame at any time, and a re-seeded frame
+       sized to the viewport would swallow every tap — so every sibling of the
+       interactive viewer is hidden outright, regardless of which frame Quest
+       last rendered. */
+    :fullscreen[data-betterquest-pdf-mode="betterquest"] > :not([data-betterquest="interactive-pdf"]),
+    :fullscreen[data-betterquest-pdf-mode="new"] > :not([data-betterquest="interactive-pdf"]),
+    #pdf-frame[data-betterquest-pdf-mode="betterquest"]:fullscreen > :not([data-betterquest="interactive-pdf"]),
+    #pdf-frame[data-betterquest-pdf-mode="new"]:fullscreen > :not([data-betterquest="interactive-pdf"]),
+    [data-betterquest-fullscreen="true"] #pdf-frame[data-betterquest-pdf-mode="betterquest"] > :not([data-betterquest="interactive-pdf"]),
+    [data-betterquest-fullscreen="true"] #pdf-frame[data-betterquest-pdf-mode="new"] > :not([data-betterquest="interactive-pdf"]){
       display:none!important;
     }
     :fullscreen :is([data-betterquest-pdf-mode="basic"], [data-betterquest-pdf-mode="old"]) [data-betterquest="interactive-pdf"],
@@ -322,7 +325,7 @@ function installStyles(document: Document) {
     #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart :where(p,span,label,h1,h2,h3,h4,h5,h6,mjx-container,.MathJax,.MathJax_Display){color:#18253a!important}
     #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart :where(img,svg,canvas){filter:none!important;mix-blend-mode:normal!important;opacity:1;color-scheme:light}
     #presentation-div[data-betterquest-slide="enhanced"] .custom-control{margin:4px 0}
-    #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart .d-flex > .submit-btn{margin-left:auto;align-self:center;flex-shrink:0}
+    #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart .d-flex > .submit-btn{margin-left:12px;align-self:center;flex-shrink:0}
     #presentation-div[data-betterquest-slide="enhanced"] .bq-slide-metrics{display:flex;flex-wrap:wrap;gap:6px 16px;margin:12px 0 4px;padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;font-size:12px;line-height:1.4;color:#475569}
     #presentation-div[data-betterquest-slide="enhanced"] .bq-slide-metrics strong{color:#0f172a;font-weight:750}
     #presentation-div[data-betterquest-slide="enhanced"] .custom-control-label{display:block!important;min-height:48px;padding:11px 15px 11px 42px!important;border:1px solid #d9d4c9;border-radius:8px;color:#18253a!important;background:#fff;cursor:pointer;transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease,background-color .18s ease}
@@ -334,6 +337,7 @@ function installStyles(document: Document) {
     #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart .submit-btn{opacity:0;visibility:hidden;pointer-events:none;transform:translateX(-8px);transition:opacity .18s ease,transform .18s ease}
     #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart[data-betterquest-question-ready="true"] .submit-btn{opacity:1;visibility:visible;pointer-events:auto;transform:none}
     #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart[data-betterquest-verdict="correct"] .custom-control-input:checked + .custom-control-label{border-color:#16a34a;background:linear-gradient(135deg,#f0fdf4 0%,#ecfdf5 100%);box-shadow:0 0 0 3px #16a34a33,0 4px 14px rgba(22,163,74,.15)}
+    #main-content #question-bar-div .questionBar{background:none!important;background-color:transparent!important;height:auto!important;min-height:0!important;color:var(--bq-text,#0f172a)!important;font-weight:800!important}
     #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart[data-betterquest-verdict="wrong"] .custom-control-input:checked + .custom-control-label{border-color:#dc2626;background:linear-gradient(135deg,#fef2f2 0%,#fff5f5 100%);box-shadow:0 0 0 3px #dc262626;text-decoration:line-through}
     .bq-slide-verdict{position:fixed;top:76px;left:50%;transform:translateX(-50%);z-index:999999;display:flex;align-items:center;gap:8px;padding:8px 16px;border-radius:999px;font:750 13px/1.2 ui-rounded,"Avenir Next",sans-serif;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.3);animation:bq-verdict-in .2s ease-out}
     .bq-slide-verdict[data-verdict="correct"]{background:#16a34a;color:#fff}
@@ -626,6 +630,10 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     } else {
       root.dataset.betterquestFullscreen = 'true';
       document.documentElement.dataset.betterquestFullscreen = 'true';
+      // Quest can re-seed its native PDF frame at any moment; a re-seeded
+      // frame would cover the interactive viewer in fullscreen, so re-hide
+      // it once the layout has settled.
+      if (pdfViewer && pdfViewerReady !== false) syncPdfVisibility(true);
     }
     updateFsBtn();
     pdfViewer?.setFullscreen?.(isFs);

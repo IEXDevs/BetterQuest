@@ -286,6 +286,11 @@ test('PDF assessment workspace mounts when PDF is provided as a problem_pdf link
     fullscreenBtn.click();
     assert.equal(targetEl?.getAttribute('data-betterquest-fullscreen'), 'true');
     assert.match(fullscreenBtn.textContent!, /Exit full screen/);
+    const css = dom.window.document.querySelector('[data-betterquest="assessment-style"]')!.textContent || '';
+    assert.match(css, /#pdf-frame\[data-betterquest-pdf-mode="betterquest"\]:fullscreen > :not\(\[data-betterquest="interactive-pdf"\]\)/,
+      'Fullscreen hides every non-interactive sibling so a re-seeded native frame cannot swallow taps');
+    assert.match(css, /\[data-betterquest-fullscreen="true"\] #pdf-frame\[data-betterquest-pdf-mode="betterquest"\] > :not\(\[data-betterquest="interactive-pdf"\]\)/,
+      'The attribute fallback hides those siblings too');
 
     // Press Escape to exit fullscreen
     dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -368,6 +373,8 @@ test('slide option states cross-fade together without sticky touch hover', () =>
     assert.match(css, /background-color \.18s ease/, 'Deselect must fade together instead of flashing');
     assert.match(css, /@media\(hover:hover\) and \(pointer:fine\)/, 'Hover must not stick on touch screens');
     assert.match(css, /linear-gradient\(135deg,#eef2ff/, 'Selected option gets a distinctive fill');
+    assert.match(css, /#question-bar-div \.questionBar\{[^}]*background-color:transparent/, 'Question header drops the grey panel');
+    assert.match(css, /#question-bar-div \.questionBar\{[^}]*font-weight:800/, 'Question header reads thicker');
   } finally { features.dispose(); dom.window.close(); }
 });
 
@@ -468,6 +475,10 @@ test('slides move the submit beside the selected option', async () => {
     await pause();
     const option = radio.closest<HTMLElement>('.custom-control')!;
     assert.ok(option.contains(submit), 'Submit moves beside the selected option');
+    const row = option.querySelector<HTMLElement>('.d-flex')!;
+    assert.equal(submit.parentElement, row, 'Submit sits in the option row, directly beside the answer');
+    const css = dom.window.document.querySelector('[data-betterquest="assessment-style"]')!.textContent || '';
+    assert.match(css, /\.d-flex > \.submit-btn\{[^}]*margin-left:12px/, 'Submit hugs the answer box instead of drifting to the far edge');
     features.dispose();
     assert.equal(submit.parentElement, controls, 'Dispose restores the native position');
   } finally { features.dispose(); dom.window.close(); }
