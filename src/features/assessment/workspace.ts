@@ -434,13 +434,20 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     .metric-value.points{color:var(--bq-assessment-accent)}
     .progress-wrap{margin-top:10px}
     .progress-copy{margin:0;color:var(--bq-assessment-muted);font-size:12px}
-    .meter{height:6px;margin-top:8px;overflow:hidden;border-radius:4px;background:var(--bq-raised,#eef3f6)}
-    .meter span{display:block;height:100%;width:var(--progress);border-radius:inherit;background:#2563eb;transition:width .25s ease}
+    .meter{height:6px;margin-top:8px;overflow:hidden;border-radius:4px;background:var(--bq-raised,#eef3f6);position:relative}
+    .meter span{display:block;height:100%;width:var(--progress);border-radius:inherit;background:linear-gradient(90deg,#2563eb,#60a5fa,#2563eb);background-size:200% 100%;animation:bq-flow 3s linear infinite;transition:width .25s ease}
+    .meter span::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 20%,#ffffff60 50%,transparent 80%);transform:translateX(-100%);animation:bq-sheen 3.5s ease-in-out infinite}
+    .meter:hover{box-shadow:0 0 0 3px #2563eb30}
+    .meter:hover span{animation-duration:1s}
+    @keyframes bq-flow{to{background-position:-200% 0}}
+    @keyframes bq-sheen{0%{transform:translateX(-100%)}60%,100%{transform:translateX(100%)}}
     .thermo{display:none;flex-direction:column;align-items:center;gap:0;margin-top:12px}
     :host([data-collapsed="true"]) .thermo{display:flex}
     :host([data-collapsed="true"]) .progress-wrap{display:none}
     .thermo-track{width:14px;height:110px;border-radius:999px;background:var(--bq-raised,#eef3f6);border:1px solid var(--bq-border,#d7e2f0);overflow:hidden;display:flex;align-items:flex-end}
-    .thermo-fill{width:100%;height:0%;background:linear-gradient(to top,#1d4ed8,#60a5fa);transition:height .25s ease}
+    .thermo-fill{width:100%;height:0%;background:linear-gradient(to top,#1d4ed8,#60a5fa,#1d4ed8);background-size:100% 200%;animation:bq-thermo-flow 3s linear infinite;transition:height .25s ease}
+    .thermo:hover .thermo-fill{animation-duration:1s}
+    @keyframes bq-thermo-flow{to{background-position:0 -200%}}
     .thermo-bulb{width:24px;height:24px;margin-top:-4px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#93c5fd,#2563eb);border:1px solid var(--bq-border,#d7e2f0)}
     .thermo-pct{margin-top:8px;font:750 11px/1.4 inherit;color:var(--bq-assessment-muted);font-variant-numeric:tabular-nums;writing-mode:vertical-rl;text-orientation:upright;letter-spacing:1px}
 
@@ -486,7 +493,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     .points-note{margin-left:auto;font:750 12px/1 inherit;color:var(--bq-text,#18253a);font-variant-numeric:tabular-nums;white-space:nowrap}
     .empty{color:var(--bq-assessment-muted);grid-column:1/-1}
     @media(max-width:1050px){#target[data-betterquest-pdf-workspace="enhanced"]{grid-template-columns:1fr}#target[data-betterquest-pdf-workspace="enhanced"] > #pdf-frame,#target[data-betterquest-pdf-workspace="enhanced"] > [data-betterquest="assessment-rail"]{grid-column:1}#target[data-betterquest-pdf-workspace="enhanced"] > [data-betterquest="assessment-rail"]{position:static;margin-top:14px}}
-    @media(prefers-reduced-motion:reduce){.meter span,.choice,.submit{transition:none}.choice:hover,.submit:hover{transform:none}}
+    @media(prefers-reduced-motion:reduce){.meter span,.choice,.submit{transition:none}.choice:hover,.submit:hover{transform:none}.meter span,.meter span::after,.thermo-fill{animation:none}}
   `;
   const rail = document.createElement('section'); rail.className = 'rail'; rail.setAttribute('aria-label', 'Assessment responses');
   const header = document.createElement('header');

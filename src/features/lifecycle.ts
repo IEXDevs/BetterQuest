@@ -45,7 +45,12 @@ export function createFeatureRuntime(document: Document, definitions: FeatureDef
 
   function remove(name: string) {
     const entry = active.get(name);
-    if (entry) { entry.abort.abort(); entry.stop(); entry.feature.dispose(); active.delete(name); }
+    if (!entry) return;
+    active.delete(name);
+    try { entry.abort.abort(); } catch { /* teardown must not throw */ }
+    try { entry.stop(); } catch { /* teardown must not throw */ }
+    try { entry.feature.dispose(); }
+    catch (error) { errors.set(name, error instanceof Error ? error.message : 'Feature disposal failed.'); }
   }
 
   function refresh(name: string) {

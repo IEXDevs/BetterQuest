@@ -1,5 +1,5 @@
 import type { Course, LocalState } from '../../shared/models';
-import { execute, subscribeLocal, type Execute } from '../../shared/client';
+import { execute, subscribeLocal, commandErrorMessage, isContextInvalidated, type Execute } from '../../shared/client';
 import { sourceUrl } from '../../shared/identity';
 import { findAssignmentSectionSlot } from '../../adapters/quest/assignment-placement';
 import { assignmentPanelData, displayDeadline, visibleAssignments } from './view-model';
@@ -41,6 +41,8 @@ export function createAssignmentSection(root: Element, run: Execute = execute, s
     .note { color:var(--bq-muted,#94a3b8); font-size:10.5px; }
     .empty,.error { margin:6px 0; color:var(--bq-muted,#64748b); font-size:12.5px; }
     .error { color:var(--bq-warning,#ef4444); }
+    .reload-btn { background:none; border:0; padding:0; color:var(--bq-accent,#0284c7); font:inherit; font-weight:600; text-decoration:underline; cursor:pointer; white-space:nowrap; }
+    .reload-btn:focus-visible { outline:2px solid var(--bq-accent,#0284c7); outline-offset:3px; }
   `;
   const section = document.createElement('section');
   section.setAttribute('aria-labelledby', 'bq-upcoming-title');
@@ -130,7 +132,13 @@ export function createAssignmentSection(root: Element, run: Execute = execute, s
     } catch (error) {
       if (!disposed && current === generation) {
         const message = document.createElement('p'); message.className = 'error'; message.setAttribute('role', 'alert');
-        message.textContent = error instanceof Error ? error.message : 'Assignments could not be loaded.';
+        message.textContent = commandErrorMessage(error);
+        if (isContextInvalidated()) {
+          const reload = document.createElement('button');
+          reload.type = 'button'; reload.className = 'reload-btn'; reload.textContent = 'Reload page';
+          reload.addEventListener('click', () => document.defaultView?.location.reload());
+          message.append(document.createTextNode(' '), reload);
+        }
         result.replaceChildren(message); lastRendered = '';
       }
     }

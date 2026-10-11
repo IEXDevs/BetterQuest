@@ -1,6 +1,6 @@
 import type { Course, LocalState } from '../../shared/models';
 import { findHomepageSlot, readHomepageCourses } from '../../adapters/quest/homepage';
-import { execute, type Execute } from '../../shared/client';
+import { execute, commandErrorMessage, isContextInvalidated, type Execute } from '../../shared/client';
 import type { Subscribe } from './section';
 import { assignmentIsCompleted, completionText, displayDeadline, type CompletionOverrides } from './view-model';
 
@@ -36,7 +36,14 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
     *{box-sizing:border-box}section{padding:22px;background:var(--bq-surface,#fff);color:var(--bq-text,#26384a);border:1px solid var(--bq-border,#e1e7ed);border-radius:8px;font-size:14px;line-height:1.5}
     header{display:flex;align-items:center;justify-content:space-between;gap:18px}h2{font:inherit;font-weight:600;font-size:20px;margin:0}h2:focus-visible{outline:2px solid var(--bq-accent,#227ab0);outline-offset:4px}
     .coverage,.caption{color:var(--bq-muted,#748491);font-size:12px;margin:8px 0}.progress-label{display:flex;justify-content:space-between;gap:12px;margin-top:16px;font-size:13px}
-    progress{display:block;appearance:none;width:100%;height:8px;margin:8px 0;border:0;border-radius:5px;overflow:hidden;background:var(--bq-raised,#eef3f6)}progress::-webkit-progress-bar{background:var(--bq-raised,#eef3f6)}progress::-webkit-progress-value{background:var(--bq-good,#26a69a);border-radius:5px}
+    .meter{height:8px;margin:8px 0;border-radius:5px;overflow:hidden;background:var(--bq-raised,#eef3f6);position:relative}
+    .meter span{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,var(--bq-good,#26a69a),#5eead4,var(--bq-good,#26a69a));background-size:200% 100%;animation:bq-flow 3s linear infinite;transition:width .25s ease}
+    .meter span::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 20%,#ffffff70 50%,transparent 80%);transform:translateX(-100%);animation:bq-sheen 3.5s ease-in-out infinite}
+    .meter:hover{box-shadow:0 0 0 3px color-mix(in srgb,var(--bq-good,#26a69a) 25%,transparent)}
+    .meter:hover span{animation-duration:1s}
+    @keyframes bq-flow{to{background-position:-200% 0}}
+    @keyframes bq-sheen{0%{transform:translateX(-100%)}60%,100%{transform:translateX(100%)}}
+    @media(prefers-reduced-motion:reduce){.meter span,.meter span::after{animation:none;transition:none}}
     .grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(240px,1fr);gap:24px;margin-top:22px}h3{font:inherit;font-weight:600;margin:0 0 10px}
     ul{list-style:none;margin:0;padding:0}li{padding:10px 0;border-top:1px solid var(--bq-border,#edf1f4)}.assignment{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center}
     .assignment-actions{display:flex;align-items:center}
@@ -49,7 +56,7 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
     .manual-list{list-style:none;margin:8px 0 0;padding:0;border-top:1px dashed var(--bq-border,#cbd7e3)}
     a{color:var(--bq-accent,#227ab0);text-decoration:none}a:hover{text-decoration:underline}a:focus-visible,button:focus-visible{outline:2px solid var(--bq-accent,#227ab0);outline-offset:3px}
     .meta{display:block;font-size:12px;color:var(--bq-muted,#748491);margin-top:3px}.due{text-align:right;font-size:12px;white-space:nowrap}.due small{display:block;color:var(--bq-muted,#748491)}.overdue{color:var(--bq-warning,#a96645)}
-    .course-title{font-weight:500}.unscanned{color:var(--bq-warning,#a96645)}button{font:inherit;font-size:12px;cursor:pointer;border:0;color:var(--bq-accent,#227ab0);background:transparent;padding:6px 0}.empty{color:var(--bq-muted,#748491);font-size:13px}.error{color:var(--bq-warning,#a3453c)}
+    .course-title{font-weight:500}.unscanned{color:var(--bq-warning,#a96645)}button{font:inherit;font-size:12px;cursor:pointer;border:0;color:var(--bq-accent,#227ab0);background:transparent;padding:6px 0}.reload-btn{padding:0;font-weight:600;text-decoration:underline;white-space:nowrap}.empty{color:var(--bq-muted,#748491);font-size:13px}.error{color:var(--bq-warning,#a3453c)}
     @media(max-width:750px){section{padding:16px}.grid{grid-template-columns:1fr;gap:18px}header{align-items:flex-start;flex-direction:column;gap:5px}.progress-label{flex-wrap:wrap}.assignment{gap:10px}}
   `;
   const section = document.createElement('section'); section.setAttribute('aria-labelledby', 'bq-home-title');
@@ -74,9 +81,16 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
     const progressText = document.createElement('span'); progressText.textContent = `${data.completed} of ${data.total} assignments completed`;
     const percent = document.createElement('span'); percent.textContent = data.total ? `${Math.round(data.completed / data.total * 100)}% complete` : 'No assignments yet';
     label.append(progressText, percent);
-    const progress = document.createElement('progress'); progress.max = Math.max(1, data.total); progress.value = data.completed;
+    const progress = document.createElement('div'); progress.className = 'meter';
+    progress.setAttribute('role', 'progressbar');
     progress.setAttribute('aria-label', 'Assignment completion progress');
+    progress.setAttribute('aria-valuemin', '0');
+    progress.setAttribute('aria-valuemax', String(Math.max(1, data.total)));
+    progress.setAttribute('aria-valuenow', String(data.completed));
     progress.setAttribute('aria-valuetext', progressText.textContent!);
+    const progressFill = document.createElement('span');
+    progressFill.style.width = data.total ? `${data.completed / data.total * 100}%` : '0%';
+    progress.append(progressFill);
     const caption = document.createElement('p'); caption.className = 'caption';
     caption.textContent = 'Open any unscanned courses to sync their assignments.' + (data.unknown ? ` (${data.unknown} statuses unknown)` : '');
     const grid = document.createElement('div'); grid.className = 'grid';
@@ -185,7 +199,18 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
       courses = discovered; cache = state.cache; overrides = state.completionOverrides || {};
       const renderKey = JSON.stringify({ courses, cache, overrides }); if (renderKey !== lastRender) { render(); lastRender = renderKey; }
     } catch (error) {
-      if (!disposed && current === generation) { lastRender = ''; content.className = 'error'; content.textContent = error instanceof Error ? error.message : 'Assignments could not be loaded.'; }
+      if (!disposed && current === generation) {
+        lastRender = ''; content.className = 'error'; content.replaceChildren();
+        const message = document.createElement('span');
+        message.textContent = commandErrorMessage(error);
+        content.append(message);
+        if (isContextInvalidated()) {
+          const reload = document.createElement('button');
+          reload.type = 'button'; reload.className = 'reload-btn'; reload.textContent = 'Reload page';
+          reload.addEventListener('click', () => document.defaultView?.location.reload());
+          content.append(document.createTextNode(' '), reload);
+        }
+      }
     }
   }
   position(); content.textContent = 'Loading assignments…';

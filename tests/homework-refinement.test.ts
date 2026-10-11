@@ -5,6 +5,7 @@ import { createPdfAssessmentWorkspace, createSlideAssessmentEnhancement } from '
 import { observeScoped } from '../src/features/lifecycle';
 import { createAssessmentHeader } from '../src/features/assessment/header';
 import { enhanceCourseReviewTab, disposeReviewSliders } from '../src/features/courses/review-enhancer';
+import { QUEST_DARK_STYLES } from '../src/adapters/quest/theme';
 
 function homework(status = '') {
   return new JSDOM('<main id="main-content"><div id="target">' +
@@ -198,6 +199,10 @@ test('unified view shows answer panels, fullscreen, and a collapsible sidebar', 
     const railCss = rail().querySelector('style')!.textContent!;
     assert.match(railCss, /\.rail\{[^}]*border-radius:14px/, 'Response deck gets rounded corners');
     assert.match(railCss, /\.metric-value\{[^}]*white-space:normal/, 'Metric values wrap instead of cutting off');
+    assert.match(railCss, /@keyframes bq-flow/, 'Progress flows like liquid');
+    assert.match(railCss, /\.meter:hover span\{animation-duration:1s\}/, 'Hovering speeds the flow');
+    assert.match(railCss, /bq-sheen/, 'Progress carries a shine sweep');
+    assert.match(railCss, /bq-thermo-flow/, 'Thermometer flows too');
     assert.match(railCss, /\[data-collapsed="true"\]\) \.metric-sd\{display:none\}/, 'Collapsed hides Standard Deviation');
     assert.match(railCss, /\[data-collapsed="true"\]\) \.progress-wrap\{display:none\}/, 'Collapsed swaps the % bar for the thermometer');
     assert.match(railCss, /\.thermo-fill/, 'Thermometer exists');
@@ -357,7 +362,7 @@ test('answer cards show right or wrong status with points earned', () => {
   } finally { workspace.dispose(); dom.window.close(); }
 });
 
-test('review sliders turn fluid with a centered readout', () => {
+test('review sliders turn fluid with a centered readout', async () => {
   const dom = new JSDOM('<div id="tabs-review">' +
     '<p>Custom Reviews allow you to create non-graded assignments.</p><p id="progress">you have completed <strong>46 / 121</strong> review problems</p>' +
     '<div class="card"><div class="card-header h4">2. How many questions?</div><div class="card"><br><div class="d-flex flex-row">' +
@@ -382,13 +387,30 @@ test('review sliders turn fluid with a centered readout', () => {
     input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     assert.equal(output.textContent, '37', 'Readout tracks free values');
     assert.equal(input.style.getPropertyValue('--bq-fill'), '67.5%');
+    const bubble = doc.querySelector<HTMLElement>('[data-betterquest="slider-bubble"]')!;
+    assert.ok(bubble, 'Bubble rides the thumb');
+    assert.equal(bubble.textContent, '37');
+    assert.match(bubble.style.left, /67\.5%/, 'Bubble sits over the chosen point');
+    assert.match(bubble.style.left, /22px/, 'Bubble stays inside the bar edges');
+    assert.equal(bubble.style.getPropertyValue('--tilt'), '-9deg', 'Moving right leans the bubble left');
+    await new Promise(resolve => setTimeout(resolve, 250));
+    assert.equal(bubble.style.getPropertyValue('--tilt'), '0deg', 'Bubble straightens when idle');
     const css = doc.querySelector('[data-betterquest="review-slider-styles"]')!.textContent!;
     assert.match(css, /\.bq-slider-value[^{]*\{[^}]*text-align:center/, 'Value sits centered under the slider');
+    assert.match(css, /\.slidecontainer[^{]*\.bq-bubble|\.bq-bubble/, 'Bubble styled');
+    assert.match(css, /slidecontainer:hover \.bq-bubble/, 'Bubble appears on hover');
+    assert.match(css, /bq-live \.bq-bubble/, 'Bubble appears while dragging');
     disposeReviewSliders(doc);
     assert.equal(input.getAttribute('step'), '10', 'Original step restores on disposal');
     assert.equal(doc.querySelector('[data-betterquest="slider-value"]'), null);
+    assert.equal(doc.querySelector('[data-betterquest="slider-bubble"]'), null, 'Bubble cleans up too');
     assert.equal(doc.querySelector('[data-betterquest="review-slider-styles"]'), null);
   } finally { dom.window.close(); }
+});
+
+test('review progress flows and reacts to hovering', () => {
+  assert.match(QUEST_DARK_STYLES, /@keyframes bq-review-flow/, 'Review fill flows like liquid');
+  assert.match(QUEST_DARK_STYLES, /\.bq-review-track:hover \.bq-review-fill/, 'Hovering speeds the review flow');
 });
 
 test('review waits for native content and refreshes completion without duplicating the dashboard', () => {

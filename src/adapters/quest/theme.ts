@@ -80,7 +80,7 @@ export const QUEST_DARK_STYLES = `
   #main-content[data-betterquest-theme] :where(.btn,.btn-sm):not(:disabled):hover { transform:translateY(-1px); }
   #main-content[data-betterquest-theme] :where(.card) { border-radius:10px; border-color:var(--bq-border); box-shadow:0 12px 34px #10203312; }
   #main-content[data-betterquest-theme] :where(.dataTables_wrapper) { border-radius:8px; }
-  @media(prefers-reduced-motion:reduce) { #main-content[data-betterquest-theme] :where(.custom-select,.form-control,.browser-default,select,input,textarea,.btn,.btn-sm) { transition:none!important; } #main-content[data-betterquest-theme] :where(.btn,.btn-sm):hover { transform:none; } }
+  @media(prefers-reduced-motion:reduce) { #main-content[data-betterquest-theme] :where(.custom-select,.form-control,.browser-default,select,input,textarea,.btn,.btn-sm) { transition:none!important; } #main-content[data-betterquest-theme] :where(.btn,.btn-sm):hover { transform:none; } #main-content .bq-review-fill { animation:none!important; } }
   #body-id.mdb-skin[data-betterquest-theme="dark"] { background-color:#111b27; color:#e7eef8; color-scheme:dark; }
   #main-content[data-betterquest-theme="dark"] { color:var(--bq-text); }
   #quest-nav-header-div[data-betterquest-theme="dark"] .qh-navbar { background:#162b40; color:#edf3fb; }
@@ -747,7 +747,8 @@ export const QUEST_DARK_STYLES = `
   #main-content .bq-review-count{margin:0!important;flex:1 1 260px;font-size:16px}
   #main-content .bq-review-count strong{font-size:28px;font-variant-numeric:tabular-nums}
   #main-content .bq-review-summary .bq-review-track{flex:1 0 100%;height:8px;margin:0!important;overflow:hidden}
-  #main-content .bq-review-summary .bq-review-fill{background:#2563eb!important;box-shadow:none!important;transition:none!important}
+  #main-content .bq-review-summary .bq-review-fill{background:linear-gradient(90deg,#2563eb,#3b82f6,#2563eb)!important;background-size:200% 100%!important;animation:bq-review-flow 3.5s linear infinite!important;box-shadow:none!important;transition:none!important}
+  #main-content .bq-review-summary .bq-review-track:hover .bq-review-fill{animation-duration:1.2s!important}
   #main-content .bq-review-goal{margin:0!important;font-size:14px}
   #main-content .bq-review-tips{border-top:1px solid var(--bq-border,#d7e2f0);padding-top:16px;line-height:1.6}
   #main-content .bq-review-tips summary{cursor:pointer;font-weight:650}
@@ -954,7 +955,15 @@ export const QUEST_DARK_STYLES = `
     height: 100% !important;
     border-radius: 999px !important;
     background: linear-gradient(90deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%) !important;
+    background-size: 200% 100% !important;
+    animation: bq-review-flow 4s linear infinite !important;
     transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+  .bq-review-track:hover .bq-review-fill {
+    animation-duration: 1.2s !important;
+  }
+  @keyframes bq-review-flow {
+    to { background-position: -200% 0; }
   }
   .bq-review-glow {
     position: absolute !important;

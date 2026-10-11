@@ -313,6 +313,19 @@ test('feature lifecycle scopes observers, aborts route work, remounts roots, and
   } finally { runtime.dispose(); dom.window.close(); }
 });
 
+test('a throwing feature disposal cannot break reconciliation', () => {
+  const dom = page(); const document = dom.window.document;
+  const runtime = createFeatureRuntime(document, [{ name: 'fixture', locate: doc => doc.querySelector('#fixture-questions'), mount: () => ({ refresh() {}, dispose: () => { throw new Error('Extension context invalidated.'); } }) }]);
+  try {
+    runtime.reconcile();
+    assert.doesNotThrow(() => {
+      dom.window.history.pushState({}, '', '/student/next');
+      runtime.reconcile();
+    });
+    assert.equal(runtime.errors().get('fixture'), 'Extension context invalidated.');
+  } finally { runtime.dispose(); dom.window.close(); }
+});
+
 test('one failed adapter cannot stop other page features or escalate to a body observer', async () => {
   const dom = page(); let mounted = 0;
   const runtime = createFeatureRuntime(dom.window.document, [

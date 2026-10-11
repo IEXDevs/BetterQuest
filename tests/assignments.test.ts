@@ -253,6 +253,24 @@ test('course-info summary shows the next three incomplete assignments in the fir
   } finally { view.dispose(); dom.window.close(); }
 });
 
+test('invalidated extension context shows a reload prompt instead of raw errors', async () => {
+  const dom = page(); const data = snapshot(dom);
+  const previous = (globalThis as { chrome?: unknown }).chrome;
+  (globalThis as { chrome?: unknown }).chrome = { runtime: {} };
+  const root = dom.window.document.querySelector('#target')!;
+  const view = createAssignmentSection(root, async () => { throw new Error('Extension context invalidated.'); }, () => () => { });
+  try {
+    await view.refresh(data.courses[0]);
+    const alert = root.querySelector('[data-betterquest="assignment-section"]')!.shadowRoot!.querySelector('[role="alert"]')!;
+    assert.match(alert.textContent || '', /Extension updated\. Reload this page to continue\./);
+    const reload = alert.querySelector<HTMLButtonElement>('.reload-btn')!;
+    assert.equal(reload.textContent, 'Reload page');
+  } finally {
+    (globalThis as { chrome?: unknown }).chrome = previous;
+    view.dispose(); dom.window.close();
+  }
+});
+
 test('unknown deadlines sort last; inline errors are visible and do not mutate state', async () => {
   const dom = page(); const f = store(); const data = snapshot(dom);
   data.assignments[0].deadline.iso = null; await new AssignmentTracker(f.run).cache(data);

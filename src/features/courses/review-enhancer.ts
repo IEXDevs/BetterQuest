@@ -148,7 +148,7 @@ export function findReviewPane(document: Document): HTMLElement | null {
 
 const REVIEW_SLIDER_STYLES = `
   #tabs-review .slidecontainer,
-  [data-betterquest-page="review"] .slidecontainer{position:relative;padding-bottom:34px}
+  [data-betterquest-page="review"] .slidecontainer{position:relative;padding:38px 0 34px}
   #tabs-review input[type="range"].bq-slider,
   [data-betterquest-page="review"] input[type="range"].bq-slider{-webkit-appearance:none;appearance:none;width:100%;height:26px;margin:0;background:transparent;cursor:pointer;--bq-fill:50%}
   #tabs-review input[type="range"].bq-slider::-webkit-slider-runnable-track,
@@ -169,9 +169,21 @@ const REVIEW_SLIDER_STYLES = `
   [data-betterquest-page="review"] .slidecontainer > .thumb{display:none!important}
   #tabs-review .bq-slider-value,
   [data-betterquest-page="review"] .bq-slider-value{display:block;text-align:center;font-weight:750;font-size:15px;margin:8px 0 0;color:var(--bq-text,#26384a);font-variant-numeric:tabular-nums}
+  #tabs-review .bq-bubble,
+  [data-betterquest-page="review"] .bq-bubble{position:absolute;top:2px;left:50%;transform:translate(-50%,-100%) rotate(var(--tilt,0deg));min-width:44px;padding:4px 10px;border-radius:999px;background:var(--bq-accent,#227ab0);color:#fff;font-weight:750;font-size:13px;text-align:center;font-variant-numeric:tabular-nums;box-shadow:0 4px 14px #10203344;opacity:0;pointer-events:none;transition:opacity .15s ease,transform .12s ease,left .08s linear}
+  #tabs-review .bq-bubble::after,
+  [data-betterquest-page="review"] .bq-bubble::after{content:'';position:absolute;left:50%;bottom:-5px;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--bq-accent,#227ab0);border-bottom:0}
+  #tabs-review .slidecontainer:hover .bq-bubble,
+  #tabs-review .slidecontainer:focus-within .bq-bubble,
+  #tabs-review .slidecontainer.bq-live .bq-bubble,
+  [data-betterquest-page="review"] .slidecontainer:hover .bq-bubble,
+  [data-betterquest-page="review"] .slidecontainer:focus-within .bq-bubble,
+  [data-betterquest-page="review"] .slidecontainer.bq-live .bq-bubble{opacity:1}
   @media(prefers-reduced-motion:reduce){
     #tabs-review input[type="range"].bq-slider::-webkit-slider-thumb,
     [data-betterquest-page="review"] input[type="range"].bq-slider::-webkit-slider-thumb{transition:none}
+    #tabs-review .bq-bubble,
+    [data-betterquest-page="review"] .bq-bubble{transition:none}
   }
 `;
 
@@ -197,7 +209,8 @@ function paintSlider(input: HTMLInputElement) {
   const max = Number(input.max || 100);
   const value = Number(input.value);
   const pct = max > min ? Math.min(100, Math.max(0, (value - min) / (max - min) * 100)) : 0;
-  input.style.setProperty('--bq-fill', `${pct}%`);
+  const fill = `${pct}%`;
+  if (input.style.getPropertyValue('--bq-fill') !== fill) input.style.setProperty('--bq-fill', fill);
   const key = input.id || input.name;
   const host = input.closest('.slidecontainer') || input.parentElement;
   let output = host?.querySelector<HTMLElement>(
@@ -209,8 +222,35 @@ function paintSlider(input: HTMLInputElement) {
     output.setAttribute('aria-label', `${input.getAttribute('aria-label') || 'Slider'} value`);
     host.append(output);
   }
-  if (output) output.textContent = input.value;
+  if (output && output.textContent !== input.value) output.textContent = input.value;
+  let bubble = host?.querySelector<HTMLElement>(
+    `:scope > [data-betterquest="slider-bubble"][data-slider-for="${key}"]`);
+  if (!bubble && host) {
+    bubble = input.ownerDocument.createElement('div');
+    bubble.dataset.betterquest = 'slider-bubble';
+    bubble.dataset.sliderFor = key;
+    bubble.setAttribute('aria-hidden', 'true');
+    host.append(bubble);
+  }
+  if (bubble) {
+    if (bubble.textContent !== input.value) bubble.textContent = input.value;
+    const pos = `clamp(22px, ${pct}%, calc(100% - 22px))`;
+    if (bubble.style.left !== pos) bubble.style.left = pos;
+    const last = input.dataset.betterquestLast;
+    if (last !== undefined && last !== input.value) {
+      bubble.style.setProperty('--tilt', Number(input.value) > Number(last) ? '-9deg' : '9deg');
+      const pending = sliderTiltTimers.get(input);
+      if (pending !== undefined) clearTimeout(pending);
+      sliderTiltTimers.set(input, setTimeout(() => {
+        bubble?.style.setProperty('--tilt', '0deg');
+        sliderTiltTimers.delete(input);
+      }, 160));
+    }
+    input.dataset.betterquestLast = input.value;
+  }
 }
+
+const sliderTiltTimers = new WeakMap<HTMLInputElement, ReturnType<typeof setTimeout>>();
 
 export function enhanceReviewSliders(pane: HTMLElement): void {
   const doc = pane.ownerDocument;
@@ -230,6 +270,13 @@ export function enhanceReviewSliders(pane: HTMLElement): void {
       const repaint = () => paintSlider(input);
       input.addEventListener('input', repaint);
       input.addEventListener('change', repaint);
+      const container = input.closest('.slidecontainer');
+      if (container) {
+        input.addEventListener('pointerdown', () => container.classList.add('bq-live'));
+        input.addEventListener('pointerup', () => container.classList.remove('bq-live'));
+        input.addEventListener('pointercancel', () => container.classList.remove('bq-live'));
+        input.addEventListener('blur', () => container.classList.remove('bq-live'));
+      }
     }
   }
   // Drop readouts whose inputs Quest re-rendered away.
@@ -249,8 +296,10 @@ export function disposeReviewSliders(document: Document): void {
     delete input.dataset.betterquestSlider;
     delete input.dataset.betterquestOriginalStep;
     delete input.dataset.betterquestSliderBound;
+    delete input.dataset.betterquestLast;
   }
   document.querySelectorAll('[data-betterquest="slider-value"]').forEach(el => el.remove());
+  document.querySelectorAll('[data-betterquest="slider-bubble"]').forEach(el => el.remove());
 }
 
 export function enhanceCourseReviewTab(document: Document): boolean {
