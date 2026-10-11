@@ -173,11 +173,27 @@ export function createCourseDetailsFacelift(root: HTMLElement) {
   }
 
   reconcile();
+  // Quest injects most category panels AFTER the page settles, and re-renders
+  // them on every tab visit. Watch for late arrivals so every category ends up
+  // collapsed — not only the ones that existed at mount.
+  let scheduled = false;
+  const collapseLateArrivals = () => {
+    if (disposed || scheduled) return;
+    scheduled = true;
+    queueMicrotask(() => {
+      scheduled = false;
+      if (!disposed) collapseCourseCategoriesByDefault(doc);
+    });
+  };
+  const Observer = doc.defaultView?.MutationObserver;
+  const observer = Observer ? new Observer(collapseLateArrivals) : undefined;
+  observer?.observe(doc.documentElement, { childList: true, subtree: true });
 
   return {
     reconcile,
     dispose() {
       disposed = true;
+      observer?.disconnect();
     },
   };
 }

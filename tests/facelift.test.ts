@@ -9,7 +9,7 @@ import { createQuestTheme } from '../src/features/theme/quest';
 import { detectPageCategory } from '../src/adapters/quest/theme';
 import { readAssessmentMetrics, readAssessmentResponses } from '../src/adapters/quest/assessment';
 import { formatMeetingTime, createMeetingTimesEnhancer } from '../src/features/courses/meeting-times';
-import { enhanceCourseInfoCard, collapseCourseCategoriesByDefault } from '../src/features/courses/details-enhancer';
+import { enhanceCourseInfoCard, collapseCourseCategoriesByDefault, createCourseDetailsFacelift } from '../src/features/courses/details-enhancer';
 import type { Execute } from '../src/shared/client';
 import type { LocalState } from '../src/shared/models';
 
@@ -106,6 +106,44 @@ test('disabling animations switches course artwork to distinct solid colors with
     assert.equal(dom.window.document.documentElement.dataset.betterquestAnimations, 'disabled');
     assert.equal(host.getAttribute('data-animations'), 'disabled');
     assert.equal(host.shadowRoot!.querySelector('.art')?.classList.contains('is-disabled'), true);
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('the celebrations setting reaches the page as a preference switch', async () => {
+  const dom = new JSDOM('<html><body></body></html>', { pretendToBeVisual: true });
+  prepare(dom);
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    assert.equal(dom.window.document.documentElement.hasAttribute('data-betterquest-celebrations'), false, 'Celebrations are on by default');
+    await f.run({ kind: 'feature:set', feature: 'celebrations', enabled: false });
+    dom.window.dispatchEvent(new dom.window.Event('betterquest:preferences-changed'));
+    await pause();
+    assert.equal(dom.window.document.documentElement.dataset.betterquestCelebrations, 'disabled', 'Turning it off reaches the page');
+    await f.run({ kind: 'feature:set', feature: 'celebrations', enabled: true });
+    dom.window.dispatchEvent(new dom.window.Event('betterquest:preferences-changed'));
+    await pause();
+    assert.equal(dom.window.document.documentElement.hasAttribute('data-betterquest-celebrations'), false, 'Turning it back on clears the switch');
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('the whimsy setting reaches the page as a preference switch', async () => {
+  const dom = new JSDOM('<html><body></body></html>', { pretendToBeVisual: true });
+  prepare(dom);
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    assert.equal(dom.window.document.documentElement.hasAttribute('data-betterquest-whimsy'), false, 'Whimsy is on by default');
+    await f.run({ kind: 'feature:set', feature: 'whimsy', enabled: false });
+    dom.window.dispatchEvent(new dom.window.Event('betterquest:preferences-changed'));
+    await pause();
+    assert.equal(dom.window.document.documentElement.dataset.betterquestWhimsy, 'disabled', 'Turning it off reaches the page');
+    await f.run({ kind: 'feature:set', feature: 'whimsy', enabled: true });
+    dom.window.dispatchEvent(new dom.window.Event('betterquest:preferences-changed'));
+    await pause();
+    assert.equal(dom.window.document.documentElement.hasAttribute('data-betterquest-whimsy'), false, 'Turning it back on clears the switch');
   } finally { features.dispose(); dom.window.close(); }
 });
 
@@ -408,6 +446,8 @@ test('slides announce wrong and correct verdicts on the picked option', async ()
     assert.equal(part.dataset.betterquestVerdict, 'wrong');
     assert.equal(doc.querySelectorAll('.bq-slide-verdict').length, 1);
     assert.match(doc.querySelector('.bq-slide-verdict')!.textContent || '', /Incorrect/);
+    assert.equal(doc.querySelector('.bq-celebration'), null, 'Wrong answers do not celebrate');
+    assert.ok(doc.querySelector('.bq-screen-flash'), 'Wrong verdicts flash the whole screen red');
     wrongIcon.classList.add('d-none');
     rightIcon.classList.remove('d-none');
     part.querySelector('.feedback_msg')!.textContent = 'Correct';
@@ -415,6 +455,10 @@ test('slides announce wrong and correct verdicts on the picked option', async ()
     assert.equal(part.dataset.betterquestVerdict, 'correct');
     assert.equal(doc.querySelectorAll('.bq-slide-verdict').length, 1, 'Only one verdict shows at a time');
     assert.match(doc.querySelector('.bq-slide-verdict')!.textContent || '', /Correct/);
+    const party = doc.querySelector<HTMLElement>('.bq-celebration');
+    assert.ok(party, 'Correct verdict turns the whole screen green with a checkmark');
+    assert.equal(party!.style.position, 'fixed', 'The green wash covers the viewport with inline styles');
+    assert.match(party!.textContent || '', /✓/, 'The big checkmark rides along');
     feedback.classList.add('d-none');
     await pause();
     assert.equal(part.hasAttribute('data-betterquest-verdict'), false, 'Verdict clears with the feedback');
@@ -422,6 +466,30 @@ test('slides announce wrong and correct verdicts on the picked option', async ()
     assert.match(css, /data-betterquest-verdict="correct"/, 'Correct answers get a checkmark style');
     assert.match(css, /data-betterquest-verdict="wrong"/, 'Wrong answers get strikethrough and X styles');
     assert.match(css, /bq-correct-pop/, 'Correct answers pop');
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('the console party trigger works on slides pages too', async () => {
+  const dom = new JSDOM(`<html><head></head><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target"><div id="presentation-div">
+    <div class="instanceitempart" id="part-one"><div class="bg-light">
+      <div class="custom-control custom-radio instanceitempart-choice"><div class="d-flex justify-content-start"><input id="one" type="radio" name="response_one" value="1"><label class="custom-control-label" for="one">One</label></div></div>
+    </div>
+    <div class="row instanceitempart-controls"><button class="submit-btn">Submit</button></div></div>
+  </div></div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/administer?instance=courseuserassignment_1', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store(); const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    const doc = dom.window.document;
+    const before = doc.querySelectorAll('.bq-celebration').length;
+    doc.dispatchEvent(new dom.window.Event('betterquest:party'));
+    assert.equal(doc.querySelectorAll('.bq-celebration').length, before + 1, 'Console event shows the celebration on slides');
+    doc.dispatchEvent(new dom.window.CustomEvent('betterquest:party', { detail: 'wrong' }));
+    assert.ok(doc.querySelector('.bq-screen-flash'), 'Console event flashes red on slides');
+    features.dispose();
+    const after = doc.querySelectorAll('.bq-celebration').length;
+    doc.dispatchEvent(new dom.window.Event('betterquest:party'));
+    assert.equal(doc.querySelectorAll('.bq-celebration').length, after, 'A disposed page stops listening');
   } finally { features.dispose(); dom.window.close(); }
 });
 
@@ -637,6 +705,19 @@ test('feature:set successfully updates assignments and bookmarks features in rep
   assert.equal(res4.preferences.features?.assignments, true);
   assert.equal(res4.preferences.features?.bookmarks, false);
   assert.equal(res4.preferences.features?.animations, false);
+
+  const res5 = await f.run({ kind: 'feature:set', feature: 'celebrations', enabled: false });
+  assert.equal(res5.preferences.features?.celebrations, false);
+  assert.equal(res5.preferences.features?.assignments, true);
+
+  const res6 = await f.run({ kind: 'feature:set', feature: 'celebrations', enabled: true });
+  assert.equal(res6.preferences.features?.celebrations, true);
+
+  const res7 = await f.run({ kind: 'feature:set', feature: 'whimsy', enabled: true });
+  assert.equal(res7.preferences.features?.whimsy, true);
+
+  const res8 = await f.run({ kind: 'feature:set', feature: 'whimsy', enabled: false });
+  assert.equal(res8.preferences.features?.whimsy, false);
 });
 
 test('grades and review pages make all text white in dark mode and black in light mode', async () => {
@@ -888,6 +969,39 @@ test('collapseCourseCategoriesByDefault collapses all assignment categories by d
   assert.equal(hw.classList.contains('show'), true, 'User opened category must remain open');
   assert.equal(hwBtn.getAttribute('aria-expanded'), 'true');
   assert.equal(exams.classList.contains('show'), false, 'Unopened category stays collapsed');
+});
+
+test('course details facelift collapses the categories Quest injects after mount', async () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin"><div id="main-content"><div id="target">
+    <div id="tabs-elements">
+      <div class="card-header text-center">
+        <button type="button" class="btn btn-link" data-toggle="collapse" data-target="#header-201" aria-expanded="true">
+          <span class="h4">Homework</span><i class="material-icons dropdown-icon">remove</i>
+        </button>
+      </div>
+      <div class="collapse show" id="header-201"><table><tr><td>HW 1</td></tr></table></div>
+    </div>
+  </div></div></body></html>`, { url: 'https://quest.cns.utexas.edu/student/courses/show?course=3491354', pretendToBeVisual: true });
+  const doc = dom.window.document;
+  const facelift = createCourseDetailsFacelift(doc.querySelector<HTMLElement>('#target')!);
+  try {
+    assert.equal(doc.querySelector('#header-201')!.classList.contains('show'), false, 'Category present at mount collapses immediately');
+    // Quest renders the remaining categories only after the page settles.
+    const late = doc.createElement('div');
+    late.innerHTML =
+      '<div class="card-header text-center">' +
+      '<button type="button" class="btn btn-link" data-toggle="collapse" data-target="#header-202" aria-expanded="true">' +
+      '<span class="h4">Midterms</span><i class="material-icons dropdown-icon">remove</i></button></div>' +
+      '<div class="collapse show" id="header-202"><table><tr><td>Midterm 1</td></tr></table></div>';
+    doc.querySelector('#tabs-elements')!.append(late);
+    await pause();
+    const exams = doc.querySelector<HTMLElement>('#header-202')!;
+    assert.equal(exams.classList.contains('show'), false, 'Late-injected category collapses too');
+    const examsBtn = doc.querySelector<HTMLButtonElement>('button[data-target="#header-202"]')!;
+    assert.equal(examsBtn.getAttribute('aria-expanded'), 'false');
+    assert.ok(examsBtn.classList.contains('collapsed'));
+    assert.equal(examsBtn.querySelector('.material-icons')?.textContent, 'add');
+  } finally { facelift.dispose(); dom.window.close(); }
 });
 
 test('course details facelift integrates with startPageFeatures on course show pages', async () => {

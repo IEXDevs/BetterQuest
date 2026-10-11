@@ -7,11 +7,68 @@ import {
   type PdfAssessmentElements,
 } from '../../adapters/quest/assessment';
 import { createInteractivePdfViewer } from './pdf-viewer';
+import { celebrateScreen, flashScreen } from './confetti';
 
 type PdfViewer = ReturnType<typeof createInteractivePdfViewer>;
 type PdfViewerFactory = typeof createInteractivePdfViewer;
 
 const COLLAPSED_KEY = 'betterquest_rail_collapsed';
+
+/** Recent submits survive as a marker so a reload right after answering still
+ * tells you how you did (and brings back a wrong mark). */
+const FRESH_SUBMITS_KEY = 'betterquest_fresh_submits';
+const FRESH_SUBMIT_WINDOW_MS = 10 * 60 * 1000;
+
+interface FreshSubmit { path: string; qn: number; value: string; attempts: number; at: number; }
+
+function freshSubmitPath(doc: Document): string {
+  // Key on the stable id so a redirect that adds or drops query params
+  // still matches the answer recorded before the reload.
+  const search = new URLSearchParams(doc.location.search);
+  const stable = search.get('instance') || search.get('course');
+  return stable ? `${doc.location.pathname}|${stable}` : `${doc.location.pathname}${doc.location.search}`;
+}
+
+function readFreshSubmits(doc: Document): FreshSubmit[] {
+  try {
+    const raw = doc.defaultView?.sessionStorage?.getItem(FRESH_SUBMITS_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is FreshSubmit => {
+      const entry = item as FreshSubmit | null;
+      return Boolean(entry) && typeof entry!.qn === 'number' &&
+        typeof entry!.value === 'string' && Date.now() - Number(entry!.at) < FRESH_SUBMIT_WINDOW_MS;
+    });
+  } catch {
+    return [];
+  }
+}
+
+function writeFreshSubmits(doc: Document, list: FreshSubmit[]): void {
+  try {
+    doc.defaultView?.sessionStorage?.setItem(FRESH_SUBMITS_KEY, JSON.stringify(list));
+  } catch {
+    /* Private mode: verdicts fall back to session memory only. */
+  }
+}
+
+function recordFreshSubmit(doc: Document, qn: number, value: string, attempts: number): void {
+  const path = freshSubmitPath(doc);
+  const list = readFreshSubmits(doc).filter(item => !(item.path === path && item.qn === qn));
+  list.push({ path, qn, value, attempts, at: Date.now() });
+  writeFreshSubmits(doc, list);
+  console.info(`[BetterQuest] Question ${qn}: answer recorded — the verdict will follow.`);
+}
+
+function consumeFreshSubmit(doc: Document, qn: number): FreshSubmit | null {
+  const path = freshSubmitPath(doc);
+  const list = readFreshSubmits(doc);
+  const index = list.findIndex(item => item.path === path && item.qn === qn);
+  if (index < 0) return null;
+  const [found] = list.splice(index, 1);
+  writeFreshSubmits(doc, list);
+  return found;
+}
 
 function installStyles(document: Document) {
   document.querySelectorAll('[data-betterquest="assessment-style"]').forEach(node => node.remove());
@@ -788,14 +845,34 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
           const table = findPdfAssessment(document)?.table;
           if (table && readOutcome(table, binding) === 'correct') {
             markedCorrect.add(qn);
+            // A submit can come back as a page reload; celebrate loudly when it does.
+            const fresh = consumeFreshSubmit(document, qn) !== null;
+            if (fresh) console.info(`[BetterQuest] Question ${qn}: correct — celebrating after refresh.`);
             void pdfViewer?.ready?.then(ok => {
-              if (!disposed && ok) pdfViewer?.celebrate?.(qn, binding.select.value, false);
+              if (!disposed && ok) {
+                pdfViewer?.celebrate?.(qn, binding.select.value, fresh);
+                if (fresh) pdfViewer?.announce?.(qn, 'correct');
+              }
             });
           }
         }
       } else {
         const marked = wrongMarks.get(qn);
-        if (marked) for (const value of marked) pdfViewer?.markWrong?.(qn, value);
+        if (marked) {
+          for (const value of marked) pdfViewer?.markWrong?.(qn, value);
+        } else {
+          // Bring back a just-submitted wrong answer after a refresh — but only
+          // once Quest has recorded the attempt, so an in-flight submit never
+          // gets called wrong before its real verdict arrives.
+          const path = freshSubmitPath(document);
+          const fresh = readFreshSubmits(document).find(item => item.path === path && item.qn === qn);
+          if (fresh && binding.attempts > fresh.attempts && consumeFreshSubmit(document, qn)) {
+            console.info(`[BetterQuest] Question ${qn}: incorrect — bringing the mark back after refresh.`);
+            wrongMarks.set(qn, new Set([fresh.value]));
+            pdfViewer?.markWrong?.(qn, fresh.value);
+            pdfViewer?.announce?.(qn, 'wrong');
+          }
+        }
       }
     }
   }
@@ -848,6 +925,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         if (pendingSubmit?.questionNumber === questionNumber) clearPendingSubmit();
       }, 10000);
       pendingSubmit = { questionNumber, optionValue, attempts, viaBetterQuest, timer };
+      // Remember the attempt so a refresh right after submitting still shows the verdict.
+      recordFreshSubmit(document, questionNumber, optionValue, attempts);
       return true;
     });
   }
@@ -1051,6 +1130,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
           } else if (target.answered && target.select.value && Number.isInteger(qn) && !markedCorrect.has(qn)) {
             if (outcome === 'correct') {
               markedCorrect.add(qn);
+              consumeFreshSubmit(document, qn); // celebrated live — don't replay it after a refresh
               const value = target.select.value;
               void pdfViewer?.ready?.then(ok => {
                 if (!disposed && ok) pdfViewer?.celebrate?.(qn, value, true);
@@ -1324,6 +1404,9 @@ export function createSlideAssessmentEnhancement(presentation: HTMLElement) {
     document.body.append(toast);
     const timer = setTimeout(() => { toast.remove(); toastTimers.delete(timer); }, 4000);
     toastTimers.add(timer);
+    // Whole-screen verdict: green check for right, red pulse for wrong.
+    if (verdict === 'correct') celebrateScreen(document.body);
+    else flashScreen(document.body);
   };
   const readSlideVerdict = (group: HTMLElement): 'correct' | 'wrong' | null => {
     const feedback = group.querySelector('.instanceitempart-feedback .feedback, .feedback');
@@ -1366,8 +1449,17 @@ export function createSlideAssessmentEnhancement(presentation: HTMLElement) {
     }
   };
   presentation.addEventListener('change', paint); paint();
+  // Same manual test hook as the PDF view — run from the page console:
+  //   document.dispatchEvent(new Event('betterquest:party'))            green celebration
+  //   document.dispatchEvent(new CustomEvent('betterquest:party',{detail:'wrong'}))  red flash
+  const handlePartyTrigger = (event: Event) => {
+    if ((event as CustomEvent).detail === 'wrong') flashScreen(document.body);
+    else celebrateScreen(document.body);
+  };
+  document.addEventListener('betterquest:party', handlePartyTrigger);
   return { reconcile: paint, dispose() {
     presentation.removeEventListener('change', paint); presentation.removeAttribute('data-betterquest-slide');
+    document.removeEventListener('betterquest:party', handlePartyTrigger);
     for (const timer of toastTimers) clearTimeout(timer);
     toastTimers.clear();
     document.querySelectorAll('.bq-slide-verdict').forEach(el => el.remove());

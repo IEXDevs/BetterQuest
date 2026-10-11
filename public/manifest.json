@@ -39,7 +39,11 @@
       "resources": [
         "pdf.worker.min.mjs",
         "pdfjs/wasm/*",
-        "pdfjs/standard_fonts/*"
+        "pdfjs/standard_fonts/*",
+        "assets/*",
+        "*.png",
+        "correct*.png",
+        "wrong*.png"
       ],
       "matches": ["https://quest.cns.utexas.edu/*"]
     }

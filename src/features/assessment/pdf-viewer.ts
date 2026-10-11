@@ -1,4 +1,5 @@
 import { mapPdfOptionLabels, parseQuestionBoundary, extractQuestionPoints, clean, type PdfOptionTarget, type PdfTextRun } from '../../adapters/quest/assessment';
+import { celebrateScreen, flashScreen } from './confetti';
 
 export interface InteractivePdfPage {
   width: number;
@@ -317,7 +318,8 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     .option-hit.is-wrong::after{
       content:'✕';
       position:absolute;
-      right:4px;
+      left:calc(100% + 6px);
+      right:auto;
       top:50%;
       display:grid;
       place-items:center;
@@ -343,7 +345,8 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     .option-hit.is-correct::after{
       content:'✓';
       position:absolute;
-      right:4px;
+      left:calc(100% + 6px);
+      right:auto;
       top:50%;
       display:grid;
       place-items:center;
@@ -363,19 +366,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       50%{box-shadow:0 0 0 3px rgba(59,130,246,.5),0 0 14px rgba(59,130,246,.55)}
       75%{box-shadow:0 0 0 3px rgba(168,85,247,.5),0 0 14px rgba(168,85,247,.55)}
     }
-    .confetti-bit{
-      position:absolute;
-      z-index:40;
-      width:6px;
-      height:6px;
-      border-radius:2px;
-      pointer-events:none;
-      animation:bq-confetti-fall 1.1s ease-out forwards;
-    }
-    @keyframes bq-confetti-fall{
-      to{transform:translate(var(--dx),var(--dy)) rotate(540deg);opacity:0}
-    }
-    @media(prefers-reduced-motion:reduce){.option-hit.is-correct{animation:none}.confetti-bit{display:none}.verdict-toast{animation:none}}
+    @media(prefers-reduced-motion:reduce){.option-hit.is-correct{animation:none}.verdict-toast{animation:none}}
     .loading,.error{display:grid;place-items:center;min-height:280px;padding:28px;text-align:center;color:var(--bq-text,#18253a)}
     .error{color:var(--bq-warning,#a96645)}
     .pdf-submit-btn{
@@ -538,6 +529,15 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     }
   };
   document.addEventListener('keydown', handleKey);
+
+  // Manual test hook — run from the page console:
+  //   document.dispatchEvent(new Event('betterquest:party'))            green celebration
+  //   document.dispatchEvent(new CustomEvent('betterquest:party',{detail:'wrong'}))  red flash
+  const handlePartyTrigger = (event: Event) => {
+    if ((event as CustomEvent).detail === 'wrong') flashScreen(screenLayerHost());
+    else celebrateScreen(screenLayerHost());
+  };
+  document.addEventListener('betterquest:party', handlePartyTrigger);
 
   function paintZoom() {
     zoomValue.textContent = `${Math.round(zoomLevel * 100)}%`;
@@ -743,24 +743,11 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     }
   }
 
-  function burst(pageEl: HTMLElement) {
-    if (document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
-    const colors = ['#f43f5e', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
-    const originLeft = 50, originTop = 30;
-    for (let i = 0; i < 24; i++) {
-      const bit = document.createElement('span');
-      bit.className = 'confetti-bit';
-      bit.setAttribute('aria-hidden', 'true');
-      const angle = (i / 24) * Math.PI * 2 + Math.random() * 0.5;
-      const distance = 40 + Math.random() * 70;
-      bit.style.left = `${originLeft}%`;
-      bit.style.top = `${originTop}%`;
-      bit.style.background = colors[i % colors.length];
-      bit.style.setProperty('--dx', `${Math.cos(angle) * distance}px`);
-      bit.style.setProperty('--dy', `${Math.sin(angle) * distance - 30}px`);
-      pageEl.append(bit);
-      setTimeout(() => bit.remove(), 1300);
-    }
+  /** Fullscreen's top layer hides everything outside it, so the celebration
+   * lives in the shell while fullscreen and on the page body otherwise. */
+  function screenLayerHost(): HTMLElement {
+    if (document.fullscreenElement?.contains(element)) return shell;
+    return document.body || shell;
   }
 
   return {
@@ -831,12 +818,17 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         : `Question ${questionNumber} incorrect ✕ — try again`;
       shell.append(toast);
       setTimeout(() => toast.remove(), 4000);
+      if (verdict === 'wrong') flashScreen(screenLayerHost());
     },
     celebrate(questionNumber: number, optionValue: string, party: boolean) {
       const boxes = [...shadow.querySelectorAll<HTMLElement>(`.option-hit[data-question="${questionNumber}"]`)];
       const target = boxes.find(box => box.dataset.option === optionValue);
-      if (!target || target.hidden) return;
+      if (!target) return;
+      // A fresh verdict (party) always shows its box even if Quest's reflection
+      // already marked the question answered; only historic answers stay hidden.
+      if (target.hidden && !party) return;
       keptCorrect.add(questionNumber);
+      target.hidden = false;
       for (const box of boxes) {
         if (box !== target) box.hidden = true;
       }
@@ -844,12 +836,13 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       target.classList.add('is-correct');
       target.setAttribute('aria-pressed', 'true');
       target.setAttribute('aria-label', `Question ${questionNumber}: option ${optionValue} is correct`);
+      // Celebration first: UI cleanup must never be able to block it.
+      if (party) celebrateScreen(screenLayerHost());
       const confirm = submitButtons.get(questionNumber);
       confirm?.remove();
       submitButtons.delete(questionNumber);
       if (pillQn === questionNumber) paintPill(null);
       refreshMeta();
-      if (party && target.parentElement) burst(target.parentElement);
     },
     setFullscreen(active: boolean) {
       if (active) {
@@ -883,6 +876,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       document.removeEventListener('fullscreenchange', handleFsChange);
       document.removeEventListener('click', handleGlobalClick);
       document.removeEventListener('keydown', handleKey);
+      document.removeEventListener('betterquest:party', handlePartyTrigger);
       document.defaultView?.removeEventListener('resize', fitPagesToViewer);
       resizeObserver?.disconnect();
       abort.abort();

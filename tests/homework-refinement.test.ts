@@ -363,6 +363,79 @@ test('a fresh correct submit celebrates with confetti and tells the user', async
   } finally { workspace.dispose(); dom.window.close(); }
 });
 
+test('a correct submit still celebrates after the page reloads', async () => {
+  const dom = homework();
+  const doc = dom.window.document;
+  const root = doc.querySelector<HTMLElement>('#target')!;
+  const celebrateCalls: Array<[number, string, boolean]> = [];
+  const verdictCalls: Array<[number, string]> = [];
+  const createPdfViewer = (container: HTMLElement) => {
+    const element = doc.createElement('section');
+    element.dataset.betterquest = 'interactive-pdf';
+    container.append(element);
+    return { element, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {}, markWrong() {},
+      celebrate(qn: number, opt: string, party: boolean) { celebrateCalls.push([qn, opt, party]); },
+      announce(qn: number, verdict: string) { verdictCalls.push([qn, verdict]); },
+      dispose() { element.remove(); } };
+  };
+  let workspace = createPdfAssessmentWorkspace(root, { createPdfViewer });
+  workspace.reconcile();
+  try {
+    const rail = doc.querySelector('[data-betterquest="assessment-rail"]')!.shadowRoot!;
+    rail.querySelector<HTMLButtonElement>('[data-value="2"]')!.click();
+    rail.querySelector<HTMLButtonElement>('.submit')!.click();
+    // Quest grades the answer and serves the page again — with extra query params.
+    workspace.dispose();
+    dom.window.history.replaceState({}, '', '/student/instances/show?instance=courseuserassignment_1&saved=1');
+    const select = doc.querySelector<HTMLSelectElement>('tr[data-id="cuaip_1"] select')!;
+    select.value = '2';
+    select.disabled = true;
+    doc.querySelector('tr[data-id="cuaip_1"] .status')!.innerHTML = '<span class="text-success">Correct</span>';
+    doc.querySelector('tr[data-id="cuaip_1"] .previous')!.textContent = '2 / 3';
+    workspace = createPdfAssessmentWorkspace(root, { createPdfViewer });
+    workspace.reconcile();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(celebrateCalls, [[1, '2', true]], 'The celebration survives the reload');
+    assert.deepEqual(verdictCalls, [[1, 'correct']], 'The user is told they were right after a refresh');
+  } finally { workspace.dispose(); dom.window.close(); }
+});
+
+test('a wrong submit keeps its red mark after the page reloads', async () => {
+  const dom = homework();
+  const doc = dom.window.document;
+  const root = doc.querySelector<HTMLElement>('#target')!;
+  const wrongCalls: Array<[number, string]> = [];
+  const verdictCalls: Array<[number, string]> = [];
+  const createPdfViewer = (container: HTMLElement) => {
+    const element = doc.createElement('section');
+    element.dataset.betterquest = 'interactive-pdf';
+    container.append(element);
+    return { element, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {},
+      markWrong(qn: number, value: string) { wrongCalls.push([qn, value]); },
+      celebrate() {}, announce(qn: number, verdict: string) { verdictCalls.push([qn, verdict]); },
+      dispose() { element.remove(); } };
+  };
+  let workspace = createPdfAssessmentWorkspace(root, { createPdfViewer });
+  workspace.reconcile();
+  try {
+    const rail = doc.querySelector('[data-betterquest="assessment-rail"]')!.shadowRoot!;
+    rail.querySelector<HTMLButtonElement>('[data-value="2"]')!.click();
+    rail.querySelector<HTMLButtonElement>('.submit')!.click();
+    // Refresh after a wrong try: Quest keeps the attempts but not the choice.
+    workspace.dispose();
+    const select = doc.querySelector<HTMLSelectElement>('tr[data-id="cuaip_1"] select')!;
+    select.value = '';
+    select.disabled = false;
+    doc.querySelector('tr[data-id="cuaip_1"] .previous')!.textContent = '2 / 3';
+    workspace = createPdfAssessmentWorkspace(root, { createPdfViewer });
+    workspace.reconcile();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(wrongCalls[0], [1, '2'], 'The red mark comes back after a refresh');
+    assert.ok(wrongCalls.every(([qn, value]) => qn === 1 && value === '2'), 'Marks only ever target the submitted answer');
+    assert.deepEqual(verdictCalls, [[1, 'wrong']], 'The user is reminded to try again exactly once');
+  } finally { workspace.dispose(); dom.window.close(); }
+});
+
 test('answer cards show right or wrong status with points earned', () => {
   const dom = new JSDOM('<main id="main-content"><div id="target">' +
     '<p id="due">Due date 10/14/26 11:59 PM</p>' +

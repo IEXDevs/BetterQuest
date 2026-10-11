@@ -196,6 +196,10 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       theme.update(state.preferences.theme);
       if (enabled.animations === false) document.documentElement.dataset.betterquestAnimations = 'disabled';
       else document.documentElement.removeAttribute('data-betterquest-animations');
+      if (enabled.celebrations === false) document.documentElement.dataset.betterquestCelebrations = 'disabled';
+      else document.documentElement.removeAttribute('data-betterquest-celebrations');
+      if (enabled.whimsy === false) document.documentElement.dataset.betterquestWhimsy = 'disabled';
+      else document.documentElement.removeAttribute('data-betterquest-whimsy');
       runtime.reconcile();
       runtime.refresh(['course-artwork', 'bookmarks']);
     } catch { /* Do not mount storage-backed features with unknown preferences. */ }
@@ -220,5 +224,7 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
     manualAbort.abort();
     unsubscribe?.(); runtime.dispose(); theme.dispose();
     document.documentElement.removeAttribute('data-betterquest-animations');
+    document.documentElement.removeAttribute('data-betterquest-celebrations');
+    document.documentElement.removeAttribute('data-betterquest-whimsy');
   } };
 }

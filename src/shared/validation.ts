@@ -89,16 +89,18 @@ export function isLocalState(value: unknown): value is LocalState {
       string(id, 6000) && completed === true && (cache.assignments as Assignment[]).some(assignment => assignment.id === id)))) &&
     array(value.bookmarks, isBookmark, 5000) && unique(value.bookmarks) && array(value.study, isStudyRecord, 1000) &&
     themePreference(value.preferences.theme) &&
-    (value.preferences.features === undefined || (object(value.preferences.features) && only(value.preferences.features, ['assignments', 'bookmarks', 'animations']) &&
+    (value.preferences.features === undefined || (object(value.preferences.features) && only(value.preferences.features, ['assignments', 'bookmarks', 'animations', 'celebrations', 'whimsy']) &&
       (value.preferences.features.assignments === undefined || typeof value.preferences.features.assignments === 'boolean') &&
       (value.preferences.features.bookmarks === undefined || typeof value.preferences.features.bookmarks === 'boolean') &&
-      (value.preferences.features.animations === undefined || typeof value.preferences.features.animations === 'boolean')));
+      (value.preferences.features.animations === undefined || typeof value.preferences.features.animations === 'boolean') &&
+      (value.preferences.features.celebrations === undefined || typeof value.preferences.features.celebrations === 'boolean') &&
+      (value.preferences.features.whimsy === undefined || typeof value.preferences.features.whimsy === 'boolean')));
 }
 
 export function isStudyExport(value: unknown): value is StudyExport {
   if (!object(value) || !only(value, ['schema', 'exportedAt', 'courses', 'assignments', 'questions', 'sources', 'collection']) ||
-      value.schema !== 'betterquest.study.v1' || !timestamp(value.exportedAt) || !array(value.courses, isCourse, 2000) ||
-      !array(value.assignments, isAssignment, 10000) || !array(value.questions, isQuestion, 10000) || !object(value.collection) || !Array.isArray(value.sources)) return false;
+    value.schema !== 'betterquest.study.v1' || !timestamp(value.exportedAt) || !array(value.courses, isCourse, 2000) ||
+    !array(value.assignments, isAssignment, 10000) || !array(value.questions, isQuestion, 10000) || !object(value.collection) || !Array.isArray(value.sources)) return false;
   const courses = value.courses;
   const assignments = value.assignments;
   return unique(courses) && unique(assignments) && unique(value.questions) &&

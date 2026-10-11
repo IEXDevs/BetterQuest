@@ -23,7 +23,7 @@ export function isCommand(value: unknown): value is Command {
     case 'bookmarks:put': return isBookmark(value.bookmark);
     case 'bookmarks:remove': return typeof value.questionId === 'string' && value.questionId.length <= 8000;
     case 'theme:set': return themePreference(value.preference);
-    case 'feature:set': return (value.feature === 'assignments' || value.feature === 'bookmarks' || value.feature === 'animations') && typeof value.enabled === 'boolean';
+    case 'feature:set': return (value.feature === 'assignments' || value.feature === 'bookmarks' || value.feature === 'animations' || value.feature === 'celebrations' || value.feature === 'whimsy') && typeof value.enabled === 'boolean';
     case 'study:save': return isStudyRecord(value.record);
     default: return false;
   }

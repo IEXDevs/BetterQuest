@@ -1,5 +1,5 @@
 import { context } from 'esbuild';
-import { cp, mkdir } from 'node:fs/promises';
+import { cp, mkdir, readdir } from 'node:fs/promises';
 import { watch as fsWatch } from 'node:fs';
 import http from 'node:http';
 
@@ -62,6 +62,16 @@ async function copyAssets() {
   await mkdir('dist', { recursive: true });
   await cp('public/manifest.json', 'dist/manifest.json');
   await cp('public/icons', 'dist/icons', { recursive: true });
+  await mkdir('dist/assets', { recursive: true });
+  try {
+    const publicEntries = await readdir('public', { withFileTypes: true });
+    for (const entry of publicEntries) {
+      if (entry.isFile() && /\.(png|jpe?g|webp|gif|svg)$/i.test(entry.name)) {
+        await cp(`public/${entry.name}`, `dist/${entry.name}`);
+        await cp(`public/${entry.name}`, `dist/assets/${entry.name}`);
+      }
+    }
+  } catch { /* no additional images */ }
   await mkdir('dist/pdfjs', { recursive: true });
   await cp('node_modules/pdfjs-dist/build/pdf.worker.min.mjs', 'dist/pdf.worker.min.mjs');
   await cp('node_modules/pdfjs-dist/wasm', 'dist/pdfjs/wasm', { recursive: true });
@@ -79,6 +89,10 @@ try {
       console.log(`[watch] Detected change in public/${filename}, updating dist/...`);
       await cp('public/manifest.json', 'dist/manifest.json');
       await cp('public/icons', 'dist/icons', { recursive: true });
+      if (filename && /\.(png|jpe?g|webp|gif|svg)$/i.test(filename)) {
+        await cp(`public/${filename}`, `dist/${filename}`);
+        await cp(`public/${filename}`, `dist/assets/${filename}`);
+      }
       notifyReload();
     } catch (err) {
       console.error('[watch] Failed to copy updated public assets:', err);

@@ -421,6 +421,8 @@ export function createSettingsMenu(
     ['assignments', 'Assignment tracker', 'Homepage overview and course summaries.'],
     ['bookmarks', 'Question bookmarks', 'Show save icons; saved questions remain available.'],
     ['animations', 'Animations', 'Fluid swirly backgrounds and motion.'],
+    ['celebrations', 'Answer celebrations', 'A full-screen wall of checkmarks and a smiley when you get one right; sad faces and a cat when you do not.'],
+    ['whimsy', 'Whimsy mode', 'Random funny pictures celebrate right and wrong answers.'],
   ] as const) {
     const label = document.createElement('label');
     const text = document.createElement('span');

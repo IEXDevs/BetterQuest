@@ -297,8 +297,337 @@ test('interactive PDF marks wrong answers and celebrates correct ones', async ()
     assert.equal(visible.length, 1, 'Other options disappear once answered correctly');
     assert.ok(boxes[0].classList.contains('is-correct'), 'Correct answer is highlighted green');
     assert.ok(!boxes[0].classList.contains('is-wrong'));
-    assert.ok(viewer.element.shadowRoot!.querySelectorAll('.confetti-bit').length > 0, 'Correct answer bursts confetti');
+    const party = dom.window.document.body.querySelector<HTMLElement>('.bq-celebration');
+    assert.ok(party, 'Correct answer lights up the whole screen');
+    assert.equal(party!.style.position, 'fixed', 'The backdrop covers the viewport with inline styles');
+    assert.match(party!.textContent || '', /✓/, 'A full wall of checkmarks covers the screen');
+    assert.ok(party!.querySelectorAll('.bq-verdict-tile').length >= 24, 'The wall is made of individual popping tiles');
+    const badge = party!.querySelector<HTMLElement>('.bq-badge');
+    assert.ok(badge, 'A mascot badge sits in the center');
+    assert.match(badge!.querySelector('.bq-badge-face')!.textContent || '', /😄/, 'The smiley shows right away');
+    assert.equal(badge!.querySelector('img'), null, 'No image yet — it waits for the animation');
     assert.match(viewer.element.shadowRoot!.querySelector('.meta')!.textContent!, /1 answer choice/, 'Kept correct answer stays counted');
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('a fresh verdict reveals a suppressed answer box and still celebrates', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    // Quest's reflection suppresses the answered question before the verdict lands.
+    viewer.setAnsweredQuestions(new Set([1]));
+    const boxes = [...viewer.element.shadowRoot!.querySelectorAll<HTMLElement>('.option-hit[data-question="1"]')];
+    assert.ok(boxes.length > 0, 'Answered question has boxes');
+    assert.ok(boxes.every(box => box.hidden), 'Answered questions start suppressed');
+    const target = viewer.element.shadowRoot!.querySelector<HTMLElement>('.option-hit[data-option="2"]')!;
+
+    // Plain load of an old correct answer: stays hidden, no celebration replay.
+    viewer.celebrate(1, '2', false);
+    assert.ok(target.hidden, 'Historical answers stay suppressed');
+    assert.equal(dom.window.document.body.querySelector('.bq-celebration'), null, 'No celebration replay on load');
+
+    // Fresh verdict: the box comes back and the screen lights up green.
+    viewer.celebrate(1, '2', true);
+    assert.ok(!target.hidden, 'The celebrated box comes back for the verdict');
+    assert.ok(target.classList.contains('is-correct'), 'And is highlighted green');
+    assert.ok(dom.window.document.body.querySelector('.bq-celebration'), 'The green celebration shows even after the suppression');
+    const css = [...viewer.element.shadowRoot!.querySelectorAll('style')].map(s => s.textContent).join('\n');
+    assert.match(css, /\.option-hit\.is-correct::after\{[^}]*left:calc\(100% \+ 6px\)/, 'Checkmark sits to the right of the box, clear of the text');
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('the green celebration still shows when the system asks for reduced motion', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1' });
+  Object.defineProperty(dom.window, 'matchMedia', {
+    configurable: true,
+    value: (query: string) => ({
+      matches: /prefers-reduced-motion/.test(query),
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+    }),
+  });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    viewer.celebrate(1, '2', true);
+    const layer = dom.window.document.body.querySelector<HTMLElement>('.bq-celebration');
+    assert.ok(layer, 'The verdict never gets skipped for reduced motion');
+    assert.equal(layer!.style.position, 'fixed', 'Covering the screen needs no motion to be seen');
+    assert.match(layer!.textContent || '', /✓/, 'The checkmark rides along');
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('the mascot image waits for the entry animation and then replaces the emoji', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1' });
+  (globalThis as { chrome?: { runtime?: { getURL?: (path: string) => string } } }).chrome = {
+    runtime: { getURL: (path: string) => `chrome-extension://test/${path}` },
+  };
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    dom.window.document.documentElement.dataset.betterquestWhimsy = 'disabled';
+    viewer.celebrate(1, '2', true);
+    const badge = dom.window.document.body.querySelector<HTMLElement>('.bq-badge')!;
+    assert.match(badge.querySelector('.bq-badge-face')!.textContent || '', /😄/, 'The emoji mascot is instant');
+    assert.equal(badge.querySelector('img'), null, 'The packaged image waits until the entry animation is done');
+    await new Promise(resolve => setTimeout(resolve, 900));
+    const img = badge.querySelector('img');
+    assert.ok(img, 'The mascot image loads after the animation');
+    assert.equal(img!.getAttribute('src'), 'chrome-extension://test/assets/verdict-happy.png', 'It points at the packaged asset');
+    assert.ok(badge.querySelector('.bq-badge-face'), 'The emoji stays until the image itself finishes loading');
+  } finally {
+    delete (globalThis as { chrome?: unknown }).chrome;
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('celebrations can be turned off in settings', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    dom.window.document.documentElement.dataset.betterquestCelebrations = 'disabled';
+    viewer.celebrate(1, '2', true);
+    assert.equal(dom.window.document.body.querySelector('.bq-celebration'), null, 'No wall when celebrations are off');
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('betterquest:party', { detail: 'wrong' }));
+    assert.equal(dom.window.document.body.querySelector('.bq-screen-flash'), null, 'No sad face wall either');
+    delete dom.window.document.documentElement.dataset.betterquestCelebrations;
+    dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
+    assert.ok(dom.window.document.body.querySelector('.bq-celebration'), 'The wall comes back as soon as the setting is on');
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('the verdict wall really animates where the Web Animations API exists', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1' });
+  const calls: { keyframes: unknown; options: { delay?: number } }[] = [];
+  (dom.window.HTMLElement.prototype as unknown as { animate: (keyframes: unknown, options?: unknown) => unknown }).animate =
+    function (keyframes: unknown, options?: unknown) {
+      calls.push({ keyframes, options: options as { delay?: number } });
+      return { cancel() {}, finish() {}, onfinish: null };
+    };
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    viewer.celebrate(1, '2', true);
+    assert.ok(calls.length >= 24, 'The backdrop, every wall tile, and the badge animate');
+    assert.ok(calls.some(call => (call.options?.delay ?? 0) > 0), 'Tiles ripple out from the center with staggered delays');
+    assert.ok(calls.some(call => Array.isArray(call.keyframes) && call.keyframes.length === 3), 'The pop-in overshoots before it settles');
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('the console party trigger shows the green celebration and the red flash on demand', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
+    assert.ok(dom.window.document.body.querySelector('.bq-celebration'), 'Console event shows the green celebration');
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('betterquest:party', { detail: 'wrong' }));
+    assert.ok(dom.window.document.body.querySelector('.bq-screen-flash'), 'Console event flashes red for a wrong verdict');
+    viewer.dispose();
+    const layers = dom.window.document.body.querySelectorAll('.bq-celebration').length;
+    const flashes = dom.window.document.body.querySelectorAll('.bq-screen-flash').length;
+    dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
+    assert.equal(dom.window.document.body.querySelectorAll('.bq-celebration').length, layers, 'A disposed viewer stops listening');
+    assert.equal(dom.window.document.body.querySelectorAll('.bq-screen-flash').length, flashes, 'A disposed viewer stops flashing');
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('whimsy mode replaces the default emoji mascot with a randomized picture from the pool', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1' });
+  (globalThis as { chrome?: { runtime?: { getURL?: (path: string) => string } } }).chrome = {
+    runtime: { getURL: (path: string) => `chrome-extension://test/${path}` },
+  };
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+
+    // Test correct answer (whimsy is on by default)
+    viewer.celebrate(1, '1', true);
+    const party = dom.window.document.body.querySelector<HTMLElement>('.bq-celebration');
+    assert.ok(party, 'Correct answer triggers celebration');
+    const badge = party!.querySelector<HTMLElement>('.bq-badge');
+    assert.ok(badge, 'Badge exists');
+    const correctImg = badge!.querySelector<HTMLImageElement>('img.bq-whimsy-img');
+    assert.ok(correctImg, 'Whimsy image is rendered directly instead of default emoji');
+    assert.match(correctImg!.getAttribute('src') || '', /^chrome-extension:\/\/test\/correct\d*\.png$/, 'Src matches one of the correct images in the pool');
+    assert.equal(badge!.querySelector('.bq-badge-face'), null, 'Smiley face emoji is replaced');
+
+    // Test wrong answer
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('betterquest:party', { detail: 'wrong' }));
+    const flash = dom.window.document.body.querySelector<HTMLElement>('.bq-screen-flash');
+    assert.ok(flash, 'Wrong answer triggers flash wall');
+    const wrongBadge = flash!.querySelector<HTMLElement>('.bq-badge');
+    assert.ok(wrongBadge, 'Wrong badge exists');
+    const wrongImg = wrongBadge!.querySelector<HTMLImageElement>('img.bq-whimsy-img');
+    assert.ok(wrongImg, 'Whimsy image is rendered directly for wrong answer');
+    assert.match(wrongImg!.getAttribute('src') || '', /^chrome-extension:\/\/test\/wrong\d+\.png$/, 'Src matches one of the wrong images in the pool');
+    assert.equal(wrongBadge!.querySelector('.bq-badge-face'), null, 'Sad face emoji is replaced');
+
+    // Test turning whimsy off
+    dom.window.document.body.querySelectorAll('.bq-celebration, .bq-screen-flash').forEach(el => el.remove());
+    dom.window.document.documentElement.dataset.betterquestWhimsy = 'disabled';
+    dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
+    const offParty = dom.window.document.body.querySelector<HTMLElement>('.bq-celebration');
+    assert.ok(offParty, 'Party shows with whimsy disabled');
+    const offBadge = offParty!.querySelector<HTMLElement>('.bq-badge');
+    assert.ok(offBadge!.querySelector('.bq-badge-face'), 'Smiley face shows when whimsy is disabled');
+    assert.equal(offBadge!.querySelector('img'), null, 'No whimsy image when whimsy is disabled');
+  } finally {
+    delete (globalThis as { chrome?: unknown }).chrome;
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('when animations are disabled, verdict wall uses calm motion while inline indicators remain active', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1' });
+  const calls: { keyframes: unknown; options: { duration?: number; delay?: number } }[] = [];
+  (dom.window.HTMLElement.prototype as unknown as { animate: (keyframes: unknown, options?: unknown) => unknown }).animate =
+    function (keyframes: unknown, options?: unknown) {
+      calls.push({ keyframes, options: options as { duration?: number; delay?: number } });
+      return { cancel() {}, finish() {}, onfinish: null };
+    };
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    dom.window.document.documentElement.dataset.betterquestAnimations = 'disabled';
+    viewer.markWrong(1, '2');
+    const wrongBox = viewer.element.shadowRoot!.querySelector<HTMLElement>('.option-hit[data-option="2"]')!;
+    assert.ok(wrongBox.classList.contains('is-wrong'), 'Inline strikethrough stays enabled even with animations off');
+
+    dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
+    const tileCalls = calls.filter(c => c.options?.duration === 160 && c.options?.delay === 0);
+    assert.ok(tileCalls.length > 0, 'Wall uses calm opacity transitions without spring delays');
   } finally {
     viewer.dispose();
     dom.window.close();
@@ -328,6 +657,7 @@ test('interactive PDF verdict toast tells the user correct or wrong', async () =
     assert.ok(toast);
     assert.equal(toast.getAttribute('role'), 'status');
     assert.match(toast.textContent || '', /incorrect/);
+    assert.ok(dom.window.document.querySelector('.bq-screen-flash'), 'Wrong answers flash the whole screen red');
     viewer.announce(1, 'correct');
     assert.equal(viewer.element.shadowRoot!.querySelectorAll('.verdict-toast').length, 1, 'Only one verdict shows at a time');
     assert.match(viewer.element.shadowRoot!.querySelector('.verdict-toast')!.textContent || '', /correct/);
