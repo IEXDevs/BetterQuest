@@ -36,7 +36,7 @@ test('interactive PDF viewer turns mapped answer rows into wide explicit-choice 
     const submitBtn = viewer.element.shadowRoot!.querySelector<HTMLButtonElement>('.pdf-submit-btn');
     assert.ok(submitBtn, 'Floating submit button must appear on PDF when equation is selected');
     assert.equal(submitBtn.getAttribute('aria-label'), 'Submit question 1');
-    assert.match(submitBtn.style.left, /calc\(/, 'Submit button must be positioned to the right of the equation');
+    assert.match(submitBtn.style.left || submitBtn.style.right, /calc\(|8px/, 'Submit button must be positioned to the right of the equation');
 
     // Clicking outside dismisses active selection and confirm button
     dom.window.document.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
@@ -293,11 +293,74 @@ test('interactive PDF marks wrong answers and celebrates correct ones', async ()
 
     viewer.celebrate(1, '1', true);
     const boxes = viewer.element.shadowRoot!.querySelectorAll<HTMLElement>('.option-hit[data-question="1"]');
-    assert.equal(boxes.length, 1, 'Other options disappear once answered correctly');
+    const visible = viewer.element.shadowRoot!.querySelectorAll<HTMLElement>('.option-hit[data-question="1"]:not([hidden])');
+    assert.equal(visible.length, 1, 'Other options disappear once answered correctly');
     assert.ok(boxes[0].classList.contains('is-correct'), 'Correct answer is highlighted green');
     assert.ok(!boxes[0].classList.contains('is-wrong'));
     assert.ok(viewer.element.shadowRoot!.querySelectorAll('.confetti-bit').length > 0, 'Correct answer bursts confetti');
     assert.match(viewer.element.shadowRoot!.querySelector('.meta')!.textContent!, /1 answer choice/, 'Kept correct answer stays counted');
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('interactive PDF verdict toast tells the user correct or wrong', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    viewer.announce(1, 'wrong');
+    const toast = viewer.element.shadowRoot!.querySelector<HTMLElement>('.verdict-toast')!;
+    assert.ok(toast);
+    assert.equal(toast.getAttribute('role'), 'status');
+    assert.match(toast.textContent || '', /incorrect/);
+    viewer.announce(1, 'correct');
+    assert.equal(viewer.element.shadowRoot!.querySelectorAll('.verdict-toast').length, 1, 'Only one verdict shows at a time');
+    assert.match(viewer.element.shadowRoot!.querySelector('.verdict-toast')!.textContent || '', /correct/);
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('interactive PDF image answers get full-territory boxes', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      // Labels only: no text runs between them, like image-based answers.
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    const first = viewer.element.shadowRoot!.querySelector<HTMLElement>('.option-hit[data-option="1"]')!;
+    const heightPct = Number.parseFloat(first.style.height);
+    const widthPct = Number.parseFloat(first.style.width);
+    assert.ok(heightPct > 6, `Image answer box must fill the inter-label span, got ${heightPct}% height`);
+    assert.ok(widthPct > 80, `Image answer box must span the column, got ${widthPct}% width`);
   } finally {
     viewer.dispose();
     dom.window.close();
@@ -399,12 +462,19 @@ test('interactive PDF viewer suppresses boxes for answered questions and always 
     assert.equal(q2Buttons[3].getAttribute('aria-pressed'), 'true');
     assert.ok(viewer.element.shadowRoot!.querySelector('.pdf-submit-btn'));
 
-    // Dynamically marking question 2 as answered removes all option boxes
+    // Dynamically marking question 2 as answered hides its boxes without deleting them
     viewer.setAnsweredQuestions(new Set([1, 2]));
-    assert.equal(viewer.element.shadowRoot!.querySelectorAll('.option-hit').length, 0);
+    const hiddenQ2 = [...viewer.element.shadowRoot!.querySelectorAll<HTMLButtonElement>('.option-hit[data-question="2"]')];
+    assert.equal(hiddenQ2.length, 4);
+    assert.ok(hiddenQ2.every(box => box.hidden), 'Answered boxes hide instead of deleting');
     assert.equal(viewer.element.shadowRoot!.querySelector('.pdf-submit-btn'), null);
     const meta = viewer.element.shadowRoot!.querySelector('.meta')!.textContent!;
     assert.match(meta, /All questions completed/);
+
+    // A transient misread (half-rendered row) must self-heal instead of wiping boxes
+    viewer.setAnsweredQuestions(new Set([1]));
+    const restoredQ2 = [...viewer.element.shadowRoot!.querySelectorAll<HTMLButtonElement>('.option-hit[data-question="2"]')];
+    assert.ok(restoredQ2.length === 4 && restoredQ2.every(box => !box.hidden), 'Boxes return when the question is answerable again');
   } finally {
     viewer.dispose();
     dom.window.close();

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { startPageFeatures } from '../src/content/features';
-import { createPdfAssessmentWorkspace } from '../src/features/assessment/workspace';
+import { createPdfAssessmentWorkspace, isSlideSubmitRevealed } from '../src/features/assessment/workspace';
 import { createSettingsMenu } from '../src/features/settings/menu';
 import { LocalRepository } from '../src/storage/repository';
 import { createQuestTheme } from '../src/features/theme/quest';
@@ -333,7 +333,7 @@ test('Slides answer equations and black question images stay on a light paper su
 });
 
 test('Slides reveal only the selected question submit and preserve natively hidden submits', async () => {
-  const dom = new JSDOM(`<html><head><style>.quest-hidden{visibility:hidden}</style></head><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target"><div id="presentation-div">
+  const dom = new JSDOM(`<html><head><style>.quest-hidden{display:none}</style></head><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target"><div id="presentation-div">
     <div class="instanceitempart" id="part-one"><div class="bg-light"><input id="one" type="radio" name="response_one" value="1"><label class="custom-control-label" for="one">One</label></div><button class="submit-btn">Submit one</button></div>
     <div class="instanceitempart" id="part-two"><div class="bg-light"><input id="two" type="radio" name="response_two" value="1"><label class="custom-control-label" for="two">Two</label></div><button class="submit-btn" hidden>Submit two</button></div>
   </div></div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/administer?instance=courseuserassignment_1', pretendToBeVisual: true });
@@ -351,6 +351,68 @@ test('Slides reveal only the selected question submit and preserve natively hidd
     assert.equal(second.querySelector<HTMLButtonElement>('button')!.hidden, true);
     first.querySelector('button')!.classList.add('quest-hidden'); await pause();
     assert.equal(first.dataset.betterquestQuestionReady, 'false');
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('slide submit readiness ignores BetterQuest-managed hiding', () => {
+  const dom = new JSDOM('<button id="s">Go</button>');
+  const btn = dom.window.document.querySelector('button')!;
+  btn.style.visibility = 'hidden';
+  assert.equal(isSlideSubmitRevealed(btn), true, 'Our own hide-until-picked must not lock the submit');
+  btn.style.visibility = '';
+  btn.style.display = 'none';
+  assert.equal(isSlideSubmitRevealed(btn), false, 'Quest hiding the submit still counts');
+  btn.style.display = '';
+  btn.disabled = true;
+  assert.equal(isSlideSubmitRevealed(btn), false, 'Disabled submit still counts');
+  dom.window.close();
+});
+
+test('slides move the submit beside the selected option', async () => {
+  const dom = new JSDOM(`<html><head></head><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target"><div id="presentation-div">
+    <div class="instanceitempart" id="part-one"><div class="bg-light">
+      <div class="custom-control custom-radio instanceitempart-choice"><div class="d-flex justify-content-start"><input id="one" type="radio" name="response_one" value="1"><label class="custom-control-label" for="one">One</label></div></div>
+      <div class="custom-control custom-radio instanceitempart-choice"><div class="d-flex justify-content-start"><input id="two" type="radio" name="response_one" value="2"><label class="custom-control-label" for="two">Two</label></div></div>
+    </div><div class="row instanceitempart-controls"><button class="submit-btn">Submit one</button></div></div>
+  </div></div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/administer?instance=courseuserassignment_1', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store(); const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    const submit = dom.window.document.querySelector<HTMLButtonElement>('.submit-btn')!;
+    const controls = dom.window.document.querySelector<HTMLElement>('.instanceitempart-controls')!;
+    assert.equal(submit.parentElement, controls, 'Submit starts in the native controls row');
+    const radio = dom.window.document.querySelector<HTMLInputElement>('#two')!;
+    radio.checked = true;
+    radio.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    await pause();
+    const option = radio.closest<HTMLElement>('.custom-control')!;
+    assert.ok(option.contains(submit), 'Submit moves beside the selected option');
+    features.dispose();
+    assert.equal(submit.parentElement, controls, 'Dispose restores the native position');
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('slides keep working after Quest replaces the slide HTML post-submit', async () => {
+  const dom = new JSDOM(`<html><head></head><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target"><div id="presentation-div">
+    <div class="instanceitempart" id="part-one"><div class="bg-light"><input id="one" type="radio" name="response_one" value="1"><label class="custom-control-label" for="one">One</label></div><button class="submit-btn">Submit one</button></div>
+  </div></div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/administer?instance=courseuserassignment_1', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store(); const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    const presentation = dom.window.document.querySelector<HTMLElement>('#presentation-div')!;
+    // Quest swaps the slide content after a submit (right or wrong).
+    presentation.replaceChildren();
+    presentation.innerHTML = `<div class="instanceitempart" id="part-two"><div class="bg-light"><input id="two" type="radio" name="response_two" value="1"><label class="custom-control-label" for="two">Two</label></div><button class="submit-btn">Submit two</button></div>`;
+    features.reconcile(); await pause();
+    const part = dom.window.document.querySelector<HTMLElement>('#part-two')!;
+    assert.equal(part.dataset.betterquestQuestionReady, 'false');
+    const radio = part.querySelector<HTMLInputElement>('input')!;
+    radio.checked = true;
+    radio.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    await pause();
+    assert.equal(part.dataset.betterquestQuestionReady, 'true', 'Re-rendered slides must reveal their submit once answered');
   } finally { features.dispose(); dom.window.close(); }
 });
 

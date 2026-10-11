@@ -134,6 +134,20 @@ function installStyles(document: Document) {
     [data-betterquest-pdf-workspace="enhanced"][data-betterquest-pdf-mode="basic"] > :not(#pdf-frame):not([data-betterquest="assessment-rail"]){
       grid-column:1 / -1!important;
     }
+    /* Single-page basic view: the info header (due date + PDF Download) is the
+       grid item on live pages, so pin the wrapper — not just the inner due row. */
+    [data-betterquest-pdf-workspace="enhanced"][data-betterquest-pdf-mode="basic"] > #info-header-div,
+    [data-betterquest-pdf-workspace="enhanced"][data-betterquest-pdf-mode="old"] > #info-header-div{
+      grid-column:1 / -1!important;
+      grid-row:1!important;
+      margin:0!important;
+    }
+    /* Slide paging and the quicklink strip duplicate the rail question cards;
+       hiding them (basic view only) is what keeps the page to one viewport. */
+    [data-betterquest-pdf-workspace="enhanced"][data-betterquest-pdf-mode="basic"] :is(#upper-paging-div, #lower-paging-div, #instanceitem-list),
+    [data-betterquest-pdf-workspace="enhanced"][data-betterquest-pdf-mode="old"] :is(#upper-paging-div, #lower-paging-div, #instanceitem-list){
+      display:none!important;
+    }
     #pdf-frame,
     [data-betterquest-pdf-workspace="enhanced"] #pdf-frame{
       display:block!important;
@@ -226,7 +240,7 @@ function installStyles(document: Document) {
     :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="old"] #pdf-frame iframe,
     #pdf-frame[data-betterquest-pdf-mode="basic"] iframe{
       height: calc(100vh - 104px) !important;
-      min-height: 760px !important;
+      min-height: min(760px, calc(100vh - 140px)) !important;
       border: 0;
       background: #fff;
       color-scheme: light;
@@ -330,6 +344,7 @@ function installStyles(document: Document) {
     #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart :where(p,span,label,h1,h2,h3,h4,h5,h6,mjx-container,.MathJax,.MathJax_Display){color:#18253a!important}
     #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart :where(img,svg,canvas){filter:none!important;mix-blend-mode:normal!important;opacity:1;color-scheme:light}
     #presentation-div[data-betterquest-slide="enhanced"] .custom-control{margin:4px 0}
+    #presentation-div[data-betterquest-slide="enhanced"] .instanceitempart .d-flex > .submit-btn{margin-left:auto;align-self:center;flex-shrink:0}
     #presentation-div[data-betterquest-slide="enhanced"] .custom-control-label{display:block!important;min-height:48px;padding:11px 15px 11px 42px!important;border:1px solid #d9d4c9;border-radius:8px;color:#18253a!important;background:#fff;cursor:pointer;transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease}
     #presentation-div[data-betterquest-slide="enhanced"] .custom-control-label:hover{border-color:#6366f1}
     #presentation-div[data-betterquest-slide="enhanced"] .custom-control-input:checked + .custom-control-label{border-color:#6366f1;box-shadow:0 0 0 3px #6366f124;background:#f5f3ff}
@@ -705,7 +720,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   const markedCorrect = new Set<number>();
   let lastBindings: ReturnType<typeof readAssessmentResponses> = [];
 
-  function readOutcome(table: HTMLTableElement, binding: { id: string }): 'correct' | 'exhausted' | null {
+  function readOutcome(table: HTMLTableElement, binding: { id: string }): 'correct' | 'incorrect' | 'exhausted' | null {
     const row = table.querySelector<HTMLElement>(`tr[data-id="${binding.id}"]`) ||
       table.querySelector<HTMLElement>(`#row-${binding.id}`);
     if (!row) return null;
@@ -713,6 +728,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     const statusText = status?.textContent || '';
     const success = Boolean(status?.querySelector('.text-success, [class*="text-success"]'));
     if (success || (/\bcorrect\b/i.test(statusText) && !/\b(?:incorrect|not correct)\b/i.test(statusText))) return 'correct';
+    const danger = Boolean(status?.querySelector('.text-danger, [class*="text-danger"]'));
+    if (danger || /\bincorrect\b/i.test(statusText)) return 'incorrect';
     const prev = row.querySelector('.previous')?.textContent || '';
     const match = prev.match(/(\d+)\s*\/\s*(\d+)/);
     if (match && Number(match[2]) > 0 && Number(match[1]) >= Number(match[2])) return 'exhausted';
@@ -936,6 +953,11 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     if (host.parentElement !== root || host.previousElementSibling !== elements.pdfFrame) elements.pdfFrame.after(host);
     reconcileLeadingGaps(elements.pdfFrame);
     const bindings = withNativeResponsesVisible(elements, () => readAssessmentResponses(elements.table));
+    if (!bindings.length && responseSignature) {
+      // Quest re-seeds its virtualized rows around submits; a momentarily
+      // empty table must not wipe the last good UI.
+      return;
+    }
     elements.responseRoot.dataset.betterquestNativeResponses = 'true';
     hideNativeStatsElements(document, root);
     paintSummary(bindings, elements.tally);
@@ -952,19 +974,24 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         clearPendingSubmit();
         if (target) {
           const qn = Number(target.number);
-          if (!target.answered && target.attempts > was.attempts) {
+          const outcome = readOutcome(elements.table, target);
+          if (!target.answered && (target.attempts > was.attempts || outcome === 'incorrect')) {
             if (was.viaBetterQuest && Number.isInteger(qn)) {
               let marked = wrongMarks.get(qn);
               if (!marked) { marked = new Set(); wrongMarks.set(qn, marked); }
               marked.add(was.optionValue);
             }
+            pdfViewer?.announce?.(qn, 'wrong');
           } else if (target.answered && target.select.value && Number.isInteger(qn) && !markedCorrect.has(qn)) {
-            if (readOutcome(elements.table, target) === 'correct') {
+            if (outcome === 'correct') {
               markedCorrect.add(qn);
               const value = target.select.value;
               void pdfViewer?.ready?.then(ok => {
                 if (!disposed && ok) pdfViewer?.celebrate?.(qn, value, true);
               });
+              pdfViewer?.announce?.(qn, 'correct');
+            } else if (outcome === 'incorrect' || outcome === 'exhausted') {
+              pdfViewer?.announce?.(qn, 'wrong');
             }
           }
         }
@@ -1060,14 +1087,54 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   } };
 }
 
+/**
+ * Readiness for a Quest slide submit button. Unlike the shared availability
+ * check, the button's own visibility is ignored: BetterQuest itself hides the
+ * button until an answer is picked, so counting that would lock it hidden
+ * forever. Display, disabled, hidden attributes, and ancestors still count.
+ */
+export function isSlideSubmitRevealed(button: HTMLButtonElement): boolean {
+  if (!button.isConnected) return false;
+  if (button.disabled || button.hidden ||
+    button.getAttribute('aria-hidden') === 'true' ||
+    button.getAttribute('aria-disabled') === 'true') return false;
+  const view = button.ownerDocument.defaultView;
+  if (view?.getComputedStyle(button).display === 'none') return false;
+  for (let node: HTMLElement | null = button.parentElement; node; node = node.parentElement) {
+    const style = node.ownerDocument.defaultView?.getComputedStyle(node);
+    if (node.hidden || node.inert || node.getAttribute('aria-hidden') === 'true' ||
+      style?.display === 'none' || style?.visibility === 'hidden' || style?.visibility === 'collapse') return false;
+  }
+  return true;
+}
+
 export function createSlideAssessmentEnhancement(presentation: HTMLElement) {
   const document = presentation.ownerDocument;
-  const submits = [...presentation.querySelectorAll<HTMLButtonElement>('.submit-btn')].map(button => {
-    const group = button.closest<HTMLElement>('.instanceitempart');
-    return { button, group, hidden: button.hidden, radios: group ? [...group.querySelectorAll<HTMLInputElement>('input[type="radio"][name^="response_"]')] : [] };
-  });
+  const originalHidden = new WeakMap<HTMLButtonElement, boolean>();
+  const originalSpot = new WeakMap<HTMLButtonElement, { parent: ParentNode; next: Node | null }>();
   const style = installStyles(document);
   presentation.dataset.betterquestSlide = 'enhanced';
+  // Quest replaces the slide HTML after every submit, so buttons must be
+  // collected live on each pass — never snapshotted once at mount.
+  const collect = () => [...presentation.querySelectorAll<HTMLButtonElement>('.submit-btn')].map(button => {
+    if (!originalHidden.has(button)) originalHidden.set(button, button.hidden);
+    const group = button.closest<HTMLElement>('.instanceitempart');
+    return { button, group, radios: group ? [...group.querySelectorAll<HTMLInputElement>('input[type="radio"][name^="response_"]')] : [] };
+  });
+  // The submit rides beside the picked option so it is always visible once an
+  // answer is chosen. It stays inside the same question part, so Quest's
+  // submit wiring (form id, closest part) keeps working untouched.
+  const placeSubmitNearSelection = (button: HTMLButtonElement, group: HTMLElement) => {
+    const checked = group.querySelector<HTMLInputElement>('input[type="radio"][name^="response_"]:checked');
+    const option = checked?.closest<HTMLElement>('.custom-control, .instanceitempart-choice');
+    const slot: HTMLElement | null = option?.querySelector<HTMLElement>('.d-flex') || option || null;
+    if (slot && button.parentElement !== slot) {
+      if (!originalSpot.has(button) && button.parentElement) {
+        originalSpot.set(button, { parent: button.parentElement, next: button.nextSibling });
+      }
+      slot.append(button);
+    }
+  };
   // Slides pages never mount the PDF workspace, so collapse the same native
   // spacer junk (stray breaks, empty paragraphs) between the header and the
   // first question here instead.
@@ -1105,11 +1172,12 @@ export function createSlideAssessmentEnhancement(presentation: HTMLElement) {
   };
   const paint = () => {
     reconcileGaps();
-    for (const item of submits) {
+    for (const item of collect()) {
       if (!item.group) continue;
-      const ready = withSlideEnhancementDisabled(presentation, () => isNativeControlAvailable(item.button)) &&
+      const ready = withSlideEnhancementDisabled(presentation, () => isSlideSubmitRevealed(item.button)) &&
         item.radios.some(radio => radio.checked && !radio.disabled);
       item.group.dataset.betterquestQuestionReady = String(ready);
+      if (ready) placeSubmitNearSelection(item.button, item.group);
     }
   };
   presentation.addEventListener('change', paint); paint();
@@ -1120,6 +1188,15 @@ export function createSlideAssessmentEnhancement(presentation: HTMLElement) {
       el.removeAttribute('data-betterquest-collapsed-gap');
     }
     collapsed.clear();
-    for (const item of submits) { item.group?.removeAttribute('data-betterquest-question-ready'); item.button.hidden = item.hidden; } style.remove();
+    for (const item of collect()) {
+      item.group?.removeAttribute('data-betterquest-question-ready');
+      if (originalHidden.has(item.button)) item.button.hidden = originalHidden.get(item.button)!;
+      const spot = originalSpot.get(item.button);
+      if (spot && spot.parent.isConnected) {
+        if (spot.next && spot.next.parentNode === spot.parent) spot.parent.insertBefore(item.button, spot.next);
+        else spot.parent.append(item.button);
+      }
+    }
+    style.remove();
   } };
 }

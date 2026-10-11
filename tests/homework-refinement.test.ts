@@ -23,7 +23,7 @@ function mount(dom: JSDOM) {
     const element = doc.createElement('section');
     element.dataset.betterquest = 'interactive-pdf';
     container.append(element);
-    return { element, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {}, markWrong() {}, celebrate() {}, dispose() { element.remove(); } };
+    return { element, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {}, markWrong() {}, celebrate() {}, announce() {}, dispose() { element.remove(); } };
   } });
   workspace.reconcile();
   return { root, workspace, rail: () => doc.querySelector('[data-betterquest="assessment-rail"]')!.shadowRoot! };
@@ -179,6 +179,10 @@ test('betterquest view shows info only while basic view shows answer panels with
 
     const css = doc.querySelector('[data-betterquest="assessment-style"]')!.textContent!;
     assert.match(css, /due-row\][^{]*\{[^}]*grid-row:1/, 'Due row must sit in the top grid row in basic view');
+    assert.match(css, /#info-header-div\{[^}]*grid-row:1/, 'Info header wrapper must sit in the top grid row in basic view');
+    assert.match(css, /#upper-paging-div/, 'Redundant paging must be hidden in basic view');
+    assert.match(css, /#instanceitem-list/, 'Quicklink strip must be hidden in basic view');
+    assert.match(css, /min\(760px, calc\(100vh - 140px\)\)/, 'Native PDF must never force the row taller than the viewport');
     const railCss = rail().querySelector('style')!.textContent!;
     assert.match(railCss, /max-height:calc\(100vh - 88px\)/, 'Sidebar must fit the viewport height');
   } finally { workspace.dispose(); dom.window.close(); }
@@ -211,13 +215,15 @@ test('a reflected wrong submit strikes through the answer on the PDF', () => {
   const doc = dom.window.document;
   const root = doc.querySelector<HTMLElement>('#target')!;
   const wrongCalls: Array<[number, string]> = [];
+  const verdictCalls: Array<[number, string]> = [];
   const workspace = createPdfAssessmentWorkspace(root, { createPdfViewer: container => {
     const element = doc.createElement('section');
     element.dataset.betterquest = 'interactive-pdf';
     container.append(element);
     return { element, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {},
       markWrong(qn: number, opt: string) { wrongCalls.push([qn, opt]); },
-      celebrate() {}, dispose() { element.remove(); } };
+      celebrate() {}, announce(qn: number, verdict: string) { verdictCalls.push([qn, verdict]); },
+      dispose() { element.remove(); } };
   } });
   workspace.reconcile();
   try {
@@ -230,6 +236,7 @@ test('a reflected wrong submit strikes through the answer on the PDF', () => {
     doc.querySelector('.previous')!.textContent = '2 / 3';
     workspace.reconcile();
     assert.deepEqual(wrongCalls, [[1, '2']], 'Reflected wrong attempt must strike through the PDF answer');
+    assert.deepEqual(verdictCalls, [[1, 'wrong']], 'User must be told the answer was wrong');
   } finally { workspace.dispose(); dom.window.close(); }
 });
 
@@ -250,12 +257,43 @@ test('a natively correct answer is celebrated on the PDF without confetti', asyn
     container.append(element);
     return { element, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {}, markWrong() {},
       celebrate(qn: number, opt: string, party: boolean) { celebrateCalls.push([qn, opt, party]); },
-      dispose() { element.remove(); } };
+      announce() {}, dispose() { element.remove(); } };
   } });
   workspace.reconcile();
   try {
     await new Promise(resolve => setTimeout(resolve, 10));
     assert.deepEqual(celebrateCalls, [[1, '3', false]], 'Correct answers get highlighted without replaying confetti on load');
+  } finally { workspace.dispose(); dom.window.close(); }
+});
+
+test('a fresh correct submit celebrates with confetti and tells the user', async () => {
+  const dom = homework();
+  const doc = dom.window.document;
+  const root = doc.querySelector<HTMLElement>('#target')!;
+  const celebrateCalls: Array<[number, string, boolean]> = [];
+  const verdictCalls: Array<[number, string]> = [];
+  const workspace = createPdfAssessmentWorkspace(root, { createPdfViewer: container => {
+    const element = doc.createElement('section');
+    element.dataset.betterquest = 'interactive-pdf';
+    container.append(element);
+    return { element, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {}, markWrong() {},
+      celebrate(qn: number, opt: string, party: boolean) { celebrateCalls.push([qn, opt, party]); },
+      announce(qn: number, verdict: string) { verdictCalls.push([qn, verdict]); },
+      dispose() { element.remove(); } };
+  } });
+  workspace.reconcile();
+  try {
+    const rail = doc.querySelector('[data-betterquest="assessment-rail"]')!.shadowRoot!;
+    rail.querySelector<HTMLButtonElement>('[data-value="2"]')!.click();
+    rail.querySelector<HTMLButtonElement>('.submit')!.click();
+    const row = doc.querySelector('tr[data-id="cuaip_1"]')!;
+    (row.querySelector('select') as HTMLSelectElement).disabled = true;
+    row.querySelector('.status')!.innerHTML = '<span class="text-success">Correct</span>';
+    row.querySelector('.previous')!.textContent = '2 / 3';
+    workspace.reconcile();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(celebrateCalls, [[1, '2', true]], 'Fresh correct answers celebrate with confetti');
+    assert.deepEqual(verdictCalls, [[1, 'correct']], 'User must be told the answer was correct');
   } finally { workspace.dispose(); dom.window.close(); }
 });
 

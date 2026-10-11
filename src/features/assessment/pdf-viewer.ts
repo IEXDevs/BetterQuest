@@ -145,8 +145,10 @@ function hitArea(
     right = Math.min(columnRight, Math.max(target.left + 50, maxEquationRight + 12));
     bottom = Math.min(verticalLimit - 2, Math.max(target.top + target.height + 4, maxEquationBottom + 4));
   } else {
-    right = Math.min(columnRight, target.left + Math.max(130, (columnRight - target.left) * 0.65));
-    bottom = Math.min(verticalLimit - 2, target.top + Math.max(22, target.height * 1.8));
+    // No text content (e.g. image answers): cover the option's full territory
+    // between consecutive labels instead of a thin strip.
+    right = columnRight;
+    bottom = Math.max(verticalLimit - 4, target.top + Math.max(22, target.height * 1.8));
   }
 
   const safeLeft = Math.max(0, Math.min(pageWidth - 40, left));
@@ -198,7 +200,11 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       z-index:999999!important;
     }
     *{box-sizing:border-box}
-    .shell{display:flex;flex-direction:column;height:100%;width:100%}
+    .shell{display:flex;flex-direction:column;height:100%;width:100%;position:relative}
+    .verdict-toast{position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:8px;padding:8px 16px;border-radius:999px;font:750 13px/1.2 ui-rounded,"Avenir Next",sans-serif;letter-spacing:.01em;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.3);animation:verdict-in .2s ease-out}
+    .verdict-toast[data-verdict="correct"]{background:#16a34a;color:#fff}
+    .verdict-toast[data-verdict="wrong"]{background:#dc2626;color:#fff}
+    @keyframes verdict-in{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
     .toolbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:8px 14px;background:var(--bq-surface,#fff);color:var(--bq-text,#18253a);box-shadow:0 3px 12px #08111c18;border-bottom:1px solid var(--bq-border,#d7e2f0)}
     .title{font-weight:750}
     .meta{color:var(--bq-pdf-muted);font-size:11px}
@@ -242,8 +248,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     .page canvas{display:block!important;width:100%!important;height:auto!important}
     .option-hit{
       position:absolute;
-      z-index:2;
-      border:1.5px dashed rgba(99,102,241,.5);
+      z-index:2;      border:1.5px dashed rgba(99,102,241,.5);
       border-radius:6px;
       background:rgba(99,102,241,.06);
       color:transparent;
@@ -278,6 +283,15 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       transform:translateY(-50%) scale(1.1);
       background:#4338ca;
       opacity:1
+    }
+    .option-hit:active{
+      transform:scale(.96);
+    }
+    .option-hit:active::before{
+      transform:translateY(-50%) scale(1.2);
+    }
+    .option-hit[hidden]{
+      display:none!important;
     }
     .option-hit[aria-pressed="true"]{
       border:2px solid #4f46e5;
@@ -360,7 +374,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     @keyframes bq-confetti-fall{
       to{transform:translate(var(--dx),var(--dy)) rotate(540deg);opacity:0}
     }
-    @media(prefers-reduced-motion:reduce){.option-hit.is-correct{animation:none}.confetti-bit{display:none}}
+    @media(prefers-reduced-motion:reduce){.option-hit.is-correct{animation:none}.confetti-bit{display:none}.verdict-toast{animation:none}}
     .loading,.error{display:grid;place-items:center;min-height:280px;padding:28px;text-align:center;color:var(--bq-text,#18253a)}
     .error{color:var(--bq-warning,#a96645)}
     .pdf-submit-btn{
@@ -404,7 +418,12 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14h6m0 0v6m0-6L3 21m17-7h-6m0 0v6m0-6 7 7M4 10h6m0 0V4m0 6L3 3m17 7h-6m0 0V4m0 6 7-7"></path></svg> Exit full screen`
       : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg> Full screen`;
   };
-  document.addEventListener('fullscreenchange', syncFs);
+  const handleFsChange = () => {
+    syncFs();
+    const boxes = shadow.querySelectorAll('.option-hit').length;
+    console.info(`[BetterQuest] Fullscreen changed. Answer boxes on PDF: ${boxes}.`);
+  };
+  document.addEventListener('fullscreenchange', handleFsChange);
   syncFs();
 
   fullscreenBtn.addEventListener('click', () => {
@@ -521,8 +540,8 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     paintZoom();
   }
 
-  zoomOut.addEventListener('click', () => { zoomLevel = Math.max(.7, zoomLevel - .1); paintZoom(); });
-  zoomIn.addEventListener('click', () => { zoomLevel = Math.min(2.0, zoomLevel + .1); paintZoom(); });
+  zoomOut.addEventListener('click', () => { zoomLevel = Math.max(.1, zoomLevel - .1); paintZoom(); });
+  zoomIn.addEventListener('click', () => { zoomLevel = Math.min(2.5, zoomLevel + .1); paintZoom(); });
   document.defaultView?.addEventListener('resize', fitPagesToViewer);
   const ResizeObserverCtor = document.defaultView?.ResizeObserver;
   const resizeObserver = ResizeObserverCtor ? new ResizeObserverCtor(() => fitPagesToViewer()) : undefined;
@@ -668,7 +687,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   const keptCorrect = new Set<number>();
 
   function refreshMeta() {
-    const activeHits = shadow.querySelectorAll<HTMLButtonElement>('.option-hit');
+    const activeHits = shadow.querySelectorAll<HTMLButtonElement>('.option-hit:not([hidden])');
     const pageLabel = `${pageElements.size} ${pageElements.size === 1 ? 'page' : 'pages'}`;
     const choiceLabel = activeHits.length > 0
       ? `${activeHits.length} answer ${activeHits.length === 1 ? 'choice' : 'choices'}`
@@ -780,13 +799,25 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       );
       box?.classList.add('is-wrong');
     },
+    announce(questionNumber: number, verdict: 'correct' | 'wrong') {
+      shell.querySelector('.verdict-toast')?.remove();
+      const toast = document.createElement('div');
+      toast.className = 'verdict-toast';
+      toast.dataset.verdict = verdict;
+      toast.setAttribute('role', 'status');
+      toast.textContent = verdict === 'correct'
+        ? `Question ${questionNumber} correct ✓`
+        : `Question ${questionNumber} incorrect ✕ — try again`;
+      shell.append(toast);
+      setTimeout(() => toast.remove(), 4000);
+    },
     celebrate(questionNumber: number, optionValue: string, party: boolean) {
       const boxes = [...shadow.querySelectorAll<HTMLElement>(`.option-hit[data-question="${questionNumber}"]`)];
       const target = boxes.find(box => box.dataset.option === optionValue);
-      if (!target) return;
+      if (!target || target.hidden) return;
       keptCorrect.add(questionNumber);
       for (const box of boxes) {
-        if (box !== target) box.remove();
+        if (box !== target) box.hidden = true;
       }
       target.classList.remove('is-wrong');
       target.classList.add('is-correct');
@@ -806,14 +837,15 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         element.removeAttribute('data-fullscreen');
       }
       syncFs();
+      fitPagesToViewer();
     },
     setAnsweredQuestions(answered: ReadonlySet<number>) {
       currentAnswered = new Set(answered);
       for (const button of shadow.querySelectorAll<HTMLButtonElement>('.option-hit')) {
         const q = Number(button.dataset.question);
-        if (currentAnswered.has(q) && !keptCorrect.has(q)) {
-          button.remove();
-        }
+        // Hide, never delete: a half-rendered row during Quest's reseed can
+        // misread as answered, and the boxes must come back afterwards.
+        button.hidden = currentAnswered.has(q) && !keptCorrect.has(q);
       }
       for (const [qNum, btn] of submitButtons.entries()) {
         if (currentAnswered.has(qNum)) {
@@ -827,7 +859,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     dispose() {
       if (disposed) return;
       disposed = true;
-      document.removeEventListener('fullscreenchange', syncFs);
+      document.removeEventListener('fullscreenchange', handleFsChange);
       document.removeEventListener('click', handleGlobalClick);
       document.removeEventListener('keydown', handleKey);
       document.defaultView?.removeEventListener('resize', fitPagesToViewer);
