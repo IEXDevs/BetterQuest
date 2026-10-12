@@ -41,6 +41,9 @@ export function subscribeLocal(callback: () => void): () => void {
       if (message && typeof message === 'object' && 'type' in message && message.type === 'betterquest:changed') callback();
     };
     port.onMessage.addListener(listener);
+    port.onDisconnect.addListener(() => {
+      void chrome.runtime.lastError;
+    });
     return () => {
       try { port.onMessage.removeListener(listener); } catch { /* host is gone */ }
       try { port.disconnect(); } catch { /* host is gone */ }

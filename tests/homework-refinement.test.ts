@@ -20,14 +20,17 @@ function homework(status = '') {
 function mount(dom: JSDOM) {
   const doc = dom.window.document;
   const root = doc.querySelector<HTMLElement>('#target')!;
+  const scrollToCalls: number[] = [];
   const workspace = createPdfAssessmentWorkspace(root, { createPdfViewer: container => {
     const element = doc.createElement('section');
     element.dataset.betterquest = 'interactive-pdf';
     container.append(element);
-    return { element, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {}, markWrong() {}, celebrate() {}, announce() {}, dispose() { element.remove(); } };
+    return { element, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {}, markWrong() {}, celebrate() {}, announce() {},
+      scrollToQuestion(qn: number) { scrollToCalls.push(qn); return true; },
+      dispose() { element.remove(); } };
   } });
   workspace.reconcile();
-  return { root, workspace, rail: () => doc.querySelector('[data-betterquest="assessment-rail"]')!.shadowRoot! };
+  return { root, workspace, scrollToCalls, rail: () => doc.querySelector('[data-betterquest="assessment-rail"]')!.shadowRoot! };
 }
 
 test('unused spacers between the due date and the PDF are collapsed without hiding real content', () => {
@@ -228,10 +231,10 @@ test('unified view shows answer panels, fullscreen, and a collapsible sidebar', 
     assert.ok(rail().querySelector('.metric-card.metric-score'), 'Your Score card exists');
     assert.ok(rail().querySelector('.metric-card.metric-average'), 'Class Average card exists');
 
-    const thermoFill = rail().querySelector<HTMLElement>('.thermo-fill')!;
-    const thermoPct = rail().querySelector<HTMLElement>('.thermo-pct')!;
-    assert.equal(thermoFill.style.height, '100%', 'Thermometer fills with progress');
-    assert.equal(thermoPct.textContent, '100%');
+    const deckPct = rail().querySelector<HTMLElement>('.deck-pct')!;
+    const pctValue = rail().querySelector<HTMLElement>('.pct-value')!;
+    assert.ok(deckPct, 'Bottom percentage display exists');
+    assert.equal(pctValue.textContent, '100%');
 
     const railCss = rail().querySelector('style')!.textContent!;
     assert.match(railCss, /\.rail\{[^}]*border-radius:14px/, 'Response deck gets rounded corners');
@@ -239,10 +242,10 @@ test('unified view shows answer panels, fullscreen, and a collapsible sidebar', 
     assert.match(railCss, /@keyframes bq-flow/, 'Progress flows like liquid');
     assert.match(railCss, /\.meter:hover span\{animation-duration:1s\}/, 'Hovering speeds the flow');
     assert.match(railCss, /bq-sheen/, 'Progress carries a shine sweep');
-    assert.match(railCss, /bq-thermo-flow/, 'Thermometer flows too');
     assert.match(railCss, /\[data-collapsed="true"\]\) \.metric-sd\{display:none\}/, 'Collapsed hides Standard Deviation');
-    assert.match(railCss, /\[data-collapsed="true"\]\) \.progress-wrap\{display:none\}/, 'Collapsed swaps the % bar for the thermometer');
-    assert.match(railCss, /\.thermo-fill/, 'Thermometer exists');
+    assert.match(railCss, /\[data-collapsed="true"\]\) \.progress-wrap\{display:none\}/, 'Collapsed swaps the % bar for the bottom progress deck');
+    assert.match(railCss, /\.deck-pct/, 'Bottom percentage display exists in styles');
+    assert.match(railCss, /\.qnav-btn\{[^}]*aspect-ratio:1/, 'Question buttons are square boxes');
 
     const css = doc.querySelector('[data-betterquest="assessment-style"]')!.textContent!;
     assert.match(css, /grid-template-rows:auto minmax\(0,1fr\)/, 'Workspace is a viewport-locked grid');
@@ -548,7 +551,7 @@ test('sidebar provides go to question on expanded view with green, orange, red, 
     '<tr data-id="cuaip_4"><td>4.</td><td><select name="response"><option value=""></option><option value="1">1</option></select></td><td class="status"></td><td class="previous">0 / 4</td><td class="correct"></td><td><button type="button" aria-label="Submit response">Submit</button></td></tr>' +
     '</tbody></table></div></div></main>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
 
-  const { workspace, rail } = mount(dom);
+  const { workspace, rail, scrollToCalls } = mount(dom);
   try {
     const r = rail();
 
@@ -556,6 +559,8 @@ test('sidebar provides go to question on expanded view with green, orange, red, 
     const qnavHeader = r.querySelector('.qnav-header');
     assert.ok(qnavHeader, 'Go to question header exists in expanded view');
     assert.equal(qnavHeader?.querySelector('.qnav-title')?.textContent, 'Go to question');
+    const railCss = r.querySelector('style')!.textContent!;
+    assert.match(railCss, /\.qnav\{display:grid;grid-template-columns:repeat\(auto-fill,minmax\(34px,1fr\)\);gap:6px;padding:2px\}/, 'Expanded qnav is dynamic without inner scroll');
 
     const navButtons = r.querySelectorAll<HTMLButtonElement>('.qnav-btn');
     assert.equal(navButtons.length, 4, 'All 4 question buttons exist');
@@ -588,21 +593,28 @@ test('sidebar provides go to question on expanded view with green, orange, red, 
     assert.equal(card3.dataset.status, 'wrong');
     assert.equal(card4.dataset.status, 'unattempted');
 
-    // 4. Clicking a question jump button scrolls both the card and PDF
+    // 4. Clicking a question jump button scrolls only the PDF, not the sidebar
     let cardScrolled = false;
     card2.scrollIntoView = () => { cardScrolled = true; };
     navButtons[1].click();
-    assert.equal(cardScrolled, true, 'Clicking jump button scrolls card into view in expanded view');
+    assert.equal(cardScrolled, false, 'Clicking jump button never auto-scrolls the sidebar card');
+    assert.deepEqual(scrollToCalls, [2], 'Clicking jump button scrolls PDF to question 2');
 
-    // 5. Collapsed rail contains the legend and thermometer with percentage text
+    // 4b. In collapsed view, clicking jump button scrolls the PDF even when cards are hidden
+    const host = dom.window.document.querySelector<HTMLElement>('[data-betterquest="assessment-rail"]')!;
+    host.dataset.collapsed = 'true';
+    navButtons[3].click();
+    assert.deepEqual(scrollToCalls, [2, 4], 'Clicking jump button in collapsed view scrolls PDF to question 4');
+
+    // 5. Collapsed rail contains the legend and bottom percentage text
     const legend = r.querySelector('.legend');
     assert.ok(legend, 'Legend exists in the rail');
     const legendDots = legend?.querySelectorAll('.legend-dot');
     assert.equal(legendDots?.length, 4, 'Legend has 4 status dots');
 
-    const thermoPct = r.querySelector('.thermo-pct');
-    assert.ok(thermoPct, 'Thermometer percentage readout exists');
-    assert.match(thermoPct!.textContent || '', /\d+%/);
+    const pctValue = r.querySelector('.pct-value');
+    assert.ok(pctValue, 'Percentage readout exists at the bottom');
+    assert.match(pctValue!.textContent || '', /\d+%/);
   } finally { workspace.dispose(); dom.window.close(); }
 });
 

@@ -10,7 +10,7 @@ import { createInteractivePdfViewer } from './pdf-viewer';
 import { celebrateScreen, flashScreen } from './celebration';
 
 type PdfViewer = ReturnType<typeof createInteractivePdfViewer>;
-type PdfViewerFactory = typeof createInteractivePdfViewer;
+type PdfViewerFactory = (container: HTMLElement, options: Parameters<typeof createInteractivePdfViewer>[1]) => any;
 
 const COLLAPSED_KEY = 'betterquest_rail_collapsed';
 
@@ -513,35 +513,33 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     .meter:hover span{animation-duration:1s}
     @keyframes bq-flow{to{background-position:-200% 0}}
     @keyframes bq-sheen{0%{transform:translateX(-100%)}60%,100%{transform:translateX(100%)}}
-    .thermo{display:none;flex-direction:column;align-items:center;justify-content:flex-start;gap:0;padding:8px 6px 10px;background:var(--bq-raised,#f4f7f9);border:1px solid var(--bq-border,#d7e2f0);border-radius:12px;flex:0 0 54px;box-shadow:inset 0 1px 3px rgba(0,0,0,0.03)}
-    :host([data-collapsed="true"]) .thermo{display:flex}
     :host([data-collapsed="true"]) .progress-wrap{display:none}
-    .thermo-track{width:14px;height:120px;border-radius:999px;background:var(--bq-surface,#fff);border:1.5px solid var(--bq-border,#d7e2f0);overflow:hidden;display:flex;align-items:flex-end;box-shadow:inset 0 2px 4px rgba(0,0,0,0.06)}
-    .thermo-fill{width:100%;height:0%;background:linear-gradient(to top,#1d4ed8,#3b82f6 50%,#60a5fa);background-size:100% 200%;animation:bq-thermo-flow 3s linear infinite;transition:height .3s cubic-bezier(0.4,0,0.2,1);box-shadow:0 0 8px rgba(59,130,246,0.35)}
-    .thermo:hover .thermo-fill{animation-duration:1s}
-    @keyframes bq-thermo-flow{to{background-position:0 -200%}}
-    .thermo-bulb{width:26px;height:26px;margin-top:-6px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#93c5fd,#2563eb 65%,#1d4ed8);border:1.5px solid var(--bq-border,#d7e2f0);box-shadow:0 3px 8px rgba(37,99,235,0.25);position:relative;z-index:1}
-    .thermo-pct{margin-top:10px;font:850 15px/1.1 ui-rounded,"Avenir Next",system-ui,sans-serif;color:var(--bq-text,#18253a);font-variant-numeric:tabular-nums;text-align:center;letter-spacing:-.02em;white-space:nowrap}
 
     /* Answer cards always stack single-file in the sidebar */
     .questions{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}
     :host([data-collapsed="true"]) .questions{display:none!important}
     .side{display:flex;flex-direction:column;gap:8px;margin-top:10px}
-    :host([data-collapsed="true"]) .side{flex-direction:row;gap:8px;flex:1;min-height:0;margin-top:10px;overflow:hidden}
+    :host([data-collapsed="true"]) .side{flex:1;min-height:0;margin-top:10px;overflow:hidden}
     .qnav-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px;margin-bottom:2px}
     :host([data-collapsed="true"]) .qnav-header{display:none}
     .qnav-title{font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.04em;color:var(--bq-assessment-muted)}
     .qnav-legend{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--bq-assessment-muted)}
-    .qnav{display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));gap:6px;max-height:116px;overflow-y:auto;scrollbar-width:thin;padding:2px}
-    :host([data-collapsed="true"]) .qnav{grid-template-columns:repeat(3,minmax(0,1fr));max-height:none;flex:1;min-height:0;padding-right:2px}
-    .qnav-btn{min-height:34px;border:1.5px solid var(--bq-border,#d7e2f0);border-radius:8px;background:var(--bq-raised,#f2f5f7);color:var(--bq-assessment-muted);font:750 13px/1 inherit;cursor:pointer;transition:border-color .15s ease,background .15s ease,transform .15s ease,box-shadow .15s ease;display:grid;place-items:center}
+    .qnav{display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));gap:6px;padding:2px}
+    :host([data-collapsed="true"]) .qnav{grid-template-columns:repeat(3,minmax(0,1fr));flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;padding-right:2px;align-content:start}
+    .qnav-btn{aspect-ratio:1;min-height:34px;border:1.5px solid var(--bq-border,#d7e2f0);border-radius:8px;background:var(--bq-raised,#f2f5f7);color:var(--bq-assessment-muted);font:750 13px/1 inherit;cursor:pointer;transition:border-color .15s ease,background .15s ease,transform .15s ease,box-shadow .15s ease;display:grid;place-items:center}
     .qnav-btn:hover{border-color:var(--bq-accent,#6366f1);transform:translateY(-1px);box-shadow:0 2px 6px rgba(0,0,0,0.06)}
     .qnav-btn:active{transform:translateY(0)}
     .qnav-btn.q-done{border-color:#16a34a;background:color-mix(in srgb,#16a34a 18%,var(--bq-raised,#f2f5f7));color:color-mix(in srgb,#15803d 85%,var(--bq-text,#18253a))}
     .qnav-btn.q-retry{border-color:#ea580c;background:color-mix(in srgb,#ea580c 18%,var(--bq-raised,#f2f5f7));color:color-mix(in srgb,#c2410c 85%,var(--bq-text,#18253a))}
     .qnav-btn.q-wrong{border-color:#dc2626;background:color-mix(in srgb,#dc2626 16%,var(--bq-raised,#f2f5f7));color:color-mix(in srgb,#b91c1c 85%,var(--bq-text,#18253a))}
-    .legend{display:none}
-    :host([data-collapsed="true"]) .legend{display:grid;grid-template-columns:repeat(2,1fr);gap:4px 6px;margin-top:auto;padding-top:8px;border-top:1px solid var(--bq-border,#d7e2f0);font-size:10.5px;color:var(--bq-assessment-muted);flex-shrink:0}
+
+    .deck-footer{display:none}
+    :host([data-collapsed="true"]) .deck-footer{display:flex;flex-direction:column;gap:10px;margin-top:auto;padding-top:10px;border-top:1px solid var(--bq-border,#d7e2f0);flex-shrink:0}
+    .deck-pct{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 4px;border-radius:8px;background:var(--bq-raised,#f2f5f7);border:1px solid var(--bq-border,#d7e2f0);text-align:center}
+    .pct-value{font:800 24px/1 ui-rounded,"Avenir Next",system-ui,sans-serif;color:var(--bq-text,#18253a);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+    .pct-label{font:700 11px/1.2 ui-rounded,"Avenir Next",system-ui,sans-serif;color:var(--bq-assessment-muted);letter-spacing:.02em}
+
+    .legend{display:grid;grid-template-columns:repeat(2,1fr);gap:4px 6px;font-size:10.5px;color:var(--bq-assessment-muted);flex-shrink:0;padding:0 2px}
     .legend-item{display:flex;align-items:center;gap:5px;white-space:nowrap}
     .legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
     .legend-dot.dot-done{background:#16a34a;border:1px solid #15803d}
@@ -549,7 +547,6 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     .legend-dot.dot-wrong{background:#dc2626;border:1px solid #b91c1c}
     .legend-dot.dot-unattempted{background:var(--bq-raised,#f2f5f7);border:1px solid var(--bq-border,#d7e2f0)}
     :host([data-collapsed="true"]) .rail{display:flex;flex-direction:column;overflow:hidden;padding:12px 10px;height:100%;max-height:100%}
-    :host([data-collapsed="true"]) .thermo{margin-top:0;flex:0 0 auto}
     :host([data-collapsed="true"]) .metrics-grid{display:none}
     :host([data-collapsed="true"]) h2{font-size:13px}
     :host([data-collapsed="true"]) .top{flex-direction:column;align-items:stretch}
@@ -581,7 +578,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     .points-note{margin-left:auto;font:750 12px/1 inherit;color:var(--bq-text,#18253a);font-variant-numeric:tabular-nums;white-space:nowrap}
     .empty{color:var(--bq-assessment-muted);grid-column:1/-1}
     @media(max-width:1050px){#target[data-betterquest-pdf-workspace="enhanced"]{grid-template-columns:1fr}#target[data-betterquest-pdf-workspace="enhanced"] > #pdf-frame,#target[data-betterquest-pdf-workspace="enhanced"] > [data-betterquest="assessment-rail"]{grid-column:1}#target[data-betterquest-pdf-workspace="enhanced"] > [data-betterquest="assessment-rail"]{position:static;margin-top:14px}}
-    @media(prefers-reduced-motion:reduce){.meter span,.choice,.submit{transition:none}.choice:hover,.submit:hover{transform:none}.meter span,.meter span::after,.thermo-fill{animation:none}}
+    @media(prefers-reduced-motion:reduce){.meter span,.choice,.submit{transition:none}.choice:hover,.submit:hover{transform:none}.meter span,.meter span::after{animation:none}}
   `;
   const rail = document.createElement('section'); rail.className = 'rail'; rail.setAttribute('aria-label', 'Assessment responses');
   const header = document.createElement('header');
@@ -640,14 +637,6 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   const meter = document.createElement('div'); meter.className = 'meter'; const meterValue = document.createElement('span'); meter.append(meterValue);
   progressWrap.append(progress, meter);
 
-  const thermo = document.createElement('div'); thermo.className = 'thermo'; thermo.setAttribute('aria-hidden', 'true');
-  const thermoTrack = document.createElement('div'); thermoTrack.className = 'thermo-track';
-  const thermoFill = document.createElement('div'); thermoFill.className = 'thermo-fill';
-  thermoTrack.append(thermoFill);
-  const thermoBulb = document.createElement('div'); thermoBulb.className = 'thermo-bulb';
-  const thermoPct = document.createElement('div'); thermoPct.className = 'thermo-pct'; thermoPct.textContent = '0%';
-  thermo.append(thermoTrack, thermoBulb, thermoPct);
-
   const questions = document.createElement('div'); questions.className = 'questions';
   const qnav = document.createElement('nav'); qnav.className = 'qnav'; qnav.setAttribute('aria-label', 'Questions');
 
@@ -661,6 +650,12 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   `;
   qnavHeader.append(qnavTitle, qnavLegend);
 
+  const deckFooter = document.createElement('div'); deckFooter.className = 'deck-footer';
+  const deckPct = document.createElement('div'); deckPct.className = 'deck-pct'; deckPct.setAttribute('aria-label', 'Completion progress');
+  const pctValue = document.createElement('span'); pctValue.className = 'pct-value'; pctValue.textContent = '0%';
+  const pctLabel = document.createElement('span'); pctLabel.className = 'pct-label'; pctLabel.textContent = 'complete';
+  deckPct.append(pctValue, pctLabel);
+
   const legend = document.createElement('div'); legend.className = 'legend'; legend.setAttribute('aria-label', 'Question status legend');
   legend.innerHTML = `
     <div class="legend-item"><span class="legend-dot dot-done" aria-hidden="true"></span><span>Done</span></div>
@@ -668,11 +663,12 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     <div class="legend-item"><span class="legend-dot dot-wrong" aria-hidden="true"></span><span>Incorrect</span></div>
     <div class="legend-item"><span class="legend-dot dot-unattempted" aria-hidden="true"></span><span>Not started</span></div>
   `;
+  deckFooter.append(deckPct, legend);
 
   header.append(top, metricsGrid, progressWrap);
   const side = document.createElement('div'); side.className = 'side';
-  side.append(qnavHeader, thermo, qnav);
-  rail.append(header, side, questions, legend); shadow.append(localStyle, rail);
+  side.append(qnavHeader, qnav);
+  rail.append(header, side, questions, deckFooter); shadow.append(localStyle, rail);
   host.dataset.layout = 'sidebar';
   rail.dataset.layout = 'sidebar';
 
@@ -826,8 +822,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     classAvg.textContent = metrics.classAverage.replace(/\s*points/gi, '');
     stdDev.textContent = metrics.standardDeviation;
     meterValue.style.setProperty('--progress', `${bindings.length ? submitted / bindings.length * 100 : 0}%`);
-    thermoFill.style.height = `${percent}%`;
-    thermoPct.textContent = `${percent}%`;
+    pctValue.textContent = `${percent}%`;
   }
 
   let pendingSubmit: { questionNumber: number; optionValue: string; attempts: number; viaBetterQuest: boolean; timer: ReturnType<typeof setTimeout> | undefined } | null = null;
@@ -1034,7 +1029,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       },
     });
     syncPdfVisibility(true);
-    void pdfViewer.ready.then(ready => {
+    void pdfViewer?.ready?.then(ready => {
       if (disposed || !pdfViewer) return;
       pdfViewerReady = ready;
       if (!ready) {
@@ -1046,17 +1041,53 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     });
   }
 
-  function scrollToQuestion(questionNumber: number, card?: HTMLElement | null) {
-    const hit = pdfViewer?.element.shadowRoot?.querySelector<HTMLElement>(
-      `.option-hit[data-question="${questionNumber}"]`,
-    );
-    if (hit) {
-      hit.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
-      hit.focus?.({ preventScroll: true });
+  function scrollToQuestion(questionNumber: number) {
+    const doc = root.ownerDocument;
+    const win = doc?.defaultView;
+    const initialScrollY = win?.scrollY ?? 0;
+    const initialScrollX = win?.scrollX ?? 0;
+
+    const doScrollPdf = () => {
+      if (pdfViewer?.scrollToQuestion) {
+        pdfViewer.scrollToQuestion(questionNumber);
+      } else {
+        const shadow = pdfViewer?.element.shadowRoot;
+        const pagesEl = shadow?.querySelector<HTMLElement>('.pages');
+        const anchor = shadow?.querySelector<HTMLElement>(
+          `.question-anchor[data-question="${questionNumber}"], .option-hit[data-question="${questionNumber}"]`,
+        );
+        if (pagesEl && anchor) {
+          const anchorRect = anchor.getBoundingClientRect?.();
+          const pagesRect = pagesEl.getBoundingClientRect?.();
+          if (pagesRect && anchorRect && (anchorRect.top !== 0 || pagesRect.height !== 0)) {
+            const targetY = (anchorRect.top - pagesRect.top) + pagesEl.scrollTop - 24;
+            pagesEl.scrollTo?.({ top: Math.max(0, targetY), behavior: 'smooth' });
+          } else {
+            anchor?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+          }
+        }
+      }
+    };
+
+    if (pdfViewerReady === false) {
+      // PDF viewer unavailable
+    } else if (pdfViewer?.scrollToQuestion || pdfViewer?.element.shadowRoot?.querySelector('.question-anchor, .option-hit')) {
+      doScrollPdf();
+    } else if (pdfViewer?.ready) {
+      void pdfViewer.ready.then(ok => {
+        if (!disposed && ok) doScrollPdf();
+      });
     }
-    if (card) {
-      card.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
-      card.querySelector<HTMLButtonElement>('.choice, .number')?.focus?.({ preventScroll: true });
+
+    if (win) {
+      if (win.scrollY !== initialScrollY || win.scrollX !== initialScrollX) {
+        win.scrollTo?.(initialScrollX, initialScrollY);
+      }
+      win.requestAnimationFrame?.(() => {
+        if (win.scrollY !== initialScrollY || win.scrollX !== initialScrollX) {
+          win.scrollTo?.(initialScrollX, initialScrollY);
+        }
+      });
     }
   }
 
@@ -1222,9 +1253,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       jump.title = `Question ${binding.number} · ${titleStatus}`;
       jump.setAttribute('aria-label', `Question ${binding.number} ${statusLabel}. Go to question ${binding.number} in the PDF.`);
       const targetNumber = Number(binding.number);
-      jump.addEventListener('click', () => {
-        const card = questions.querySelector<HTMLElement>(`[data-question-id="${binding.id}"]`);
-        scrollToQuestion(Number.isInteger(targetNumber) ? targetNumber : 0, card);
+      jump.addEventListener('click', (e) => {
+        e.preventDefault();
+        scrollToQuestion(Number.isInteger(targetNumber) ? targetNumber : 0);
       });
       qnav.append(jump);
     }
@@ -1238,7 +1269,10 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       number.className = 'number' + (cardStatus !== 'unattempted' ? ' number-' + cardStatus : '');
       number.textContent = `Question ${binding.number}`;
       number.setAttribute('aria-label', `Go to question ${binding.number} in the PDF`);
-      number.addEventListener('click', () => scrollToQuestion(Number(binding.number), card));
+      number.addEventListener('click', (e) => {
+        e.preventDefault();
+        scrollToQuestion(Number(binding.number));
+      });
       const selected = document.createElement('span'); selected.className = 'selected';
 
       if (binding.answered) {

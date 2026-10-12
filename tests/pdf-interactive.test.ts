@@ -868,3 +868,44 @@ test('interactive PDF viewer suppresses boxes for answered questions and always 
     dom.window.close();
   }
 });
+
+test('interactive PDF viewer provides question anchors and scrollToQuestion scrolls the PDF even when all questions are complete', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 4], [2, 4], [14, 5]]),
+    answeredQuestions: new Set([1, 2, 14]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 2,
+      renderPage: async (pageNumber: number) => ({
+        width: 600, height: 800,
+        runs: pageNumber === 1
+          ? [textRun('001', 50), textRun('1.', 100), textRun('2.', 140), textRun('002', 200), textRun('1.', 250)]
+          : [textRun('014', 80, 55), textRun('1.', 120), textRun('2.', 160)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    // Question anchors exist for every question even though all questions are answered
+    const anchor1 = viewer.element.shadowRoot!.querySelector<HTMLElement>('.question-anchor[data-question="1"]');
+    const anchor2 = viewer.element.shadowRoot!.querySelector<HTMLElement>('.question-anchor[data-question="2"]');
+    const anchor14 = viewer.element.shadowRoot!.querySelector<HTMLElement>('.question-anchor[data-question="14"]');
+    assert.ok(anchor1, 'Anchor for question 1 exists');
+    assert.ok(anchor2, 'Anchor for question 2 exists');
+    assert.ok(anchor14, 'Anchor for question 14 exists');
+
+    // Calling scrollToQuestion scrolls the anchor into view
+    let scrolled14 = false;
+    anchor14!.scrollIntoView = () => { scrolled14 = true; };
+    const result = viewer.scrollToQuestion(14);
+    assert.equal(result, true);
+    assert.equal(scrolled14, true, 'scrollToQuestion must scroll question 14 anchor into view');
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});

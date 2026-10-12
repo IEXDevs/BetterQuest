@@ -10,7 +10,10 @@ chrome.runtime.onConnect.addListener(port => {
   if (port.name !== 'betterquest:changes' || port.sender?.id !== chrome.runtime.id ||
     !port.sender.url || !isStudentPage(port.sender.url)) { port.disconnect(); return; }
   subscribers.add(port);
-  port.onDisconnect.addListener(() => subscribers.delete(port));
+  port.onDisconnect.addListener(() => {
+    subscribers.delete(port);
+    void chrome.runtime.lastError;
+  });
 });
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, reply) => {

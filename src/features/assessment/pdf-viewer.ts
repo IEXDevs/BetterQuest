@@ -248,6 +248,14 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       box-sizing:border-box!important;
     }
     .page canvas{display:block!important;width:100%!important;height:auto!important}
+    .question-anchor{
+      position:absolute;
+      left:0;
+      width:100%;
+      height:2px;
+      pointer-events:none;
+      opacity:0;
+    }
     .option-hit{
       position:absolute;
       z-index:2;      border:1.5px dashed rgba(99,102,241,.5);
@@ -585,6 +593,51 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         options.onPoints?.(extractQuestionPoints(runs));
       } catch { /* points are a bonus; never break choice mapping */ }
 
+      // Build persistent question anchors for every question on the PDF so that jump
+      // navigation can scroll directly to any question even when all questions are complete.
+      const allQuestionNumbers = new Set<number>();
+      for (const qNum of options.optionMaximums.keys()) allQuestionNumbers.add(qNum);
+      for (const t of targets) allQuestionNumbers.add(t.questionNumber);
+      for (const r of runs) {
+        const b = parseQuestionBoundary(clean(r.text));
+        if (b !== null && b > 0) allQuestionNumbers.add(b);
+      }
+
+      for (const qNum of [...allQuestionNumbers].sort((a, b) => a - b)) {
+        if (!Number.isInteger(qNum) || qNum <= 0) continue;
+        const qBoundaryRun = runs.find(r => parseQuestionBoundary(clean(r.text)) === qNum) ||
+          runs.find(r => clean(r.text) === String(qNum).padStart(3, '0')) ||
+          runs.find(r => new RegExp(`^0*${qNum}(?:\\b|[:.)\\s])`).test(clean(r.text)));
+        let targetPage = 1;
+        let topPercent = 0;
+        if (qBoundaryRun) {
+          targetPage = qBoundaryRun.page;
+          const pageInfo = pageElements.get(targetPage);
+          const height = pageInfo?.height || 800;
+          topPercent = Math.max(0, Math.min(100, ((qBoundaryRun.top - 12) / height) * 100));
+        } else {
+          const qTarget = targets.find(t => t.questionNumber === qNum);
+          if (qTarget) {
+            targetPage = qTarget.page;
+            const pageInfo = pageElements.get(targetPage);
+            const height = pageInfo?.height || 800;
+            topPercent = Math.max(0, Math.min(100, ((qTarget.top - 40) / height) * 100));
+          } else {
+            const totalQ = Math.max(1, allQuestionNumbers.size);
+            targetPage = Math.max(1, Math.min(source.pageCount, Math.ceil((qNum / totalQ) * source.pageCount)));
+            topPercent = 10;
+          }
+        }
+        const pageRoot = pageElements.get(targetPage)?.root;
+        if (pageRoot) {
+          const anchor = document.createElement('div');
+          anchor.className = 'question-anchor';
+          anchor.dataset.question = String(qNum);
+          anchor.style.top = `${topPercent}%`;
+          pageRoot.append(anchor);
+        }
+      }
+
       // Ensure boxes for ALL answers possible for every unanswered question
       for (const [qNum, max] of options.optionMaximums.entries()) {
         if (currentAnswered.has(qNum)) continue;
@@ -869,6 +922,61 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         }
       }
       refreshMeta();
+    },
+    scrollToQuestion(questionNumber: number): boolean {
+      const anchor = shadow.querySelector<HTMLElement>(`.question-anchor[data-question="${questionNumber}"]`);
+      if (anchor) {
+        const pageEl = anchor.closest<HTMLElement>('.page');
+        let didScrollContainer = false;
+        if (pageEl && pages) {
+          const anchorRect = anchor.getBoundingClientRect?.();
+          const pagesRect = pages.getBoundingClientRect?.();
+          if (pagesRect && anchorRect && (anchorRect.top !== 0 || anchorRect.bottom !== 0 || pagesRect.top !== 0 || pagesRect.height !== 0)) {
+            const targetY = (anchorRect.top - pagesRect.top) + pages.scrollTop;
+            pages.scrollTo?.({ top: Math.max(0, targetY - 24), behavior: 'smooth' });
+            didScrollContainer = true;
+          } else {
+            const topPct = parseFloat(anchor.style.top) || 0;
+            const pageHeight = pageEl.clientHeight || pageEl.offsetHeight || 0;
+            const targetY = pageEl.offsetTop + (topPct / 100) * pageHeight;
+            if (Number.isFinite(targetY) && targetY > 0) {
+              pages.scrollTo?.({ top: Math.max(0, targetY - 24), behavior: 'smooth' });
+              didScrollContainer = true;
+            }
+          }
+        }
+        if (!didScrollContainer) {
+          anchor.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+        }
+        return true;
+      }
+      const hit = shadow.querySelector<HTMLElement>(`.option-hit[data-question="${questionNumber}"]`);
+      if (hit) {
+        const pageEl = hit.closest<HTMLElement>('.page');
+        let didScrollContainer = false;
+        if (pageEl && pages) {
+          const hitRect = hit.getBoundingClientRect?.();
+          const pagesRect = pages.getBoundingClientRect?.();
+          if (pagesRect && hitRect && (hitRect.top !== 0 || hitRect.bottom !== 0 || pagesRect.top !== 0 || pagesRect.height !== 0)) {
+            const targetY = (hitRect.top - pagesRect.top) + pages.scrollTop;
+            pages.scrollTo?.({ top: Math.max(0, targetY - 60), behavior: 'smooth' });
+            didScrollContainer = true;
+          } else {
+            const topPct = parseFloat(hit.style.top) || 0;
+            const pageHeight = pageEl.clientHeight || pageEl.offsetHeight || 0;
+            const targetY = pageEl.offsetTop + (topPct / 100) * pageHeight;
+            if (Number.isFinite(targetY) && targetY > 0) {
+              pages.scrollTo?.({ top: Math.max(0, targetY - 60), behavior: 'smooth' });
+              didScrollContainer = true;
+            }
+          }
+        }
+        if (!didScrollContainer) {
+          hit.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+        }
+        return true;
+      }
+      return false;
     },
     dispose() {
       if (disposed) return;
