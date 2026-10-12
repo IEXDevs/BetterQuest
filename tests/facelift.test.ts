@@ -135,15 +135,15 @@ test('the whimsy setting reaches the page as a preference switch', async () => {
   const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
   try {
     features.reconcile(); await pause();
-    assert.equal(dom.window.document.documentElement.hasAttribute('data-betterquest-whimsy'), false, 'Whimsy is on by default');
-    await f.run({ kind: 'feature:set', feature: 'whimsy', enabled: false });
-    dom.window.dispatchEvent(new dom.window.Event('betterquest:preferences-changed'));
-    await pause();
-    assert.equal(dom.window.document.documentElement.dataset.betterquestWhimsy, 'disabled', 'Turning it off reaches the page');
+    assert.equal(dom.window.document.documentElement.hasAttribute('data-betterquest-whimsy'), false, 'Whimsy is off by default');
     await f.run({ kind: 'feature:set', feature: 'whimsy', enabled: true });
     dom.window.dispatchEvent(new dom.window.Event('betterquest:preferences-changed'));
     await pause();
-    assert.equal(dom.window.document.documentElement.hasAttribute('data-betterquest-whimsy'), false, 'Turning it back on clears the switch');
+    assert.equal(dom.window.document.documentElement.dataset.betterquestWhimsy, 'enabled', 'Turning it on reaches the page');
+    await f.run({ kind: 'feature:set', feature: 'whimsy', enabled: false });
+    dom.window.dispatchEvent(new dom.window.Event('betterquest:preferences-changed'));
+    await pause();
+    assert.equal(dom.window.document.documentElement.hasAttribute('data-betterquest-whimsy'), false, 'Turning it back off clears the switch');
   } finally { features.dispose(); dom.window.close(); }
 });
 

@@ -198,7 +198,7 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       else document.documentElement.removeAttribute('data-betterquest-animations');
       if (enabled.celebrations === false) document.documentElement.dataset.betterquestCelebrations = 'disabled';
       else document.documentElement.removeAttribute('data-betterquest-celebrations');
-      if (enabled.whimsy === false) document.documentElement.dataset.betterquestWhimsy = 'disabled';
+      if (enabled.whimsy) document.documentElement.dataset.betterquestWhimsy = 'enabled';
       else document.documentElement.removeAttribute('data-betterquest-whimsy');
       runtime.reconcile();
       runtime.refresh(['course-artwork', 'bookmarks']);

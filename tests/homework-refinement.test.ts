@@ -304,7 +304,7 @@ test('a reflected wrong submit strikes through the answer on the PDF', () => {
   } finally { workspace.dispose(); dom.window.close(); }
 });
 
-test('a natively correct answer is celebrated on the PDF without confetti', async () => {
+test('a natively correct answer is celebrated on the PDF without celebration animation', async () => {
   const dom = new JSDOM('<main id="main-content"><div id="target">' +
     '<p id="due">Due date 10/14/26 11:59 PM</p>' +
     '<div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF" src="/student/images/problem_pdf?instance=courseuserassignment_1"></iframe></div></div>' +
@@ -326,11 +326,11 @@ test('a natively correct answer is celebrated on the PDF without confetti', asyn
   workspace.reconcile();
   try {
     await new Promise(resolve => setTimeout(resolve, 10));
-    assert.deepEqual(celebrateCalls, [[1, '3', false]], 'Correct answers get highlighted without replaying confetti on load');
+    assert.deepEqual(celebrateCalls, [[1, '3', false]], 'Correct answers get highlighted without replaying celebration animation on load');
   } finally { workspace.dispose(); dom.window.close(); }
 });
 
-test('a fresh correct submit celebrates with confetti and tells the user', async () => {
+test('a fresh correct submit celebrates with celebration animation and tells the user', async () => {
   const dom = homework();
   const doc = dom.window.document;
   const root = doc.querySelector<HTMLElement>('#target')!;
@@ -356,7 +356,7 @@ test('a fresh correct submit celebrates with confetti and tells the user', async
     row.querySelector('.previous')!.textContent = '2 / 3';
     workspace.reconcile();
     await new Promise(resolve => setTimeout(resolve, 10));
-    assert.deepEqual(celebrateCalls, [[1, '2', true]], 'Fresh correct answers celebrate with confetti');
+    assert.deepEqual(celebrateCalls, [[1, '2', true]], 'Fresh correct answers celebrate with celebration animation');
     assert.deepEqual(verdictCalls, [[1, 'correct']], 'User must be told the answer was correct');
     assert.equal(doc.querySelector('#target')?.getAttribute('data-betterquest-pdf-mode'), 'betterquest', 'Correct answers stay in our view');
     assert.equal(rail.querySelector<HTMLElement>('.questions')!.style.display, '', 'Submit panels stay visible after a correct answer');
@@ -532,3 +532,77 @@ test('review waits for native content and refreshes completion without duplicati
     assert.equal((pane.querySelector('button') as HTMLElement).hidden, false);
   } finally { dom.window.close(); }
 });
+
+test('sidebar provides go to question on expanded view with green, orange, red, and neutral status colors, plus a collapsed legend', () => {
+  const dom = new JSDOM('<main id="main-content"><div id="target">' +
+    '<p id="due">Due date 10/14/26 11:59 PM</p>' +
+    '<div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF" src="/student/images/problem_pdf?instance=courseuserassignment_1"></iframe></div></div>' +
+    '<div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody>' +
+    // Question 1: 1 attempt, correct -> green (done)
+    '<tr data-id="cuaip_1"><td>1.</td><td><select name="response"><option value="1" selected>1</option></select></td><td class="status"><span class="text-success">Correct</span></td><td class="previous">1 / 4</td><td class="correct">10</td><td><button type="button">Submit</button></td></tr>' +
+    // Question 2: 2 attempts, correct -> orange (retry)
+    '<tr data-id="cuaip_2"><td>2.</td><td><select name="response"><option value="2" selected>2</option></select></td><td class="status"><span class="text-success">Correct</span></td><td class="previous">2 / 4</td><td class="correct">7</td><td><button type="button">Submit</button></td></tr>' +
+    // Question 3: 1 attempt, incorrect -> red (wrong)
+    '<tr data-id="cuaip_3"><td>3.</td><td><select name="response"><option value="1">1</option></select></td><td class="status"><span class="text-danger">Incorrect</span></td><td class="previous">1 / 4</td><td class="correct">0</td><td><button type="button">Submit</button></td></tr>' +
+    // Question 4: 0 attempts, unattempted -> neutral
+    '<tr data-id="cuaip_4"><td>4.</td><td><select name="response"><option value=""></option><option value="1">1</option></select></td><td class="status"></td><td class="previous">0 / 4</td><td class="correct"></td><td><button type="button" aria-label="Submit response">Submit</button></td></tr>' +
+    '</tbody></table></div></div></main>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
+
+  const { workspace, rail } = mount(dom);
+  try {
+    const r = rail();
+
+    // 1. Expanded view has "Go to question" header and navigation
+    const qnavHeader = r.querySelector('.qnav-header');
+    assert.ok(qnavHeader, 'Go to question header exists in expanded view');
+    assert.equal(qnavHeader?.querySelector('.qnav-title')?.textContent, 'Go to question');
+
+    const navButtons = r.querySelectorAll<HTMLButtonElement>('.qnav-btn');
+    assert.equal(navButtons.length, 4, 'All 4 question buttons exist');
+
+    // 2. Status colors:
+    // Question 1: 1 try & correct -> green (q-done)
+    assert.ok(navButtons[0].classList.contains('q-done'), 'Question 1 is green on first-try correct');
+    assert.match(navButtons[0].title, /Correct/);
+
+    // Question 2: 2 tries & correct -> orange (q-retry)
+    assert.ok(navButtons[1].classList.contains('q-retry'), 'Question 2 is orange for correct after retries');
+    assert.match(navButtons[1].title, /Correct \(retried\)/);
+
+    // Question 3: 1 try & incorrect -> red (q-wrong)
+    assert.ok(navButtons[2].classList.contains('q-wrong'), 'Question 3 is red for incorrect attempt');
+    assert.match(navButtons[2].title, /Incorrect/);
+
+    // Question 4: 0 tries & unattempted -> neutral (no q-done/retry/wrong)
+    assert.equal(navButtons[3].classList.contains('q-done'), false);
+    assert.equal(navButtons[3].classList.contains('q-retry'), false);
+    assert.equal(navButtons[3].classList.contains('q-wrong'), false);
+
+    // 3. Question cards in expanded view carry status
+    const card1 = r.querySelector<HTMLElement>('[data-question-id="cuaip_1"]')!;
+    const card2 = r.querySelector<HTMLElement>('[data-question-id="cuaip_2"]')!;
+    const card3 = r.querySelector<HTMLElement>('[data-question-id="cuaip_3"]')!;
+    const card4 = r.querySelector<HTMLElement>('[data-question-id="cuaip_4"]')!;
+    assert.equal(card1.dataset.status, 'done');
+    assert.equal(card2.dataset.status, 'retry');
+    assert.equal(card3.dataset.status, 'wrong');
+    assert.equal(card4.dataset.status, 'unattempted');
+
+    // 4. Clicking a question jump button scrolls both the card and PDF
+    let cardScrolled = false;
+    card2.scrollIntoView = () => { cardScrolled = true; };
+    navButtons[1].click();
+    assert.equal(cardScrolled, true, 'Clicking jump button scrolls card into view in expanded view');
+
+    // 5. Collapsed rail contains the legend and thermometer with percentage text
+    const legend = r.querySelector('.legend');
+    assert.ok(legend, 'Legend exists in the rail');
+    const legendDots = legend?.querySelectorAll('.legend-dot');
+    assert.equal(legendDots?.length, 4, 'Legend has 4 status dots');
+
+    const thermoPct = r.querySelector('.thermo-pct');
+    assert.ok(thermoPct, 'Thermometer percentage readout exists');
+    assert.match(thermoPct!.textContent || '', /\d+%/);
+  } finally { workspace.dispose(); dom.window.close(); }
+});
+

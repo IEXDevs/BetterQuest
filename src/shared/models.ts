@@ -7,7 +7,7 @@ export interface FeaturePreferences { assignments?: boolean; bookmarks?: boolean
 export interface Preferences { theme: ThemePreference; features?: FeaturePreferences }
 export function featurePreferences(preferences?: Preferences | null): { assignments: boolean; bookmarks: boolean; animations: boolean; celebrations: boolean; whimsy: boolean } {
   const current = preferences?.features;
-  return { assignments: current?.assignments ?? true, bookmarks: current?.bookmarks ?? true, animations: current?.animations ?? true, celebrations: current?.celebrations ?? true, whimsy: current?.whimsy ?? true };
+  return { assignments: current?.assignments ?? true, bookmarks: current?.bookmarks ?? true, animations: current?.animations ?? true, celebrations: current?.celebrations ?? true, whimsy: current?.whimsy ?? false };
 }
 export type CompletionStatus = 'unknown' | 'not-started' | 'not-completed' | 'in-progress' | 'completed';
 

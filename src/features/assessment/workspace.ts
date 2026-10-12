@@ -7,7 +7,7 @@ import {
   type PdfAssessmentElements,
 } from '../../adapters/quest/assessment';
 import { createInteractivePdfViewer } from './pdf-viewer';
-import { celebrateScreen, flashScreen } from './confetti';
+import { celebrateScreen, flashScreen } from './celebration';
 
 type PdfViewer = ReturnType<typeof createInteractivePdfViewer>;
 type PdfViewerFactory = typeof createInteractivePdfViewer;
@@ -513,36 +513,52 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     .meter:hover span{animation-duration:1s}
     @keyframes bq-flow{to{background-position:-200% 0}}
     @keyframes bq-sheen{0%{transform:translateX(-100%)}60%,100%{transform:translateX(100%)}}
-    .thermo{display:none;flex-direction:column;align-items:center;gap:0;margin-top:12px}
+    .thermo{display:none;flex-direction:column;align-items:center;justify-content:flex-start;gap:0;padding:8px 6px 10px;background:var(--bq-raised,#f4f7f9);border:1px solid var(--bq-border,#d7e2f0);border-radius:12px;flex:0 0 54px;box-shadow:inset 0 1px 3px rgba(0,0,0,0.03)}
     :host([data-collapsed="true"]) .thermo{display:flex}
     :host([data-collapsed="true"]) .progress-wrap{display:none}
-    .thermo-track{width:14px;height:110px;border-radius:999px;background:var(--bq-raised,#eef3f6);border:1px solid var(--bq-border,#d7e2f0);overflow:hidden;display:flex;align-items:flex-end}
-    .thermo-fill{width:100%;height:0%;background:linear-gradient(to top,#1d4ed8,#60a5fa,#1d4ed8);background-size:100% 200%;animation:bq-thermo-flow 3s linear infinite;transition:height .25s ease}
+    .thermo-track{width:14px;height:120px;border-radius:999px;background:var(--bq-surface,#fff);border:1.5px solid var(--bq-border,#d7e2f0);overflow:hidden;display:flex;align-items:flex-end;box-shadow:inset 0 2px 4px rgba(0,0,0,0.06)}
+    .thermo-fill{width:100%;height:0%;background:linear-gradient(to top,#1d4ed8,#3b82f6 50%,#60a5fa);background-size:100% 200%;animation:bq-thermo-flow 3s linear infinite;transition:height .3s cubic-bezier(0.4,0,0.2,1);box-shadow:0 0 8px rgba(59,130,246,0.35)}
     .thermo:hover .thermo-fill{animation-duration:1s}
     @keyframes bq-thermo-flow{to{background-position:0 -200%}}
-    .thermo-bulb{width:24px;height:24px;margin-top:-4px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#93c5fd,#2563eb);border:1px solid var(--bq-border,#d7e2f0)}
-    .thermo-pct{margin-top:8px;font:750 11px/1.4 inherit;color:var(--bq-assessment-muted);font-variant-numeric:tabular-nums;writing-mode:vertical-rl;text-orientation:upright;letter-spacing:1px}
+    .thermo-bulb{width:26px;height:26px;margin-top:-6px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#93c5fd,#2563eb 65%,#1d4ed8);border:1.5px solid var(--bq-border,#d7e2f0);box-shadow:0 3px 8px rgba(37,99,235,0.25);position:relative;z-index:1}
+    .thermo-pct{margin-top:10px;font:850 15px/1.1 ui-rounded,"Avenir Next",system-ui,sans-serif;color:var(--bq-text,#18253a);font-variant-numeric:tabular-nums;text-align:center;letter-spacing:-.02em;white-space:nowrap}
 
     /* Answer cards always stack single-file in the sidebar */
     .questions{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}
     :host([data-collapsed="true"]) .questions{display:none!important}
-    /* Collapsed slim rail: thermometer plus color-coded numbers, no statistics */
-    .qnav{display:none;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;overflow-y:auto;scrollbar-width:thin;align-content:start;flex:1;min-height:0;padding:2px}
-    :host([data-collapsed="true"]) .qnav{display:grid}
-    .qnav-btn{min-height:34px;border:1px solid var(--bq-border,#d7e2f0);border-radius:8px;background:var(--bq-raised,#f2f5f7);color:var(--bq-assessment-muted);font:750 13px/1 inherit;cursor:pointer;transition:border-color .15s ease,background .15s ease}
-    .qnav-btn:hover{border-color:var(--bq-accent,#6366f1)}
-    .qnav-btn.q-done{border-color:color-mix(in srgb,#16a34a 60%,var(--bq-border,#d7e2f0));background:color-mix(in srgb,#16a34a 16%,transparent);color:color-mix(in srgb,#16a34a 72%,var(--bq-text,#18253a))}
-    .qnav-btn.q-wrong{border-color:color-mix(in srgb,#dc2626 55%,var(--bq-border,#d7e2f0));background:color-mix(in srgb,#dc2626 12%,transparent);color:color-mix(in srgb,#dc2626 72%,var(--bq-text,#18253a))}
-    :host([data-collapsed="true"]) .rail{display:flex;flex-direction:column;overflow:hidden}
-    :host([data-collapsed="true"]) .side{display:flex;gap:10px;flex:1;min-height:0;margin-top:12px}
+    .side{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+    :host([data-collapsed="true"]) .side{flex-direction:row;gap:8px;flex:1;min-height:0;margin-top:10px;overflow:hidden}
+    .qnav-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px;margin-bottom:2px}
+    :host([data-collapsed="true"]) .qnav-header{display:none}
+    .qnav-title{font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.04em;color:var(--bq-assessment-muted)}
+    .qnav-legend{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--bq-assessment-muted)}
+    .qnav{display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));gap:6px;max-height:116px;overflow-y:auto;scrollbar-width:thin;padding:2px}
+    :host([data-collapsed="true"]) .qnav{grid-template-columns:repeat(3,minmax(0,1fr));max-height:none;flex:1;min-height:0;padding-right:2px}
+    .qnav-btn{min-height:34px;border:1.5px solid var(--bq-border,#d7e2f0);border-radius:8px;background:var(--bq-raised,#f2f5f7);color:var(--bq-assessment-muted);font:750 13px/1 inherit;cursor:pointer;transition:border-color .15s ease,background .15s ease,transform .15s ease,box-shadow .15s ease;display:grid;place-items:center}
+    .qnav-btn:hover{border-color:var(--bq-accent,#6366f1);transform:translateY(-1px);box-shadow:0 2px 6px rgba(0,0,0,0.06)}
+    .qnav-btn:active{transform:translateY(0)}
+    .qnav-btn.q-done{border-color:#16a34a;background:color-mix(in srgb,#16a34a 18%,var(--bq-raised,#f2f5f7));color:color-mix(in srgb,#15803d 85%,var(--bq-text,#18253a))}
+    .qnav-btn.q-retry{border-color:#ea580c;background:color-mix(in srgb,#ea580c 18%,var(--bq-raised,#f2f5f7));color:color-mix(in srgb,#c2410c 85%,var(--bq-text,#18253a))}
+    .qnav-btn.q-wrong{border-color:#dc2626;background:color-mix(in srgb,#dc2626 16%,var(--bq-raised,#f2f5f7));color:color-mix(in srgb,#b91c1c 85%,var(--bq-text,#18253a))}
+    .legend{display:none}
+    :host([data-collapsed="true"]) .legend{display:grid;grid-template-columns:repeat(2,1fr);gap:4px 6px;margin-top:auto;padding-top:8px;border-top:1px solid var(--bq-border,#d7e2f0);font-size:10.5px;color:var(--bq-assessment-muted);flex-shrink:0}
+    .legend-item{display:flex;align-items:center;gap:5px;white-space:nowrap}
+    .legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .legend-dot.dot-done{background:#16a34a;border:1px solid #15803d}
+    .legend-dot.dot-retry{background:#ea580c;border:1px solid #c2410c}
+    .legend-dot.dot-wrong{background:#dc2626;border:1px solid #b91c1c}
+    .legend-dot.dot-unattempted{background:var(--bq-raised,#f2f5f7);border:1px solid var(--bq-border,#d7e2f0)}
+    :host([data-collapsed="true"]) .rail{display:flex;flex-direction:column;overflow:hidden;padding:12px 10px;height:100%;max-height:100%}
     :host([data-collapsed="true"]) .thermo{margin-top:0;flex:0 0 auto}
     :host([data-collapsed="true"]) .metrics-grid{display:none}
-    :host([data-collapsed="true"]) .rail{padding:12px 10px}
     :host([data-collapsed="true"]) h2{font-size:13px}
     :host([data-collapsed="true"]) .top{flex-direction:column;align-items:stretch}
     :host([data-collapsed="true"]) .actions{justify-content:space-between}
 
     .question{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--bq-border,#d7e2f0);border-radius:8px;background:var(--bq-surface,#fff);box-shadow:0 2px 8px #0f172a08;transition:border-color .18s ease,box-shadow .18s ease}
+    .question[data-status="done"]{border-left:3.5px solid #16a34a}
+    .question[data-status="retry"]{border-left:3.5px solid #ea580c}
+    .question[data-status="wrong"]{border-left:3.5px solid #dc2626}
     .question:focus-within{border-color:var(--bq-accent,#227ab0)}
     .question-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
     .number{font-weight:800;font-size:13px;color:var(--bq-text,#18253a);border:0;background:transparent;padding:2px 4px;margin:-2px -4px;border-radius:4px;cursor:pointer;font-family:inherit;text-align:left}
@@ -634,10 +650,29 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
 
   const questions = document.createElement('div'); questions.className = 'questions';
   const qnav = document.createElement('nav'); qnav.className = 'qnav'; qnav.setAttribute('aria-label', 'Questions');
+
+  const qnavHeader = document.createElement('div'); qnavHeader.className = 'qnav-header';
+  const qnavTitle = document.createElement('span'); qnavTitle.className = 'qnav-title'; qnavTitle.textContent = 'Go to question';
+  const qnavLegend = document.createElement('div'); qnavLegend.className = 'qnav-legend';
+  qnavLegend.innerHTML = `
+    <span class="legend-item"><span class="legend-dot dot-done" aria-hidden="true"></span>Done</span>
+    <span class="legend-item"><span class="legend-dot dot-retry" aria-hidden="true"></span>Retried</span>
+    <span class="legend-item"><span class="legend-dot dot-wrong" aria-hidden="true"></span>Incorrect</span>
+  `;
+  qnavHeader.append(qnavTitle, qnavLegend);
+
+  const legend = document.createElement('div'); legend.className = 'legend'; legend.setAttribute('aria-label', 'Question status legend');
+  legend.innerHTML = `
+    <div class="legend-item"><span class="legend-dot dot-done" aria-hidden="true"></span><span>Done</span></div>
+    <div class="legend-item"><span class="legend-dot dot-retry" aria-hidden="true"></span><span>Retried</span></div>
+    <div class="legend-item"><span class="legend-dot dot-wrong" aria-hidden="true"></span><span>Incorrect</span></div>
+    <div class="legend-item"><span class="legend-dot dot-unattempted" aria-hidden="true"></span><span>Not started</span></div>
+  `;
+
   header.append(top, metricsGrid, progressWrap);
   const side = document.createElement('div'); side.className = 'side';
-  side.append(thermo, qnav);
-  rail.append(header, questions, side); shadow.append(localStyle, rail);
+  side.append(qnavHeader, thermo, qnav);
+  rail.append(header, side, questions, legend); shadow.append(localStyle, rail);
   host.dataset.layout = 'sidebar';
   rail.dataset.layout = 'sidebar';
 
@@ -1018,11 +1053,10 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     if (hit) {
       hit.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
       hit.focus?.({ preventScroll: true });
-      return;
     }
     if (card) {
-      card.querySelector<HTMLButtonElement>('.choice')?.focus?.({ preventScroll: true });
-      card.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' } as ScrollIntoViewOptions);
+      card.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+      card.querySelector<HTMLButtonElement>('.choice, .number')?.focus?.({ preventScroll: true });
     }
   }
 
@@ -1157,27 +1191,52 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     responseSignature = signature;
     questions.replaceChildren();
     qnav.replaceChildren();
+
+    const assessmentTable = elements.table;
+
+    function getQuestionStatus(binding: (typeof bindings)[number]): { state: string; statusLabel: string; titleStatus: string } {
+      const outcome = readOutcome(assessmentTable, binding);
+      const tries = readTries(assessmentTable, binding);
+      const usedTries = tries?.used ?? binding.attempts;
+      const qn = Number(binding.number);
+      const hadWrongMarks = Number.isInteger(qn) && (wrongMarks.get(qn)?.size ?? 0) > 0;
+
+      if (outcome === 'correct') {
+        if (usedTries > 1 || hadWrongMarks) {
+          return { state: 'q-retry', statusLabel: 'correct after retry', titleStatus: 'Correct (retried)' };
+        }
+        return { state: 'q-done', statusLabel: 'completed correctly', titleStatus: 'Correct' };
+      }
+      if (outcome === 'incorrect' || outcome === 'exhausted' || usedTries > 0) {
+        return { state: 'q-wrong', statusLabel: 'needs another try', titleStatus: 'Incorrect' };
+      }
+      return { state: '', statusLabel: 'not attempted', titleStatus: 'Not started' };
+    }
+
     for (const binding of bindings) {
       const jump = document.createElement('button');
       jump.type = 'button';
-      const outcome = readOutcome(elements.table, binding);
-      const state = outcome === 'correct' ? 'q-done' : binding.attempts > 0 ? 'q-wrong' : '';
+      const { state, statusLabel, titleStatus } = getQuestionStatus(binding);
       jump.className = 'qnav-btn' + (state ? ' ' + state : '');
       jump.textContent = binding.number;
-      jump.title = `Go to question ${binding.number}`;
-      jump.setAttribute('aria-label', state === 'q-done'
-        ? `Question ${binding.number} correct. Go to question ${binding.number} in the PDF.`
-        : state === 'q-wrong'
-          ? `Question ${binding.number} needs another try. Go to question ${binding.number} in the PDF.`
-          : `Question ${binding.number} not attempted. Go to question ${binding.number} in the PDF.`);
+      jump.title = `Question ${binding.number} · ${titleStatus}`;
+      jump.setAttribute('aria-label', `Question ${binding.number} ${statusLabel}. Go to question ${binding.number} in the PDF.`);
       const targetNumber = Number(binding.number);
-      jump.addEventListener('click', () => scrollToQuestion(Number.isInteger(targetNumber) ? targetNumber : 0, null));
+      jump.addEventListener('click', () => {
+        const card = questions.querySelector<HTMLElement>(`[data-question-id="${binding.id}"]`);
+        scrollToQuestion(Number.isInteger(targetNumber) ? targetNumber : 0, card);
+      });
       qnav.append(jump);
     }
     for (const binding of bindings) {
+      const { state } = getQuestionStatus(binding);
+      const cardStatus = state ? state.replace(/^q-/, '') : 'unattempted';
       const card = document.createElement('article'); card.className = 'question'; card.dataset.questionId = binding.id;
+      card.dataset.status = cardStatus;
       const cardTop = document.createElement('div'); cardTop.className = 'question-top';
-      const number = document.createElement('button'); number.type = 'button'; number.className = 'number'; number.textContent = `Question ${binding.number}`;
+      const number = document.createElement('button'); number.type = 'button';
+      number.className = 'number' + (cardStatus !== 'unattempted' ? ' number-' + cardStatus : '');
+      number.textContent = `Question ${binding.number}`;
       number.setAttribute('aria-label', `Go to question ${binding.number} in the PDF`);
       number.addEventListener('click', () => scrollToQuestion(Number(binding.number), card));
       const selected = document.createElement('span'); selected.className = 'selected';

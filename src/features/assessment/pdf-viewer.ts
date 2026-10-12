@@ -1,5 +1,5 @@
 import { mapPdfOptionLabels, parseQuestionBoundary, extractQuestionPoints, clean, type PdfOptionTarget, type PdfTextRun } from '../../adapters/quest/assessment';
-import { celebrateScreen, flashScreen } from './confetti';
+import { celebrateScreen, flashScreen } from './celebration';
 
 export interface InteractivePdfPage {
   width: number;
