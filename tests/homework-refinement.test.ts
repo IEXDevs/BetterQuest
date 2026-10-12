@@ -237,7 +237,7 @@ test('unified view shows answer panels, fullscreen, and a collapsible sidebar', 
     assert.equal(pctValue.textContent, '100%');
 
     const railCss = rail().querySelector('style')!.textContent!;
-    assert.match(railCss, /\.rail\{[^}]*border-radius:14px/, 'Response deck gets rounded corners');
+    assert.match(railCss, /\.rail\{[^}]*border-radius:3px/, 'Response deck keeps almost-sharp corners');
     assert.match(railCss, /\.metric-value\{[^}]*white-space:normal/, 'Metric values wrap instead of cutting off');
     assert.match(railCss, /@keyframes bq-flow/, 'Progress flows like liquid');
     assert.match(railCss, /\.meter:hover span\{animation-duration:1s\}/, 'Hovering speeds the flow');
