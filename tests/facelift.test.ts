@@ -663,6 +663,10 @@ test('BetterQuest and Quest Settings are completely separate menus without linke
     menu.open('betterquest');
     assert.equal(menuHost.hidden, false);
     assert.equal(bqMenu.hidden, false);
+    const switchLabels = [...bqMenu.querySelectorAll('label')].map(l => l.querySelector('span')?.childNodes[0]?.textContent?.trim());
+    assert.ok(switchLabels.includes('Whimsy mode'), 'Whimsy mode toggle is present');
+    assert.ok(switchLabels.includes('Animations'), 'Animations toggle is present');
+    assert.ok(!switchLabels.includes('Answer celebrations'), 'Answer celebrations toggle is removed');
     assert.equal(questMenu.hidden, true);
 
     // 4. Opening Quest Settings displays only questMenu

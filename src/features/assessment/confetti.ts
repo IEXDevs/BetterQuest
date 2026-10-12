@@ -66,7 +66,10 @@ export const WHIMSY_WRONG_ASSETS = [
 ] as const;
 
 function celebrationsDisabled(doc: Document): boolean {
-  return doc.documentElement?.dataset.betterquestCelebrations === 'disabled';
+  const explicit = doc.documentElement?.dataset.betterquestCelebrations === 'disabled';
+  const animationsOff = doc.documentElement?.dataset.betterquestAnimations === 'disabled';
+  const whimsyOff = doc.documentElement?.dataset.betterquestWhimsy === 'disabled';
+  return explicit || (animationsOff && whimsyOff);
 }
 
 function whimsyEnabled(doc: Document): boolean {
@@ -74,6 +77,7 @@ function whimsyEnabled(doc: Document): boolean {
 }
 
 function prefersCalm(view: Window, doc?: Document): boolean {
+  if (doc && whimsyEnabled(doc)) return false;
   if (doc?.documentElement?.dataset.betterquestAnimations === 'disabled') return true;
   try { return Boolean(view.matchMedia?.('(prefers-reduced-motion: reduce)').matches); } catch { return false; }
 }

@@ -454,14 +454,15 @@ test('celebrations can be turned off in settings', async () => {
   });
   try {
     assert.equal(await viewer.ready, true);
-    dom.window.document.documentElement.dataset.betterquestCelebrations = 'disabled';
+    dom.window.document.documentElement.dataset.betterquestAnimations = 'disabled';
+    dom.window.document.documentElement.dataset.betterquestWhimsy = 'disabled';
     viewer.celebrate(1, '2', true);
-    assert.equal(dom.window.document.body.querySelector('.bq-celebration'), null, 'No wall when celebrations are off');
+    assert.equal(dom.window.document.body.querySelector('.bq-celebration'), null, 'No wall when animations and whimsy are both off');
     dom.window.document.dispatchEvent(new dom.window.CustomEvent('betterquest:party', { detail: 'wrong' }));
     assert.equal(dom.window.document.body.querySelector('.bq-screen-flash'), null, 'No sad face wall either');
-    delete dom.window.document.documentElement.dataset.betterquestCelebrations;
+    delete dom.window.document.documentElement.dataset.betterquestWhimsy;
     dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
-    assert.ok(dom.window.document.body.querySelector('.bq-celebration'), 'The wall comes back as soon as the setting is on');
+    assert.ok(dom.window.document.body.querySelector('.bq-celebration'), 'The wall comes back as soon as whimsy is on');
   } finally {
     viewer.dispose();
     dom.window.close();
@@ -596,9 +597,12 @@ test('whimsy mode replaces the default emoji mascot with a randomized picture fr
   }
 });
 
-test('when animations are disabled, verdict wall uses calm motion while inline indicators remain active', async () => {
+test('when animations are disabled and whimsy is enabled, whimsy overtakes and animates with images', async () => {
   const module = await import('../src/features/assessment/pdf-viewer');
   const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1' });
+  (globalThis as { chrome?: { runtime?: { getURL?: (path: string) => string } } }).chrome = {
+    runtime: { getURL: (path: string) => `chrome-extension://test/${path}` },
+  };
   const calls: { keyframes: unknown; options: { duration?: number; delay?: number } }[] = [];
   (dom.window.HTMLElement.prototype as unknown as { animate: (keyframes: unknown, options?: unknown) => unknown }).animate =
     function (keyframes: unknown, options?: unknown) {
@@ -620,15 +624,27 @@ test('when animations are disabled, verdict wall uses calm motion while inline i
   });
   try {
     assert.equal(await viewer.ready, true);
+    // Animations are disabled, but whimsy is enabled by default
     dom.window.document.documentElement.dataset.betterquestAnimations = 'disabled';
     viewer.markWrong(1, '2');
     const wrongBox = viewer.element.shadowRoot!.querySelector<HTMLElement>('.option-hit[data-option="2"]')!;
     assert.ok(wrongBox.classList.contains('is-wrong'), 'Inline strikethrough stays enabled even with animations off');
 
     dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
-    const tileCalls = calls.filter(c => c.options?.duration === 160 && c.options?.delay === 0);
-    assert.ok(tileCalls.length > 0, 'Wall uses calm opacity transitions without spring delays');
+    // Whimsy overtakes: wall animates with the images (duration: 430)
+    const springCalls = calls.filter(c => c.options?.duration === 430);
+    assert.ok(springCalls.length > 0, 'Whimsy overtakes disabled animations and animates with images');
+    const party = dom.window.document.body.querySelector<HTMLElement>('.bq-celebration');
+    assert.ok(party, 'Celebration wall shows');
+    assert.ok(party!.querySelector('img.bq-whimsy-img'), 'Whimsy image is present');
+
+    // But when BOTH animations and whimsy are disabled, the wall is completely disabled
+    dom.window.document.body.querySelectorAll('.bq-celebration, .bq-screen-flash').forEach(el => el.remove());
+    dom.window.document.documentElement.dataset.betterquestWhimsy = 'disabled';
+    dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
+    assert.equal(dom.window.document.body.querySelector('.bq-celebration'), null, 'Wall is disabled when both animations and whimsy are off');
   } finally {
+    delete (globalThis as { chrome?: unknown }).chrome;
     viewer.dispose();
     dom.window.close();
   }
