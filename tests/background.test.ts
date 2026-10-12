@@ -16,7 +16,7 @@ test('real background handler validates senders/payloads, persists locally, and 
   const disconnects: (() => void)[] = [];
   const sender = { id, url: course.url };
   const fakeChrome = {
-    runtime: { id, getManifest: () => ({ version: '0.1' }), onMessage: { addListener: (fn: typeof listener) => { listener = fn; } },
+    runtime: { id, getManifest: () => ({ version: '1.0' }), onMessage: { addListener: (fn: typeof listener) => { listener = fn; } },
       onConnect: { addListener: (fn: typeof connection) => { connection = fn; } } },
     storage: { local: {
       setAccessLevel: async (options: { accessLevel: string }) => { accessLevel = options.accessLevel; },
@@ -33,7 +33,7 @@ test('real background handler validates senders/payloads, persists locally, and 
     listener!({ type: 'betterquest:ping' }, { id, url: 'https://elsewhere.example/student/' }, value => replies.push(value));
     assert.equal(replies.length, 0);
     listener!({ type: 'betterquest:ping' }, sender, value => replies.push(value));
-    assert.deepEqual(replies[0], { type: 'betterquest:pong', version: '0.1' });
+    assert.deepEqual(replies[0], { type: 'betterquest:pong', version: '1.0' });
     listener!({ type: 'betterquest:command', command: { kind: 'theme:set', preference: 'bad' } }, sender, value => replies.push(value));
     assert.equal((replies[1] as CommandResponse).ok, false);
     let disconnected = false;
