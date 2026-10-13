@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Course card art check</title>
+  <style>
+    /* Quest/bootstrap stand-ins so the card lays out the way it does live. */
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Segoe UI', ui-rounded, system-ui, sans-serif; font-size: 14px; }
+    #main-content { max-width: 1080px; margin: 0 auto; padding: 28px 24px 56px; }
+    .card { position: relative; display: flex; flex-direction: column; min-width: 0;
+      background-color: #fff; border: 1px solid rgba(0, 0, 0, 0.125); border-radius: 0.25rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+    .card-header { padding: 12px 15px; margin-bottom: 0; background-color: rgba(0, 0, 0, 0.03);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.125); }
+    .text-center { text-align: center; }
+    .collapse:not(.show) { display: none; }
+    .btn { display: inline-block; font-weight: 400; border: 1px solid transparent; cursor: pointer; }
+    .btn-link { background: none; border: 0; font-size: 1rem; color: #007bff; text-decoration: none; }
+    .btn-link:hover { text-decoration: underline; }
+    .float-right { float: right; }
+    .material-icons { font-size: 18px; vertical-align: middle; }
+    .h4 { font-size: 1.25rem; margin: 0; font-weight: 500; line-height: 1.2; }
+    .row { display: flex; flex-wrap: wrap; margin-right: -15px; margin-left: -15px; }
+    .row > .col { padding-right: 15px; padding-left: 15px; }
+    .col { flex: 1 0 0%; }
+    .qlabel { display: block; }
+    a { color: inherit; }
+    .qlabel { font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    #theme { position: fixed; top: 14px; right: 16px; padding: 7px 13px; border-radius: 7px;
+      border: 1px solid rgba(148, 163, 184, 0.4); background: rgba(255, 255, 255, 0.9);
+      color: #0f172a; font: 600 12px/1 inherit; cursor: pointer; }
+    .fake-assignment { font-size: 13.5px; font-weight: 600; color: #0284c7; }
+    .fake-meta { font-size: 11.5px; color: #94a3b8; margin-top: 4px; }
+  </style>
+</head>
+<body id="body-id" class="mdb-skin" data-betterquest-theme="dark">
+  <button id="theme" type="button">Switch to light</button>
+  <div id="main-content" data-betterquest-theme="dark">
+    <div id="target">
+      <div class="card">
+        <div class="card-header text-center">
+          <button type="button" class="btn btn-link" data-toggle="collapse" data-target="#student-course-info-header" aria-expanded="true">
+            <span class="h4">DIFFEREN AND INTEGRAL CALCULUS (58360)</span>
+            <span class="float-right" aria-hidden="true"><i class="material-icons">add</i></span>
+          </button>
+        </div>
+
+        <div class="collapse show bq-course-info-header" id="student-course-info-header">
+          <div class="row text-center bq-course-info-row">
+            <div class="col bq-col-instructor" data-betterquest-cleaned="true">
+              <div class="qlabel">Instructor</div>
+              <div class="bq-instructor-name">Nicolas Reyes</div>
+              <a href="mailto:nreyes@math.utexas.edu" class="bq-contact-btn" aria-label="Email contact">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path></svg><span>Email Instructor</span>
+              </a>
+            </div>
+            <div class="col bq-col-meets" data-betterquest-cleaned="true">
+              <div class="qlabel">Meets</div>
+              <div><span class="bq-meeting-time" data-betterquest="meeting-time" data-raw="TTH 330-500"><span class="bq-meeting-days">Tuesday/Thursday</span> <span class="bq-meeting-hours">3:30 PM - 5:00 PM</span></span></div>
+              <div class="bq-course-location">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg><span>PMA 4.102</span>
+              </div>
+            </div>
+            <div class="col bq-col-upcoming"></div>
+            <div class="col bq-col-empty"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="./card-demo.js"></script>
+</body>
+</html>

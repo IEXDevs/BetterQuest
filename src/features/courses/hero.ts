@@ -79,10 +79,6 @@ function syncToggleChrome(document: Document, mounted: boolean): void {
     style.setAttribute('data-betterquest', 'course-hero-style');
     style.textContent = `
       .card > .card-header:has(> button[data-target="#student-course-info-header"]) { display: none !important; }
-      .card:has(> [data-betterquest="course-hero"]) {
-        overflow: hidden !important;
-        border-radius: 10px !important;
-      }
       [data-betterquest="course-hero"] {
         display: block !important;
         width: 100% !important;
@@ -93,6 +89,29 @@ function syncToggleChrome(document: Document, mounted: boolean): void {
         border-top-right-radius: inherit !important;
         overflow: hidden !important;
         box-sizing: border-box !important;
+      }
+      /* Inside the course card the art layer fills the whole card, not just
+         the top banner; without a card wrapper it stays the in-flow banner. */
+      .card:has(> [data-betterquest="course-hero"]) {
+        position: relative !important;
+        overflow: hidden !important;
+        border-radius: 10px !important;
+        /* Reserve the top strip the banner copy (code, name, unique) sits in. */
+        padding-top: 80px !important;
+      }
+      .card:has(> [data-betterquest="course-hero"]) > [data-betterquest="course-hero"] {
+        position: absolute !important;
+        inset: 0 !important;
+        z-index: 0 !important;
+        width: auto !important;
+        height: auto !important;
+        pointer-events: none !important;
+      }
+      /* The art is a positioned layer, so everything else the card holds has to
+         stack above it to stay readable, clickable, and above the backdrop. */
+      .card:has(> [data-betterquest="course-hero"]) > *:not([data-betterquest="course-hero"]) {
+        position: relative !important;
+        z-index: 1 !important;
       }
     `;
     document.head.append(style);
@@ -121,8 +140,11 @@ function renderHero(host: HTMLElement, document: Document, identity: { code: str
       position: relative;
       isolation: isolate;
       display: flex;
-      align-items: flex-end;
+      align-items: flex-start;
       width: 100%;
+      /* Fills the host: a full-card host when the art is pinned to the card,
+         a 118px banner when the host sits in the flow with no card behind it. */
+      height: 100%;
       min-height: 118px;
       overflow: hidden;
       box-sizing: border-box;
@@ -130,7 +152,6 @@ function renderHero(host: HTMLElement, document: Document, identity: { code: str
       background: ${solid};
       color: #fff;
       text-align: left;
-      border-bottom: 1px solid rgba(8, 12, 20, 0.45);
       border-top-left-radius: inherit;
       border-top-right-radius: inherit;
     }
@@ -162,7 +183,7 @@ function renderHero(host: HTMLElement, document: Document, identity: { code: str
       position: absolute;
       inset: 0;
       z-index: 2;
-      background: linear-gradient(to top, rgba(6, 8, 12, 0.88) 0%, rgba(6, 8, 12, 0.28) 60%, transparent 100%);
+      background: linear-gradient(to bottom, rgba(6, 8, 12, 0.88) 0%, rgba(6, 8, 12, 0.44) 30%, rgba(6, 8, 12, 0.14) 58%, rgba(6, 8, 12, 0.30) 100%);
       pointer-events: none;
     }
     .copy {
@@ -267,16 +288,16 @@ export function enhanceCourseHero(root: HTMLElement): void {
       observers.set(host, observer);
     }
   } else if (host.dataset.betterquestKey === key) {
+    syncToggleChrome(document, true); // Sized before the layer measures itself.
     syncAnimations(host, document);
-    syncToggleChrome(document, true);
     return;
   }
   host.dataset.betterquestKey = key;
   host.setAttribute('aria-label', `${name} course banner${compactCode ? `, course ${compactCode}` : ''}`);
   destroyFx(host); // The canvas belongs to the previous render's layer.
   renderHero(host, document, { code: compactCode, name, unique, fx, departmentCode });
+  syncToggleChrome(document, true); // Layout settles first, so the effect mounts at full-card size.
   syncAnimations(host, document);
-  syncToggleChrome(document, true);
 }
 
 function removeHero(document: Document): void {

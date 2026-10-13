@@ -497,7 +497,7 @@ export const QUEST_DARK_STYLES = `
      ========================================================================= */
   #main-content #student-course-info-header {
     text-align: left;
-    padding: 16px 20px;
+    padding: 14px 20px 18px;
     background: transparent;
   }
   #main-content #student-course-info-header > .row.text-center,
@@ -512,7 +512,7 @@ export const QUEST_DARK_STYLES = `
   #main-content #student-course-info-header > .row > .col {
     flex: 1 1 200px !important;
     max-width: 100% !important;
-    padding: 16px 18px !important;
+    padding: 12px 18px !important;
     border-radius: 8px !important;
     text-align: left !important;
     display: flex !important;
@@ -545,19 +545,24 @@ export const QUEST_DARK_STYLES = `
     max-width: none !important;
   }
 
-  /* Light mode course info card */
+  /* The card's backdrop art shows through these panels, so they stay hazy
+     rather than solid — still opaque enough to read every line against. */
   #main-content[data-betterquest-theme="light"] #student-course-info-header > .row > .col,
   #main-content:not([data-betterquest-theme="dark"]) #student-course-info-header > .row > .col {
-    background: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
+    background: rgba(255, 255, 255, 0.86) !important;
+    border: 1px solid rgba(15, 23, 42, 0.10) !important;
     color: #0f172a !important;
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
   }
 
   /* Dark mode course info card */
   #main-content[data-betterquest-theme="dark"] #student-course-info-header > .row > .col {
-    background: #182436 !important;
-    border: 1px solid #2e3e54 !important;
+    background: rgba(13, 22, 38, 0.72) !important;
+    border: 1px solid rgba(148, 163, 184, 0.22) !important;
     color: #ffffff !important;
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
   }
 
   /* Labels (Instructor, Meets) inside course info */

@@ -124,11 +124,14 @@ export function enhanceCourseInfoCard(root: HTMLElement) {
     upcomingCol.classList.add('bq-col-upcoming');
   }
 
-  // 4. Mark empty columns
+  // 4. Mark empty columns (and release one that gained the assignment panel
+  //    after an earlier pass had written it off as empty).
   for (const col of cols) {
     const text = (col.textContent || '').trim();
     if (!text && !col.querySelector('[data-betterquest="assignment-section"]')) {
       col.classList.add('bq-col-empty');
+    } else {
+      col.classList.remove('bq-col-empty');
     }
   }
 }
