@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BetterQuest art preview</title>
+  <style>
+    body { margin: 0; padding: 24px; background: #0b0f16; color: #e6edf5; font: 13px/1.4 ui-rounded, 'Avenir Next', system-ui, sans-serif; }
+    h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .12em; opacity: .6; margin: 28px 0 12px; }
+    #heroes { display: grid; grid-template-columns: repeat(2, 520px); gap: 18px 20px; }
+    #cards { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; }
+    figure { margin: 0; }
+    figcaption { font-size: 11px; opacity: .65; margin-bottom: 6px; font-family: ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+  <div id="app"><h2>Hero banners (course page)</h2><div id="heroes"></div><h2>Course tiles (homepage)</h2><div id="cards"></div></div>
+  <script src="./preview.js"></script>
+</body>
+</html>

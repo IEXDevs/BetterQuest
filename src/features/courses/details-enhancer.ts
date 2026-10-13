@@ -1,5 +1,6 @@
 import { formatMeetingTime } from './meeting-times';
 import { enhanceCourseReviewTab } from './review-enhancer';
+import { enhanceCourseHero, disposeCourseHero } from './hero';
 
 export function isCourseShowPage(url: string): boolean {
   try {
@@ -168,6 +169,7 @@ export function createCourseDetailsFacelift(root: HTMLElement) {
   function reconcile() {
     if (disposed) return;
     enhanceCourseInfoCard(root);
+    enhanceCourseHero(root);
     collapseCourseCategoriesByDefault(doc);
     enhanceCourseReviewTab(doc);
   }
@@ -182,7 +184,7 @@ export function createCourseDetailsFacelift(root: HTMLElement) {
     scheduled = true;
     queueMicrotask(() => {
       scheduled = false;
-      if (!disposed) collapseCourseCategoriesByDefault(doc);
+      if (!disposed) { collapseCourseCategoriesByDefault(doc); enhanceCourseHero(root); }
     });
   };
   const Observer = doc.defaultView?.MutationObserver;
@@ -194,6 +196,7 @@ export function createCourseDetailsFacelift(root: HTMLElement) {
     dispose() {
       disposed = true;
       observer?.disconnect();
+      disposeCourseHero(doc);
     },
   };
 }

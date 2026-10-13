@@ -68,40 +68,26 @@
   padding: 0.15rem;
 }
 
-.badge-dept {
+.badge-code {
   font-family: ui-rounded, 'Avenir Next', -apple-system, sans-serif;
   font-weight: 850;
   line-height: 0.95;
-  letter-spacing: -0.04em;
-}
-
-.course-badge-sm .badge-dept {
-  font-size: 0.95rem;
-}
-
-.course-badge-md .badge-dept {
-  font-size: 1.35rem;
-}
-
-.course-badge-lg .badge-dept {
-  font-size: 2.1rem;
-}
-
-.badge-code {
-  font-family: var(--mono, ui-monospace, monospace);
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: -0.03em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.95);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 0.15rem;
 }
 
 .course-badge-sm .badge-code {
-  display: none;
+  font-size: 0.56rem;
+}
+
+.course-badge-md .badge-code {
+  font-size: 0.68rem;
+}
+
+.course-badge-lg .badge-code {
+  font-size: 1.05rem;
 }
 
 /* Hero layout */
@@ -126,20 +112,16 @@
 
 .hero-titles {
   display: flex;
-  align-items: baseline;
-  gap: 0.65rem;
-}
-
-.hero-dept {
-  font-size: 1.75rem;
-  font-weight: 900;
-  letter-spacing: -0.04em;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
 .hero-code {
-  font-size: 1.05rem;
-  font-weight: 750;
-  color: #f4f4f5;
+  font-size: 1.65rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  color: #ffffff;
 }
 
 .hero-name {
@@ -152,6 +134,16 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 0.35rem;
+}
+
+.hero-unique {
+  font-family: ui-rounded, 'Avenir Next', -apple-system, sans-serif;
+  font-size: 1.65rem;
+  font-weight: 850;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.95);
+  white-space: nowrap;
 }
 
 .course-badge-type-ether {

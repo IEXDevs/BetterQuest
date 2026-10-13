@@ -31,7 +31,7 @@ type Course = {
 const COURSES: Course[] = [
   {
     id: 'm408c',
-    code: 'M 408C',
+    code: 'M408C',
     department: 'M',
     bgType: 'ether',
     name: 'Differential & Integral Calculus',
@@ -42,8 +42,8 @@ const COURSES: Course[] = [
         id: 'm1',
         day: 'Fri',
         date: 'Oct 9',
-        course: 'M 408C',
-        title: 'Sequences & Series',
+        course: 'M408C',
+        title: 'Related Rates',
         type: 'Homework 5',
         deadline: 'Tonight, 10:00 PM',
         status: 'In progress',
@@ -54,8 +54,8 @@ const COURSES: Course[] = [
         id: 'm2',
         day: 'Mon',
         date: 'Oct 12',
-        course: 'M 408C',
-        title: 'Power Series Review',
+        course: 'M408C',
+        title: 'L’Hôpital’s Rule & Limit Laws',
         type: 'Quiz Prep',
         deadline: 'Mon, 5:00 PM',
         status: 'Not started',
@@ -65,8 +65,8 @@ const COURSES: Course[] = [
         id: 'm3',
         day: 'Wed',
         date: 'Oct 14',
-        course: 'M 408C',
-        title: 'Taylor Approximations',
+        course: 'M408C',
+        title: 'Optimization & Curve Sketching',
         type: 'Homework 6',
         deadline: 'Wed, 10:00 PM',
         status: 'Not started',
@@ -76,14 +76,14 @@ const COURSES: Course[] = [
     saved: {
       question: 'Question 7',
       assignment: 'Homework 5',
-      note: 'Review ratio test convergence conditions before office hours.',
+      note: 'Related rates: differentiate with respect to time t before plugging in values.',
     },
   },
   {
     id: 'ch301',
-    code: 'CH 301',
+    code: 'CH301',
     department: 'CH',
-    bgType: 'pixel',
+    bgType: 'ether',
     name: 'Chemistry I',
     unique: '51200',
     count: 2,
@@ -92,7 +92,7 @@ const COURSES: Course[] = [
         id: 'c1',
         day: 'Mon',
         date: 'Oct 12',
-        course: 'CH 301',
+        course: 'CH301',
         title: 'Thermochemistry & Enthalpy',
         type: 'Quest 8',
         deadline: 'Mon, 11:59 PM',
@@ -104,7 +104,7 @@ const COURSES: Course[] = [
         id: 'c2',
         day: 'Thu',
         date: 'Oct 15',
-        course: 'CH 301',
+        course: 'CH301',
         title: 'Gas Laws & Partial Pressure',
         type: 'Homework',
         deadline: 'Thu, 11:59 PM',
@@ -120,9 +120,9 @@ const COURSES: Course[] = [
   },
   {
     id: 'phy303k',
-    code: 'PHY 303K',
+    code: 'PHY303K',
     department: 'PHY',
-    bgType: 'aurora',
+    bgType: 'ether',
     name: 'Physics I',
     unique: '56410',
     count: 3,
@@ -131,7 +131,7 @@ const COURSES: Course[] = [
         id: 'p1',
         day: 'Tue',
         date: 'Oct 13',
-        course: 'PHY 303K',
+        course: 'PHY303K',
         title: 'Rotational Dynamics & Torque',
         type: 'Homework 4',
         deadline: 'Tue, 9:00 PM',
@@ -143,7 +143,7 @@ const COURSES: Course[] = [
         id: 'p2',
         day: 'Fri',
         date: 'Oct 16',
-        course: 'PHY 303K',
+        course: 'PHY303K',
         title: 'Angular Momentum Preflight',
         type: 'Lab Prep',
         deadline: 'Fri, 5:00 PM',
@@ -154,7 +154,7 @@ const COURSES: Course[] = [
         id: 'p3',
         day: 'Sun',
         date: 'Oct 18',
-        course: 'PHY 303K',
+        course: 'PHY303K',
         title: 'Midterm Practice Set',
         type: 'Review',
         deadline: 'Sun, 11:59 PM',
@@ -171,13 +171,13 @@ const COURSES: Course[] = [
 ];
 
 const CALENDAR_FEED = [
-  { date: 'Fri, Oct 9', time: '10:00 PM', course: 'M 408C', title: 'Sequences & Series' },
-  { date: 'Mon, Oct 12', time: '5:00 PM', course: 'M 408C', title: 'Power Series Review' },
-  { date: 'Mon, Oct 12', time: '11:59 PM', course: 'CH 301', title: 'Thermochemistry' },
-  { date: 'Tue, Oct 13', time: '9:00 PM', course: 'PHY 303K', title: 'Rotational Dynamics' },
-  { date: 'Wed, Oct 14', time: '10:00 PM', course: 'M 408C', title: 'Taylor Approximations' },
-  { date: 'Thu, Oct 15', time: '11:59 PM', course: 'CH 301', title: 'Gas Laws Worksheet' },
-  { date: 'Fri, Oct 16', time: '5:00 PM', course: 'PHY 303K', title: 'Angular Momentum' },
+  { date: 'Fri, Oct 9', time: '10:00 PM', course: 'M408C', title: 'Related Rates' },
+  { date: 'Mon, Oct 12', time: '5:00 PM', course: 'M408C', title: 'L’Hôpital’s Rule Quiz Prep' },
+  { date: 'Mon, Oct 12', time: '11:59 PM', course: 'CH301', title: 'Thermochemistry & Enthalpy' },
+  { date: 'Tue, Oct 13', time: '9:00 PM', course: 'PHY303K', title: 'Rotational Dynamics & Torque' },
+  { date: 'Wed, Oct 14', time: '10:00 PM', course: 'M408C', title: 'Optimization & Curve Sketching' },
+  { date: 'Thu, Oct 15', time: '11:59 PM', course: 'CH301', title: 'Gas Laws & Partial Pressure' },
+  { date: 'Fri, Oct 16', time: '5:00 PM', course: 'PHY303K', title: 'Angular Momentum Preflight' },
 ];
 
 export function InteractiveProductFrame() {
@@ -185,15 +185,14 @@ export function InteractiveProductFrame() {
   const [activeCourse, setActiveCourse] = useState<CourseId>('m408c');
   const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>({});
   const [savedOpen, setSavedOpen] = useState(true);
+  const [frameDark, setFrameDark] = useState(true);
   const [viewMode, setViewMode] = useState<'queue' | 'calendar'>('queue');
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState('Daily · 4:00 AM');
-  const [copiedFeed, setCopiedFeed] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [menuOpen, setMenuOpen] = useState(false);
+  const [trackerSetting, setTrackerSetting] = useState(true);
+  const [bookmarksSetting, setBookmarksSetting] = useState(true);
   const [animSetting, setAnimSetting] = useState(true);
-  const [darkSetting, setDarkSetting] = useState(true);
-  const [upcomingSetting, setUpcomingSetting] = useState(true);
+  const [whimsySetting, setWhimsySetting] = useState(false);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -220,22 +219,6 @@ export function InteractiveProductFrame() {
     }));
   };
 
-  const handleSyncTrigger = () => {
-    if (isSyncing) return;
-    setIsSyncing(true);
-    setSyncStatus('Syncing feed…');
-    setTimeout(() => {
-      setIsSyncing(false);
-      setSyncStatus('✓ Synced just now');
-      setTimeout(() => setSyncStatus('Daily · 4:00 AM'), 3500);
-    }, 1000);
-  };
-
-  const handleCopyFeed = () => {
-    setCopiedFeed(true);
-    setTimeout(() => setCopiedFeed(false), 2000);
-  };
-
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const el = frameRef.current;
     if (!el) return;
@@ -254,6 +237,7 @@ export function InteractiveProductFrame() {
     <div
       ref={frameRef}
       className="product-frame is-interactive"
+      data-frame-mode={frameDark ? 'dark' : 'light'}
       aria-label="Interactive preview of BetterQuest's assignment overview"
       onPointerMove={onPointerMove}
       onPointerLeave={onPointerLeave}
@@ -294,6 +278,7 @@ export function InteractiveProductFrame() {
               onClick={() => setViewMode('calendar')}
             >
               Calendar Feed
+              <span className="tab-progress-chip">In progress</span>
             </button>
           </div>
 
@@ -326,31 +311,72 @@ export function InteractiveProductFrame() {
               <div className="frame-dropdown-popup" role="dialog" aria-label="BetterQuest settings">
                 <div className="dropdown-popup-header">
                   <strong>BetterQuest</strong>
-                  <span className="dropdown-popup-sub">Fluid settings preview</span>
+                  <span className="dropdown-popup-sub">A calmer workspace for Quest.</span>
                 </div>
                 <div className="dropdown-popup-options">
                   <label className="dropdown-popup-label">
-                    <span>Animations</span>
+                    <span>
+                      Assignment tracker
+                      <small>Homepage overview and course summaries.</small>
+                    </span>
                     <input
                       type="checkbox"
+                      role="switch"
+                      aria-label="Assignment tracker"
+                      checked={trackerSetting}
+                      onChange={() => setTrackerSetting((v) => !v)}
+                    />
+                  </label>
+                  <label className="dropdown-popup-label">
+                    <span>
+                      Question bookmarks
+                      <small>Show save icons; saved questions remain available.</small>
+                    </span>
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      aria-label="Question bookmarks"
+                      checked={bookmarksSetting}
+                      onChange={() => setBookmarksSetting((v) => !v)}
+                    />
+                  </label>
+                  <label className="dropdown-popup-label">
+                    <span>
+                      Animations
+                      <small>Fluid backgrounds, celebration walls, and motion.</small>
+                    </span>
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      aria-label="Animations"
                       checked={animSetting}
                       onChange={() => setAnimSetting((v) => !v)}
                     />
                   </label>
                   <label className="dropdown-popup-label">
-                    <span>Dark theme</span>
+                    <span>
+                      Whimsy mode
+                      <small>Random funny pictures celebrate right and wrong answers.</small>
+                    </span>
                     <input
                       type="checkbox"
-                      checked={darkSetting}
-                      onChange={() => setDarkSetting((v) => !v)}
+                      role="switch"
+                      aria-label="Whimsy mode"
+                      checked={whimsySetting}
+                      onChange={() => setWhimsySetting((v) => !v)}
                     />
                   </label>
                   <label className="dropdown-popup-label">
-                    <span>Upcoming view</span>
+                    <span>
+                      Dark mode
+                      <small>Quest components only; original PDF colors are preserved.</small>
+                    </span>
                     <input
                       type="checkbox"
-                      checked={upcomingSetting}
-                      onChange={() => setUpcomingSetting((v) => !v)}
+                      role="switch"
+                      aria-label="Dark mode"
+                      checked={frameDark}
+                      onChange={() => setFrameDark((v) => !v)}
                     />
                   </label>
                 </div>
@@ -390,7 +416,6 @@ export function InteractiveProductFrame() {
           <div className="sidebar-brand-pill">
             <img src="/logo.png" alt="" className="sidebar-brand-glyph" width="28" height="28" />
             <span className="sidebar-brand-name">BetterQuest</span>
-            <span className="sidebar-status-beacon" title="Extension connected" />
           </div>
 
           <div className="sidebar-heading">COURSES</div>
@@ -466,15 +491,13 @@ export function InteractiveProductFrame() {
                   </div>
                 </div>
 
-                {/* Refined Calendar Sync Pill */}
-                <button
-                  type="button"
-                  className={`calendar-sync-pill ${isSyncing ? 'is-syncing' : ''}`}
-                  onClick={handleSyncTrigger}
-                  title="Simulate daily Google Calendar sync"
+                {/* Calendar Sync Pill — work in progress */}
+                <div
+                  className="calendar-sync-pill is-pending"
+                  title="Calendar feed — not final UI, currently in progress"
                 >
                   <svg
-                    className={`sync-icon-glyph ${isSyncing ? 'is-spinning' : ''}`}
+                    className="sync-icon-glyph"
                     width="12"
                     height="12"
                     viewBox="0 0 24 24"
@@ -486,9 +509,12 @@ export function InteractiveProductFrame() {
                   </svg>
                   <div className="sync-pill-text">
                     <span className="sync-title">GCal Sync</span>
-                    <span className="sync-meta">{syncStatus}</span>
+                    <span className="sync-meta">
+                      <span className="status-progress-dot" />
+                      In progress
+                    </span>
                   </div>
-                </button>
+                </div>
               </div>
 
               {/* Scrollable Tasks Viewport */}
@@ -598,18 +624,20 @@ export function InteractiveProductFrame() {
                 <div className="feed-header-left">
                   <div className="feed-status-badge">
                     <span className="feed-dot" />
-                    <span>Live Subscribe Feed</span>
+                    <span>In progress</span>
                   </div>
                   <h4>Google Calendar · Quest Feed</h4>
                   <p>Subscribe once in Google Calendar. Visited assignments update daily automatically.</p>
+                  <p className="feed-progress-note">(not final UI — currently in progress)</p>
                 </div>
 
                 <button
                   type="button"
-                  className={`feed-copy-btn ${copiedFeed ? 'is-copied' : ''}`}
-                  onClick={handleCopyFeed}
+                  className="feed-copy-btn is-pending"
+                  disabled
+                  title="Not ready yet — currently in progress"
                 >
-                  {copiedFeed ? '✓ Copied Feed URL' : 'Copy .ics Link'}
+                  Copy .ics Link · In progress
                 </button>
               </div>
 
@@ -630,9 +658,9 @@ export function InteractiveProductFrame() {
                         <strong>{event.title}</strong>
                         <span className="event-course-pill">{event.course}</span>
                       </div>
-                      <div className="event-status-col">
-                        <span className="status-synced-dot" />
-                        <span>Synced</span>
+                      <div className="event-status-col is-pending">
+                        <span className="status-progress-dot" />
+                        <span>In progress</span>
                       </div>
                     </div>
                   ))}

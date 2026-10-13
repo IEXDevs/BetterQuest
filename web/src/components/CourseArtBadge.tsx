@@ -134,19 +134,19 @@ export function CourseArtBadge({
   };
 
   const renderOverlay = () => {
+    const compactCode = code.replace(/\s+/g, '').toUpperCase();
     if (size === 'hero') {
       return (
         <div className="course-badge-overlay">
           <div className="hero-left">
             <div className="hero-titles">
-              <span className="hero-dept">{department}</span>
-              <span className="hero-code">{code}</span>
-              {name && <span className="hero-name">— {name}</span>}
+              <span className="hero-code">{compactCode}</span>
+              {name && <span className="hero-name">{name}</span>}
             </div>
           </div>
           {unique && (
             <div className="hero-right">
-              <span className="unique-chip">Unique #{unique}</span>
+              <span className="hero-unique">{unique}</span>
             </div>
           )}
         </div>
@@ -155,8 +155,7 @@ export function CourseArtBadge({
 
     return (
       <div className="course-badge-overlay">
-        <span className="badge-dept">{department}</span>
-        {size !== 'sm' && <span className="badge-code">{code}</span>}
+        <span className="badge-code">{compactCode}</span>
       </div>
     );
   };

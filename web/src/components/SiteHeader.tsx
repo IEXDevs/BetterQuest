@@ -12,7 +12,8 @@ export function SiteHeader({
       <Brand />
       <div className="header-actions">
         <nav aria-label="Primary navigation">
-          {current === 'privacy' && <a href="/">Product</a>}
+          <a href="/" aria-current={current === 'product' ? 'page' : undefined}>Product</a>
+          <a href="/#inside">Features</a>
           <a href="/privacy" aria-current={current === 'privacy' ? 'page' : undefined}>Privacy Policy</a>
           <InstallExtensionButton size="sm" label="Extension" className="nav-cta" />
         </nav>

@@ -85,6 +85,11 @@ export const QUEST_DARK_STYLES = `
   #main-content[data-betterquest-theme="dark"] { color:var(--bq-text); }
   #quest-nav-header-div[data-betterquest-theme="dark"] .qh-navbar { background:#162b40; color:#edf3fb; }
   #quest-nav-header-div[data-betterquest-theme="dark"] .qh-nav-link { color:#edf3fb; }
+  #quest-nav-header-div .qh-navbar[data-betterquest-nav="compact"] { color:#edf3fb; }
+  #quest-nav-header-div .qh-navbar[data-betterquest-nav="compact"] .qh-breadcrumbs,
+  #quest-nav-header-div .qh-navbar[data-betterquest-nav="compact"] .qh-breadcrumb,
+  #quest-nav-header-div .qh-navbar[data-betterquest-nav="compact"] .qh-breadcrumb li,
+  #quest-nav-header-div .qh-navbar[data-betterquest-nav="compact"] .qh-breadcrumb a { color:#edf3fb!important; }
   #quest-nav-header-div[data-betterquest-theme="dark"] :where(.qh-dropdown-menu),
   #main-content[data-betterquest-theme="dark"] :where(.dropdown-menu) {
     background: color-mix(in srgb, var(--bq-surface) 94%, transparent);

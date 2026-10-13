@@ -7,6 +7,17 @@ export interface HomepageCourseRow {
   nativeImage: HTMLImageElement | null;
   departmentCode: string;
   courseCode: string;
+  /** Quest's unique number for the course. An open course page prints it in the
+   *  card header, so it is the one id both views share for artwork identity. */
+  courseUnique: string;
+  /** The `?course=` id shared with the course page URL; presentation memory only. */
+  courseParam: string | null;
+}
+
+/** Index of a labelled column in the course table header, or -1. */
+function columnIndex(table: HTMLTableElement, label: string): number {
+  const headers = [...table.querySelectorAll('thead tr:first-child > th')];
+  return headers.findIndex(th => (th.textContent || '').trim() === label);
 }
 
 /** Homepage selectors/column labels from the supplied authenticated document. */
@@ -23,8 +34,7 @@ export function findHomepageSlot(document: Document): { root: HTMLElement; wrapp
 export function readHomepageCourses(document: Document): Course[] {
   const slot = findHomepageSlot(document);
   if (!slot) return [];
-  const headers = [...slot.table.querySelectorAll('thead tr:first-child > th')].map(th => th.textContent?.trim() || '');
-  const nameIndex = headers.indexOf('Name'), uniqueIndex = headers.indexOf('Unique');
+  const nameIndex = columnIndex(slot.table, 'Name'), uniqueIndex = columnIndex(slot.table, 'Unique');
   if (nameIndex < 0 || uniqueIndex < 0) return [];
   const courses = new Map<string, Course>();
   for (const row of slot.table.querySelectorAll('tbody > tr')) {
@@ -54,13 +64,22 @@ export function departmentFromCourseCode(courseCode: string): string {
 export function readHomepageCourseRows(document: Document): HomepageCourseRow[] {
   const slot = findHomepageSlot(document);
   if (!slot) return [];
+  const uniqueIndex = columnIndex(slot.table, 'Unique');
   const rows: HomepageCourseRow[] = [];
   for (const row of slot.table.querySelectorAll<HTMLTableRowElement>('tbody > tr')) {
     const artworkCell = row.querySelector<HTMLTableCellElement>(':scope > td:first-child');
     const codeCell = row.querySelector<HTMLTableCellElement>('td[aria-label^="Course Short Name:"]');
     const courseCode = (codeCell?.getAttribute('aria-label')?.replace(/^Course Short Name:\s*/i, '') || codeCell?.textContent || '').replace(/\s+/g, ' ').trim();
     if (!artworkCell || !courseCode) continue;
-    rows.push({ row, artworkCell, nativeImage: artworkCell.querySelector('img'), departmentCode: departmentFromCourseCode(courseCode), courseCode });
+    const cells = [...row.querySelectorAll<HTMLTableCellElement>(':scope > td')];
+    const courseUnique = (uniqueIndex < 0 ? '' : (cells[uniqueIndex]?.textContent || '').replace(/\s+/g, ''));
+    let courseParam: string | null = null;
+    try {
+      const link = row.querySelector<HTMLAnchorElement>('td a[href*="courses/show"]');
+      const href = link?.getAttribute('href');
+      if (href) courseParam = new URL(sourceUrl(href, document.URL)).searchParams.get('course');
+    } catch { /* Rows without a verifiable course link keep a null param. */ }
+    rows.push({ row, artworkCell, nativeImage: artworkCell.querySelector('img'), departmentCode: departmentFromCourseCode(courseCode), courseCode, courseUnique, courseParam });
   }
   return rows;
 }

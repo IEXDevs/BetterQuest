@@ -29,11 +29,17 @@ export function applyNavigationFacelift(document: Document, navbar: HTMLElement)
   document.querySelectorAll('[data-betterquest="navigation-style"]').forEach(node => node.remove());
   const style = document.createElement('style'); style.dataset.betterquest = 'navigation-style';
   style.textContent = `
-    .qh-navbar[data-betterquest-nav="compact"]{min-height:62px;padding:0 18px;background:linear-gradient(110deg,#17283d 0%,#213750 58%,#17283d 100%);box-shadow:0 6px 24px #08131f25}
+    .qh-navbar[data-betterquest-nav="compact"]{min-height:62px;padding:0 18px;background:linear-gradient(110deg,#17283d 0%,#213750 58%,#17283d 100%);box-shadow:0 6px 24px #08131f25;color:#edf3fb}
+    .qh-navbar[data-betterquest-nav="compact"] .qh-breadcrumbs,
+    .qh-navbar[data-betterquest-nav="compact"] .qh-breadcrumbs *,
+    .qh-navbar[data-betterquest-nav="compact"] .qh-breadcrumb,
+    .qh-navbar[data-betterquest-nav="compact"] .qh-breadcrumb *{color:#edf3fb!important}
     .qh-navbar[data-betterquest-nav="compact"]>.qh-nav{margin-left:auto;align-self:stretch;display:flex;align-items:center}
     .qh-navbar[data-betterquest-nav="compact"]>.qh-nav>.qh-nav-item:not([data-betterquest="navigation"]){display:none!important}
     .qh-navbar[data-betterquest-nav="compact"] [data-betterquest="navigation"]{display:flex!important;align-items:center;align-self:stretch;position:relative;margin-left:auto}
     .qh-navbar[data-betterquest-nav="compact"] .bq-nav-toolbar{display:inline-flex;align-items:center;gap:8px}
+    .qh-navbar[data-betterquest-nav="compact"] .bq-toolbar-btn,
+    .qh-navbar[data-betterquest-nav="compact"] .bq-toolbar-btn *{color:#f7fbff!important}
     .qh-navbar[data-betterquest-nav="compact"] .bq-toolbar-btn{display:inline-flex;align-items:center;gap:8px;min-height:42px;margin:7px 0;padding:7px 13px!important;border:1px solid #ffffff1f!important;border-radius:8px!important;background:#ffffff0d!important;color:#f7fbff!important;box-shadow:inset 0 1px #ffffff18,0 2px 8px #080f1840;font-weight:650;letter-spacing:-.01em;cursor:pointer;transition:background .22s cubic-bezier(0.16,1,0.3,1),border-color .22s cubic-bezier(0.16,1,0.3,1),transform .22s cubic-bezier(0.16,1,0.3,1),box-shadow .22s ease}
     .qh-navbar[data-betterquest-nav="compact"] .bq-toolbar-btn::after,.bq-toolbar-btn::after{display:none!important;content:none!important}
     .qh-navbar[data-betterquest-nav="compact"] .bq-toolbar-btn:hover{background:#ffffff18!important;border-color:#ffffff3b!important;transform:translateY(-1.5px);box-shadow:inset 0 1px #ffffff24,0 6px 20px #080f1860}
