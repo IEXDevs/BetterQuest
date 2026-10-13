@@ -417,14 +417,24 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   const darkPagesBtn = document.createElement('button');
   darkPagesBtn.type = 'button'; darkPagesBtn.className = 'tool-btn';
   darkPagesBtn.textContent = 'Dark pages';
-  darkPagesBtn.setAttribute('aria-pressed', 'false');
+  const DARK_PAGES_KEY = 'betterquest_pdf_dark_pages';
+  const applyDarkPages = (dark: boolean) => {
+    if (dark) element.dataset.darkPages = 'true';
+    else delete element.dataset.darkPages;
+    darkPagesBtn.setAttribute('aria-pressed', String(dark));
+  };
+  // Restore before mounting, using the same on-device storage as PDF zoom.
+  let savedDarkPages = false;
+  try { savedDarkPages = document.defaultView?.localStorage?.getItem(DARK_PAGES_KEY) === 'true'; }
+  catch { /* Storage unavailable: default to original PDF colors. */ }
+  applyDarkPages(savedDarkPages);
   darkPagesBtn.title = 'Darken PDF pages only. Diagram colors may change; turn off to see original colors.';
   darkPagesBtn.addEventListener('click', event => {
     event.stopPropagation(); // Do not dismiss a pending answer confirmation.
     const dark = element.dataset.darkPages !== 'true';
-    if (dark) element.dataset.darkPages = 'true';
-    else delete element.dataset.darkPages;
-    darkPagesBtn.setAttribute('aria-pressed', String(dark));
+    applyDarkPages(dark);
+    try { document.defaultView?.localStorage?.setItem(DARK_PAGES_KEY, String(dark)); }
+    catch { /* The toggle still works for this viewer if storage is unavailable. */ }
   });
   const fullscreenBtn = document.createElement('button'); fullscreenBtn.type = 'button'; fullscreenBtn.className = 'tool-btn';
   fullscreenBtn.setAttribute('aria-label', 'Toggle full screen');
