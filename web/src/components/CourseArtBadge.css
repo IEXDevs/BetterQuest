@@ -200,6 +200,7 @@
 :root[data-betterquest-animations="disabled"] .course-badge-root .swirl-card-container,
 :root[data-betterquest-animations="disabled"] .course-badge-root .pixel-card-container,
 :root[data-betterquest-animations="disabled"] .course-badge-root .soft-aurora-container,
+:root[data-betterquest-animations="disabled"] .course-badge-root .course-effect-art,
 :root[data-betterquest-animations="disabled"] .course-badge-root canvas,
 :root[data-betterquest-animations="disabled"] .course-badge-root svg {
   display: none !important;
