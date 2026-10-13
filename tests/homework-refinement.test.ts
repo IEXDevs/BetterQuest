@@ -212,7 +212,7 @@ test('unified view shows answer panels, fullscreen, and a collapsible sidebar', 
     assert.notEqual(focus.style.display, 'none', 'Fullscreen stays available');
     assert.ok(rail().querySelector('.metrics-grid'), 'Score info stays visible');
     assert.ok(rail().querySelector('.qnav'), 'Collapsed question navigator exists');
-    assert.match(root.style.height, /^\d+px$/, 'Workspace locks to the viewport height');
+    assert.match(root.style.getPropertyValue('--bq-pdf-workspace-height'), /^\d+px$/, 'Workspace locks to the viewport height');
 
     collapse.click();
     const host = doc.querySelector<HTMLElement>('[data-betterquest="assessment-rail"]')!;
@@ -248,7 +248,7 @@ test('unified view shows answer panels, fullscreen, and a collapsible sidebar', 
     assert.match(railCss, /\.qnav-btn\{[^}]*aspect-ratio:1/, 'Question buttons are square boxes');
 
     const css = doc.querySelector('[data-betterquest="assessment-style"]')!.textContent!;
-    assert.match(css, /grid-template-rows:auto minmax\(0,1fr\)/, 'Workspace is a viewport-locked grid');
+    assert.match(css, /grid-template-rows:auto minmax\(0,var\(--bq-pdf-workspace-height,calc\(100dvh - 104px\)\)\)/, 'Workspace is a viewport-locked grid');
     assert.match(css, /overflow:hidden/, 'No page scrolling from the workspace');
     assert.match(css, /#info-header-div/, 'Header pins to the top row');
     assert.match(css, /#instanceitem-list/, 'Quicklink strip stays hidden');

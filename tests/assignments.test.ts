@@ -302,6 +302,7 @@ test('full integration keeps the automatic summary while navbar opens Saved Ques
     const targetCopy = dom.window.document.querySelector('#target')!.cloneNode(true) as Element;
     targetCopy.querySelector('[data-betterquest="assignment-section"]')!.remove();
     targetCopy.querySelectorAll('[data-betterquest="completion-toggle"]').forEach(node => node.remove());
+    targetCopy.querySelectorAll('[data-betterquest="assignment-group-preview"], [data-betterquest="assignment-group-preview-style"]').forEach(node => node.remove());
     assert.equal(targetCopy.outerHTML, original);
     assert.equal(dom.window.document.querySelectorAll('[data-betterquest="navigation"]').length, 1);
   } finally { integration.dispose(); dom.window.close(); }
