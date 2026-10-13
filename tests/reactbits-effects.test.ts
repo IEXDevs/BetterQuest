@@ -8,17 +8,25 @@ import { createCourseArtwork } from '../src/features/courses/artwork';
 import { COURSE_EFFECTS, isCourseEffect } from '../src/features/courses/effects';
 import { REACTBITS_EFFECTS } from '../src/features/courses/reactbits';
 
+/** jsdom ships no canvas backend; stubbing getContext keeps effect mounts on
+ *  the silent no-WebGL path instead of spamming "Not implemented" logs. */
+function quietCanvas(dom: JSDOM): JSDOM {
+  const proto = dom.window.HTMLCanvasElement.prototype;
+  proto.getContext = (() => null) as unknown as typeof proto.getContext;
+  return dom;
+}
+
 function homepageDom(courseParam: string, courseCode: string) {
-  return new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><div id="main-content"><div id="courses-table-div">
+  return quietCanvas(new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><div id="main-content"><div id="courses-table-div">
     <div id="courses-table_wrapper"><table id="courses-table"><thead><tr><th>Course</th><th>Name</th><th>Unique</th><th>Instructor</th><th>Short Name</th></tr></thead>
     <tbody><tr><td><img src="/assets/images/subj_generic.png" alt=""></td><td><a href="/student/courses/show?course=${courseParam}">CALCULUS</a></td><td>58360</td><td>Instructor</td><td aria-label="Course Short Name: ${courseCode}">${courseCode}</td></tr></tbody></table></div>
   </div><div id="enroll-div"></div></div></body></html>`, {
     url: 'https://quest.cns.utexas.edu/student/courses', pretendToBeVisual: true,
-  });
+  }));
 }
 
 function courseDom(courseParam: string, title = 'MULTIVARIABLE CALCULUS (58735)') {
-  return new JSDOM(`<html><body id="body-id" class="mdb-skin"><div id="quest-nav-header-div"></div><div id="main-content"><div id="target">
+  return quietCanvas(new JSDOM(`<html><body id="body-id" class="mdb-skin"><div id="quest-nav-header-div"></div><div id="main-content"><div id="target">
     <div class="card">
       <div class="card-header text-center">
         <button type="button" class="btn btn-link" data-toggle="collapse" data-target="#student-course-info-header" aria-expanded="true">
@@ -31,7 +39,7 @@ function courseDom(courseParam: string, title = 'MULTIVARIABLE CALCULUS (58735)'
     </div>
   </div></div></body></html>`, {
     url: `https://quest.cns.utexas.edu/student/courses/show?course=${courseParam}`, pretendToBeVisual: true,
-  });
+  }));
 }
 
 test('every allowed course effect has exactly one real react-bits mount', () => {
@@ -43,9 +51,9 @@ test('every allowed course effect has exactly one real react-bits mount', () => 
 });
 
 test('mounting degrades to the CSS fallback when WebGL is unavailable', () => {
-  const dom = new JSDOM('<html><body><div id="target"></div></body></html>', {
+  const dom = quietCanvas(new JSDOM('<html><body><div id="target"></div></body></html>', {
     url: 'https://quest.cns.utexas.edu/student/courses', pretendToBeVisual: true,
-  });
+  }));
   try {
     for (const effect of COURSE_EFFECTS) {
       const layer = dom.window.document.createElement('div');

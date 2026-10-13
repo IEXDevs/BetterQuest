@@ -47,7 +47,7 @@ const artKeyOf = (code: string, unique: string) =>
   courseArtKey({ code, unique, departmentCode: departmentFromCourseCode(code) });
 
 test('every course hashes to its own allowed backdrop and keeps it across views', () => {
-  assert.equal(COURSE_EFFECTS.length, 18);
+  assert.equal(COURSE_EFFECTS.length, 17);
   for (const [code, unique] of ROSTER) {
     const key = artKeyOf(code, unique);
     assert.ok(isCourseEffect(courseEffect(key)), `${code} maps to an allowed effect`);

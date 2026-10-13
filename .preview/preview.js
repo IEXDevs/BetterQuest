@@ -5,7 +5,6 @@
     "ether",
     "pixel",
     "micro-slats",
-    "aero-shards",
     "ghost-fibres",
     "crt-warp",
     "scanner",
@@ -116,17 +115,6 @@
     content: ''; position: absolute; inset: 0;
     background: linear-gradient(100deg, transparent 35%, rgba(255,255,255,.18) 50%, transparent 65%);
     animation: bq-fx-slats-sweep 5.5s linear infinite;
-  }
-
-  /* Aero Shards \u2014 glassy angular shards drifting corner to corner. */
-  .fx-aero-shards {
-    background:
-      linear-gradient(32deg, transparent 40%, var(--fx-bright) 41% 44%, transparent 45%),
-      linear-gradient(-22deg, transparent 52%, var(--fx-paper) 53% 55%, transparent 56%),
-      linear-gradient(58deg, transparent 28%, var(--fx-bright) 29% 31%, transparent 32%),
-      linear-gradient(160deg, var(--fx-deep), #0b1018 70%);
-    opacity: .9;
-    animation: bq-fx-shards 9s ease-in-out infinite alternate;
   }
 
   /* Ghost Fibres \u2014 soft blurred fibre strands swaying. */
@@ -290,10 +278,6 @@
     0% { transform: translateX(-80%); }
     55% { transform: translateX(80%); }
     100% { transform: translateX(80%); }
-  }
-  @keyframes bq-fx-shards {
-    from { transform: translateY(-3%) rotate(-1.5deg) scale(1.02); }
-    to { transform: translateY(3%) rotate(1.5deg) scale(1.08); }
   }
   @keyframes bq-fx-fibres {
     from { background-position: 0 0, 0 0, 0 0; }

@@ -8,7 +8,6 @@ import type { EffectMount } from './shared';
 import { mountLiquidEther } from './ether';
 import { mountPixelBlast } from './pixel';
 import { mountMicroSlats } from './micro-slats';
-import { mountAeroShards } from './aero-shards';
 import { mountGhostFibres } from './ghost-fibres';
 import { mountCrtWarp } from './crt-warp';
 import { mountScanner } from './scanner';
@@ -30,7 +29,6 @@ export const REACTBITS_EFFECTS: Record<CourseEffect, EffectMount> = {
   ether: mountLiquidEther,
   pixel: mountPixelBlast,
   'micro-slats': mountMicroSlats,
-  'aero-shards': mountAeroShards,
   'ghost-fibres': mountGhostFibres,
   'crt-warp': mountCrtWarp,
   scanner: mountScanner,

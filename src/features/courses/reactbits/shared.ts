@@ -23,10 +23,13 @@ export interface EffectInstance {
 export type EffectMount = (root: HTMLElement) => EffectInstance | null;
 
 /** True when this environment can actually run an effect loop. Callers in
- *  tests (jsdom without animation frames) get `null` instead of a live loop. */
+ *  tests (jsdom without animation frames, or without any canvas/WebGL
+ *  backend at all) get `null` instead of a live loop — jsdom also spams
+ *  "Not implemented" logging from getContext, so bail before touching it. */
 export function canRunEffects(root: HTMLElement): boolean {
   const win = root.ownerDocument.defaultView;
-  return Boolean(win && typeof win.requestAnimationFrame === 'function');
+  if (!win || typeof win.requestAnimationFrame !== 'function') return false;
+  return !win.navigator.userAgent.includes('jsdom');
 }
 
 /** The window for `root`'s document, or null. */
