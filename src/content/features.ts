@@ -12,6 +12,7 @@ import { pdfAdapter } from '../adapters/quest/pdf';
 import { createFeatureRuntime, type FeatureDefinition } from '../features/lifecycle';
 import { AssignmentTracker } from '../features/assignments/tracker';
 import { createCompletionControls } from '../features/assignments/completion-controls';
+import { createAssignmentGroupPreviews } from '../features/assignments/group-preview';
 import { createBookmarkControls } from '../features/bookmarks/controls';
 import { BookmarkService } from '../features/bookmarks/service';
 import { createPdfController } from '../features/pdf/controller';
@@ -38,19 +39,24 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       mount: root => {
         let fingerprint = '';
         const completionControls = createCompletionControls(root, run, subscribe);
+        const groupPreviews = createAssignmentGroupPreviews(root, run, subscribe);
         return {
           refresh: async context => {
             const root = adapter.locate(document);
             if (!root) return;
             const result = adapter.read(root, context);
             if (result.status !== 'ready' || context.signal.aborted) return;
+            // Page previews need the current snapshot and saved completion choices,
+            // not a successful cache write or completion-control refresh.
+            await groupPreviews.reconcile(result.value);
+            if (context.signal.aborted) return;
             const signature = JSON.stringify({ ...result.value, observedAt: '' });
             if (signature !== fingerprint) {
               await tracker.cache(result.value);
               if (!context.signal.aborted) fingerprint = signature;
             }
             if (!context.signal.aborted) await completionControls.reconcile(readAssignmentCompletionBindings(root, context));
-          }, dispose: completionControls.dispose,
+          }, dispose: () => { completionControls.dispose(); groupPreviews.dispose(); },
         };
       },
     });

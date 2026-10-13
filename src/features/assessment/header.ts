@@ -9,11 +9,36 @@ export function createAssessmentHeader(root: HTMLElement) {
     #main-content a[data-betterquest-download]:hover{background:var(--bq-raised,#eef3f6)!important}
     #main-content a[data-betterquest-download]:focus-visible{outline:2px solid #2563eb;outline-offset:3px}
     [data-betterquest-download-gap]{display:none!important}
+    #main-content .assessment-integrity-banner[data-betterquest-integrity-inline] {
+      display:block!important;max-width:100%;min-width:0;box-sizing:border-box;
+      margin:3px 0 0!important;padding:3px 7px!important;
+      background:var(--bq-surface,#182434)!important;color:var(--bq-muted,#a9b8ca)!important;
+      border:1px solid var(--bq-border,#3b4b63)!important;border-left-width:1px!important;
+      border-radius:4px!important;font-size:11px!important;line-height:1.4!important;
+      white-space:nowrap;overflow-x:auto;scrollbar-width:thin;box-shadow:none!important;
+    }
+    #main-content .assessment-integrity-banner[data-betterquest-integrity-inline]:focus-visible {outline:2px solid var(--bq-accent,#9cc9ff);outline-offset:2px}
   `;
   doc.head.append(style);
   const restores: Array<() => void> = [];
   const handled = new WeakSet<HTMLAnchorElement>();
+  const notices = new Map<HTMLElement, { marker: Comment; tabIndex: string | null }>();
   function reconcile() {
+    const header = root.querySelector<HTMLElement>('#info-header-div');
+    const due = header?.querySelector('#due_date_field');
+    const dueAndSlides = due?.closest('.d-flex.justify-content-between');
+    const notice = root.querySelector<HTMLElement>('.assessment-integrity-banner');
+    if (header && dueAndSlides && header.contains(dueAndSlides) && notice && !notice.contains(header)) {
+      if (!notices.has(notice)) {
+        const marker = doc.createComment('BetterQuest integrity notice position');
+        notice.before(marker);
+        notices.set(notice, { marker, tabIndex: notice.getAttribute('tabindex') });
+        notice.dataset.betterquestIntegrityInline = 'true';
+        // Full text remains available by horizontal scroll and assistive technology.
+        notice.tabIndex = 0;
+      }
+      if (dueAndSlides.nextElementSibling !== notice) dueAndSlides.after(notice);
+    }
     for (const link of root.querySelectorAll<HTMLAnchorElement>('a[href*="/images/problem_pdf"], a[href*="/images/download_pdf"]')) {
       if (handled.has(link) || link.closest('[data-betterquest]')) continue;
       // Only the native problem PDF link; never relabel a solution download.
@@ -94,5 +119,15 @@ export function createAssessmentHeader(root: HTMLElement) {
       });
     }
   }
-  return { reconcile, dispose() { for (const restore of restores.splice(0).reverse()) restore(); style.remove(); } };
+  return { reconcile, dispose() {
+    for (const [notice, original] of notices) {
+      if (original.marker.isConnected && notice.isConnected) original.marker.replaceWith(notice);
+      else original.marker.remove();
+      notice.removeAttribute('data-betterquest-integrity-inline');
+      if (original.tabIndex === null) notice.removeAttribute('tabindex');
+      else notice.setAttribute('tabindex', original.tabIndex);
+    }
+    notices.clear();
+    for (const restore of restores.splice(0).reverse()) restore(); style.remove();
+  } };
 }
