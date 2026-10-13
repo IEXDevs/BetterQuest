@@ -91,11 +91,12 @@ function installStyles(document: Document) {
     #target[data-betterquest-pdf-workspace="enhanced"],
     [data-betterquest-pdf-workspace="enhanced"]{
       display:grid!important;
-      height:var(--bq-pdf-workspace-height,calc(100dvh - 104px))!important;
+      height:auto!important;
+      flex-shrink:0!important;
       max-height:none!important;
       min-height:0!important;
       grid-template-columns:minmax(0,1fr) clamp(280px,25vw,320px)!important;
-      grid-template-rows:auto minmax(0,1fr)!important;
+      grid-template-rows:auto minmax(0,var(--bq-pdf-workspace-height,calc(100dvh - 104px)))!important;
       column-gap:12px!important;
       row-gap:12px!important;
       width:100%!important;
@@ -108,6 +109,7 @@ function installStyles(document: Document) {
        scrolling inside the PDF and response desk, not these ancestor boxes. */
     [data-betterquest-pdf-parent="true"]{
       height:auto!important;
+      flex-shrink:0!important;
       max-height:none!important;
       overflow:visible!important;
     }
@@ -1156,8 +1158,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     const view = document.defaultView;
     if (!view) return;
     if (document.fullscreenElement || root.dataset.betterquestFullscreen === 'true') return;
-    const stacked = view.matchMedia?.('(max-width: 1050px)').matches;
-    const sizingRoot = stacked ? root.querySelector<HTMLElement>('#pdf-frame') || root : root;
+    // Size the reading row itself, not the outer grid that also contains
+    // Quest's headers. Footer height does not participate in this calculation.
+    const sizingRoot = root.querySelector<HTMLElement>('#pdf-frame') || root;
     const viewportBottom = view.visualViewport
       ? view.visualViewport.offsetTop + view.visualViewport.height : view.innerHeight;
     const available = Math.max(240, Math.floor(viewportBottom - sizingRoot.getBoundingClientRect().top - 12));
@@ -1190,9 +1193,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     root.dataset.betterquestPdfMode = 'betterquest';
     document.documentElement.dataset.betterquestPdfMode = 'betterquest';
     document.body.dataset.betterquestPdfMode = 'betterquest';
-    fitWorkspace();
     if (host.parentElement !== root || host.previousElementSibling !== elements.pdfFrame) elements.pdfFrame.after(host);
     reconcileLeadingGaps(elements.pdfFrame);
+    fitWorkspace();
     const bindings = withNativeResponsesVisible(elements, () => readAssessmentResponses(elements.table));
     if (!bindings.length && responseSignature) {
       // Quest re-seeds its virtualized rows around submits; a momentarily
