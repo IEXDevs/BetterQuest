@@ -4,9 +4,14 @@ import SwirlCard, { type SwirlVariant } from '../bits/SwirlCard';
 import SoftAurora from '../bits/SoftAurora';
 import DotGrid from '../bits/DotGrid';
 import LiquidEther from '../bits/LiquidEther';
+import CourseEffectArt from '../bits/CourseEffectArt';
+import { courseArtKey } from '../../../src/features/courses/effects';
 import './CourseArtBadge.css';
 
-export type BackgroundStyle = 'ether' | 'swirl' | 'pixel' | 'aurora' | 'dotgrid';
+export type BackgroundStyle =
+  | 'ether' | 'swirl' | 'pixel' | 'aurora' | 'dotgrid'
+  /* Backdrops shared with the extension: the real react-bits ports. */
+  | 'light-fall' | 'magic-rings';
 
 const SOLID_BADGE_COLORS: Record<string, string> = {
   M: '#4c1d95',   // Rich solid purple
@@ -130,6 +135,20 @@ export function CourseArtBadge({
             {renderOverlay()}
           </div>
         );
+
+      /* Backdrops the extension also uses: the same react-bits port mounted
+         over the same CSS fallback art, in the shared purple palette. */
+      case 'light-fall':
+      case 'magic-rings':
+        return (
+          <>
+            <CourseEffectArt
+              effect={derivedType}
+              artKey={courseArtKey({ code, unique, departmentCode: department })}
+            />
+            {renderOverlay()}
+          </>
+        );
     }
   };
 
@@ -155,7 +174,7 @@ export function CourseArtBadge({
 
     return (
       <div className="course-badge-overlay">
-        <span className="badge-code">{compactCode}</span>
+        <span className="badge-code" data-long={compactCode.length > 6 || undefined}>{compactCode}</span>
       </div>
     );
   };

@@ -800,8 +800,6 @@ html[data-theme="light"] .rainbow-halo-btn:hover .rainbow-halo-blur {
 .task-body { display: flex; flex-direction: column; gap: .22rem; min-width: 0; }
 .task-title-line { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 .task-name { font-size: .86rem; font-weight: 700; color: var(--bq-text); letter-spacing: -.01em; }
-.task-type-badge { padding: .12rem .42rem; border-radius: 2px; background: var(--bq-raised); color: var(--bq-muted); font-size: .56rem; font-weight: 700; }
-.task-points-badge { color: var(--bq-faint); font-size: .56rem; font-weight: 600; }
 
 .task-meta-line { display: flex; align-items: center; gap: .5rem; font-size: .64rem; color: var(--bq-muted); }
 .task-status-label { color: var(--bq-pending); font-weight: 600; }

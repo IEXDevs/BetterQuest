@@ -86,6 +86,15 @@
   font-size: 0.68rem;
 }
 
+/* Long codes (PHY303K) step down a size instead of clipping. */
+.course-badge-sm .badge-code[data-long] {
+  font-size: 0.46rem;
+}
+
+.course-badge-md .badge-code[data-long] {
+  font-size: 0.6rem;
+}
+
 .course-badge-lg .badge-code {
   font-size: 1.05rem;
 }
@@ -151,6 +160,39 @@
 }
 
 .course-badge-type-ether:hover {
+  box-shadow: 0 10px 32px rgba(147, 51, 234, 0.62), inset 0 0 0 1px rgba(233, 213, 255, 0.45);
+}
+
+/* Backdrops shared with the extension: the WebGL layer runs over the same CSS
+   fallback art, inside the badge's own clipping box. */
+.course-effect-art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: var(--fx-solid, #4c1d95);
+}
+
+.course-effect-art .fx-layer {
+  position: absolute;
+  top: -45%;
+  left: -45%;
+  width: 190%;
+  height: 190%;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+  filter: hue-rotate(var(--fx-hue, 0deg));
+}
+
+/* Every backdrop glows the same purple, matching the LiquidEther course. */
+.course-badge-type-light-fall,
+.course-badge-type-magic-rings {
+  box-shadow: 0 6px 20px rgba(147, 51, 234, 0.38), inset 0 0 0 1px rgba(192, 132, 252, 0.25);
+}
+
+.course-badge-type-light-fall:hover,
+.course-badge-type-magic-rings:hover {
   box-shadow: 0 10px 32px rgba(147, 51, 234, 0.62), inset 0 0 0 1px rgba(233, 213, 255, 0.45);
 }
 

@@ -268,7 +268,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     .option-hit::before{
       content:attr(data-option);
       position:absolute;
-      left:4px;
+      /* Sits just outside the box, so it never covers the PDF's own text. */
+      right:calc(100% + 6px);
+      left:auto;
       top:50%;
       display:grid;
       place-items:center;

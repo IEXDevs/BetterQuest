@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { CourseArtBadge, type BackgroundStyle } from './CourseArtBadge';
 
-type CourseId = 'm408c' | 'ch301' | 'phy303k';
+type CourseId = 'm408d' | 'ch301' | 'phy303k';
 
 type Task = {
   id: string;
@@ -9,11 +9,9 @@ type Task = {
   date: string;
   course: string;
   title: string;
-  type: string;
   deadline: string;
   status: 'In progress' | 'Not started';
   priority?: boolean;
-  points: string;
 };
 
 type Course = {
@@ -30,60 +28,66 @@ type Course = {
 
 const COURSES: Course[] = [
   {
-    id: 'm408c',
-    code: 'M408C',
+    id: 'm408d',
+    code: 'M408D',
     department: 'M',
     bgType: 'ether',
     name: 'Differential & Integral Calculus',
     unique: '58360',
-    count: 3,
+    count: 4,
+    // Listed in due order: the earlier sections were assigned first, so they
+    // are the ones coming due now.
     tasks: [
       {
         id: 'm1',
         day: 'Fri',
         date: 'Oct 9',
-        course: 'M408C',
-        title: 'Related Rates',
-        type: 'Homework 5',
+        course: 'M408D',
+        title: 'Section 12.5: Equations of Lines and Planes',
         deadline: 'Tonight, 10:00 PM',
         status: 'In progress',
         priority: true,
-        points: '25 pts',
       },
       {
         id: 'm2',
         day: 'Mon',
         date: 'Oct 12',
-        course: 'M408C',
-        title: 'L’Hôpital’s Rule & Limit Laws',
-        type: 'Quiz Prep',
-        deadline: 'Mon, 5:00 PM',
+        course: 'M408D',
+        title: 'Section 12.6: Cylinders and Quadric Surfaces',
+        deadline: 'Mon, 11:59 PM',
         status: 'Not started',
-        points: '10 pts',
       },
       {
         id: 'm3',
         day: 'Wed',
         date: 'Oct 14',
-        course: 'M408C',
-        title: 'Optimization & Curve Sketching',
-        type: 'Homework 6',
+        course: 'M408D',
+        title: 'Section 13.1: Vector Functions and Space Curves',
         deadline: 'Wed, 10:00 PM',
         status: 'Not started',
-        points: '30 pts',
+      },
+      {
+        id: 'm4',
+        day: 'Fri',
+        date: 'Oct 16',
+        course: 'M408D',
+        title: 'Section 13.2: Derivatives and Integrals of Vector Functions',
+        deadline: 'Fri, 11:59 PM',
+        status: 'Not started',
+        priority: true,
       },
     ],
     saved: {
-      question: 'Question 7',
-      assignment: 'Homework 5',
-      note: 'Related rates: differentiate with respect to time t before plugging in values.',
+      question: 'Question 4',
+      assignment: 'Section 12.5',
+      note: 'A line needs one point plus a direction vector; a plane needs the normal — plug the point in last.',
     },
   },
   {
     id: 'ch301',
     code: 'CH301',
     department: 'CH',
-    bgType: 'ether',
+    bgType: 'light-fall',
     name: 'Chemistry I',
     unique: '51200',
     count: 2,
@@ -94,11 +98,9 @@ const COURSES: Course[] = [
         date: 'Oct 12',
         course: 'CH301',
         title: 'Thermochemistry & Enthalpy',
-        type: 'Quest 8',
         deadline: 'Mon, 11:59 PM',
         status: 'Not started',
         priority: true,
-        points: '20 pts',
       },
       {
         id: 'c2',
@@ -106,10 +108,8 @@ const COURSES: Course[] = [
         date: 'Oct 15',
         course: 'CH301',
         title: 'Gas Laws & Partial Pressure',
-        type: 'Homework',
         deadline: 'Thu, 11:59 PM',
         status: 'Not started',
-        points: '15 pts',
       },
     ],
     saved: {
@@ -122,7 +122,7 @@ const COURSES: Course[] = [
     id: 'phy303k',
     code: 'PHY303K',
     department: 'PHY',
-    bgType: 'ether',
+    bgType: 'magic-rings',
     name: 'Physics I',
     unique: '56410',
     count: 3,
@@ -133,11 +133,9 @@ const COURSES: Course[] = [
         date: 'Oct 13',
         course: 'PHY303K',
         title: 'Rotational Dynamics & Torque',
-        type: 'Homework 4',
         deadline: 'Tue, 9:00 PM',
         status: 'In progress',
         priority: true,
-        points: '35 pts',
       },
       {
         id: 'p2',
@@ -145,10 +143,8 @@ const COURSES: Course[] = [
         date: 'Oct 16',
         course: 'PHY303K',
         title: 'Angular Momentum Preflight',
-        type: 'Lab Prep',
         deadline: 'Fri, 5:00 PM',
         status: 'Not started',
-        points: '10 pts',
       },
       {
         id: 'p3',
@@ -156,10 +152,8 @@ const COURSES: Course[] = [
         date: 'Oct 18',
         course: 'PHY303K',
         title: 'Midterm Practice Set',
-        type: 'Review',
         deadline: 'Sun, 11:59 PM',
         status: 'Not started',
-        points: '50 pts',
       },
     ],
     saved: {
@@ -171,18 +165,19 @@ const COURSES: Course[] = [
 ];
 
 const CALENDAR_FEED = [
-  { date: 'Fri, Oct 9', time: '10:00 PM', course: 'M408C', title: 'Related Rates' },
-  { date: 'Mon, Oct 12', time: '5:00 PM', course: 'M408C', title: 'L’Hôpital’s Rule Quiz Prep' },
+  { date: 'Fri, Oct 9', time: '10:00 PM', course: 'M408D', title: 'Section 12.5: Equations of Lines and Planes' },
+  { date: 'Mon, Oct 12', time: '11:59 PM', course: 'M408D', title: 'Section 12.6: Cylinders and Quadric Surfaces' },
   { date: 'Mon, Oct 12', time: '11:59 PM', course: 'CH301', title: 'Thermochemistry & Enthalpy' },
   { date: 'Tue, Oct 13', time: '9:00 PM', course: 'PHY303K', title: 'Rotational Dynamics & Torque' },
-  { date: 'Wed, Oct 14', time: '10:00 PM', course: 'M408C', title: 'Optimization & Curve Sketching' },
+  { date: 'Wed, Oct 14', time: '10:00 PM', course: 'M408D', title: 'Section 13.1: Vector Functions and Space Curves' },
   { date: 'Thu, Oct 15', time: '11:59 PM', course: 'CH301', title: 'Gas Laws & Partial Pressure' },
   { date: 'Fri, Oct 16', time: '5:00 PM', course: 'PHY303K', title: 'Angular Momentum Preflight' },
+  { date: 'Fri, Oct 16', time: '11:59 PM', course: 'M408D', title: 'Section 13.2: Derivatives and Integrals of Vector Functions' },
 ];
 
 export function InteractiveProductFrame() {
   const frameRef = useRef<HTMLDivElement>(null);
-  const [activeCourse, setActiveCourse] = useState<CourseId>('m408c');
+  const [activeCourse, setActiveCourse] = useState<CourseId>('m408d');
   const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>({});
   const [savedOpen, setSavedOpen] = useState(true);
   const [frameDark, setFrameDark] = useState(true);
@@ -545,8 +540,6 @@ export function InteractiveProductFrame() {
                         <div className="task-body">
                           <div className="task-title-line">
                             <span className="task-name">{task.title}</span>
-                            <span className="task-type-badge">{task.type}</span>
-                            <span className="task-points-badge">{task.points}</span>
                           </div>
                           <div className="task-meta-line">
                             <span className={`task-status-label ${isDone ? 'is-done' : ''}`}>

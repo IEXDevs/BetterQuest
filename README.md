@@ -65,7 +65,7 @@ Deadlines use Quest's Unix `data-order` timestamps, with the original displayed 
 
 Coverage stays limited: the summary notes **Course data only**, or **Not scanned yet** while the current course tables are unobserved. Its tooltip explains that other courses are not automatically scanned and cached work may be stale. The supplied fragment does not include a full course list, so BetterQuest cannot name or count every unvisited course. An observed table is not an account-wide sync guarantee.
 
-Homepage placement and course discovery use verified Quest markup. Generic course thumbnails are replaced at runtime with deterministic department artwork derived from the native short code (for example, `M 408C` → `M`); native image URLs and course data are retained and restored on cleanup. No background course crawling or assignment fabrication was added.
+Homepage placement and course discovery use verified Quest markup. Generic course thumbnails are replaced at runtime with deterministic department artwork derived from the native short code (for example, `M 408D` → `M`); native image URLs and course data are retained and restored on cleanup. No background course crawling or assignment fabrication was added.
 
 Course identity currently uses the unique number in the verified course heading (`58735` in the fixture); assignment identity uses the exact `courseuserassignment_…` link value within that course. Internal course/term ID mapping and semester rollover still require additional markup. Missing course identity disables collection instead of guessing it.
 
