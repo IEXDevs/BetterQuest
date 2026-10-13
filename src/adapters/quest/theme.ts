@@ -74,6 +74,22 @@ export function detectPageCategory(document: Document): 'grades' | 'review' | nu
 
 /** Verified shared Quest shell, tables, forms, native component families, and grades/review styling. */
 export const QUEST_DARK_STYLES = `
+  #main-content[data-betterquest-theme="dark"] .assessment-integrity-banner {
+    margin:0 0 .65rem!important;
+    padding:.45rem .7rem!important;
+    background:var(--bq-surface,#182434)!important;
+    color:var(--bq-muted,#a9b8ca)!important;
+    border:1px solid var(--bq-border,#3b4b63)!important;
+    border-left-width:2px!important;
+    border-radius:4px!important;
+    font-size:.8rem!important;
+    line-height:1.45!important;
+    box-shadow:none!important;
+  }
+  #main-content[data-betterquest-theme="dark"] .assessment-integrity-banner strong {
+    color:var(--bq-text,#e7eef8);
+    font-weight:600;
+  }
   #main-content[data-betterquest-theme] :where(.custom-select,.form-control,.browser-default,select,input[type="text"],input[type="number"],textarea) { border-radius:6px; min-height:40px; box-shadow:none; transition:border-color .18s ease,box-shadow .18s ease,background-color .18s ease; }
   #main-content[data-betterquest-theme] :where(.custom-select,.form-control,.browser-default,select,input[type="text"],input[type="number"],textarea):focus { box-shadow:0 0 0 3px color-mix(in srgb,var(--bq-accent) 22%,transparent)!important; }
   #main-content[data-betterquest-theme] :where(.btn,.btn-sm) { border-radius:6px; transition:transform .16s ease,box-shadow .16s ease,background-color .16s ease; }

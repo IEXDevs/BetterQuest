@@ -207,12 +207,13 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     .verdict-toast[data-verdict="correct"]{background:#16a34a;color:#fff}
     .verdict-toast[data-verdict="wrong"]{background:#dc2626;color:#fff}
     @keyframes verdict-in{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
-    .toolbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:8px 14px;background:var(--bq-surface,#fff);color:var(--bq-text,#18253a);box-shadow:0 3px 12px #08111c18;border-bottom:1px solid var(--bq-border,#d7e2f0)}
+    .toolbar{position:sticky;top:0;z-index:5;display:flex;flex-shrink:0;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:8px 14px;background:var(--bq-surface,#fff);color:var(--bq-text,#18253a);box-shadow:0 3px 12px #08111c18;border-bottom:1px solid var(--bq-border,#d7e2f0)}
     .title{font-weight:750}
     .meta{color:var(--bq-pdf-muted);font-size:11px}
-    .toolbar-actions{display:flex;align-items:center;gap:6px}
+    .toolbar-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px}
     .tool-btn{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 10px;border:1px solid var(--bq-border,#d7e2f0);border-radius:6px;background:var(--bq-raised,#eef3f6);color:var(--bq-text,#18253a);font:700 12px/1 inherit;cursor:pointer;transition:background .15s ease}
     .tool-btn:hover{background:color-mix(in srgb,var(--bq-raised,#eef3f6) 72%,var(--bq-accent,#2563eb))}
+    .tool-btn[aria-pressed="true"]{border-color:var(--bq-accent,#227ab0);color:var(--bq-accent,#227ab0)}
     .tool-btn:focus-visible,.zoom button:focus-visible,.option-hit:focus-visible,.pdf-submit-btn:focus-visible,.submit-pill:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
     .submit-pill{border:0;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;white-space:nowrap}
     .submit-pill:hover{background:linear-gradient(135deg,#4f46e5,#4338ca)}
@@ -230,7 +231,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       scroll-behavior:smooth!important;
       padding:0!important;
       scrollbar-width:thin!important;
-      height:100%!important;
+      min-height:0!important;
       width:100%!important;
       background:var(--bq-raised,#eef3f6);
     }
@@ -248,6 +249,10 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       box-sizing:border-box!important;
     }
     .page canvas{display:block!important;width:100%!important;height:auto!important}
+    /* Only rasterized PDF pixels change. Interactive overlays are siblings,
+       not descendants of the canvas, and retain their original colors. */
+    :host([data-dark-pages="true"]) .page{background:#111!important}
+    :host([data-dark-pages="true"]) .page canvas{filter:invert(1) hue-rotate(180deg)}
     .question-anchor{
       position:absolute;
       left:0;
@@ -411,6 +416,28 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   const copy = document.createElement('div'); const title = document.createElement('div'); title.className = 'title'; title.textContent = 'Interactive PDF';
   const meta = document.createElement('div'); meta.className = 'meta'; meta.textContent = 'Loading choices…'; copy.append(title, meta);
   const toolbarActions = document.createElement('div'); toolbarActions.className = 'toolbar-actions';
+  const darkPagesBtn = document.createElement('button');
+  darkPagesBtn.type = 'button'; darkPagesBtn.className = 'tool-btn';
+  darkPagesBtn.textContent = 'Dark pages';
+  const DARK_PAGES_KEY = 'betterquest_pdf_dark_pages';
+  const applyDarkPages = (dark: boolean) => {
+    if (dark) element.dataset.darkPages = 'true';
+    else delete element.dataset.darkPages;
+    darkPagesBtn.setAttribute('aria-pressed', String(dark));
+  };
+  // Restore before mounting, using the same on-device storage as PDF zoom.
+  let savedDarkPages = false;
+  try { savedDarkPages = document.defaultView?.localStorage?.getItem(DARK_PAGES_KEY) === 'true'; }
+  catch { /* Storage unavailable: default to original PDF colors. */ }
+  applyDarkPages(savedDarkPages);
+  darkPagesBtn.title = 'Darken PDF pages only. Diagram colors may change; turn off to see original colors.';
+  darkPagesBtn.addEventListener('click', event => {
+    event.stopPropagation(); // Do not dismiss a pending answer confirmation.
+    const dark = element.dataset.darkPages !== 'true';
+    applyDarkPages(dark);
+    try { document.defaultView?.localStorage?.setItem(DARK_PAGES_KEY, String(dark)); }
+    catch { /* The toggle still works for this viewer if storage is unavailable. */ }
+  });
   const fullscreenBtn = document.createElement('button'); fullscreenBtn.type = 'button'; fullscreenBtn.className = 'tool-btn';
   fullscreenBtn.setAttribute('aria-label', 'Toggle full screen');
 
@@ -488,7 +515,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       : `Submit question ${pillQn}`);
   }
   submitPill.addEventListener('click', () => { if (pillQn !== null) attemptSubmit(pillQn); });
-  zoom.append(zoomOut, zoomValue, zoomIn); toolbarActions.append(submitPill, fullscreenBtn, zoom); toolbar.append(copy, toolbarActions);
+  zoom.append(zoomOut, zoomValue, zoomIn); toolbarActions.append(submitPill, darkPagesBtn, fullscreenBtn, zoom); toolbar.append(copy, toolbarActions);
   const pages = document.createElement('div'); pages.className = 'pages';
   const loading = document.createElement('div'); loading.className = 'loading'; loading.textContent = 'Loading clickable choices…'; pages.append(loading);
   shell.append(toolbar, pages); shadow.append(style, shell); container.append(element);

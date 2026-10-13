@@ -91,8 +91,12 @@ function installStyles(document: Document) {
     #target[data-betterquest-pdf-workspace="enhanced"],
     [data-betterquest-pdf-workspace="enhanced"]{
       display:grid!important;
-      grid-template-columns:minmax(0,1fr) 380px!important;
-      grid-template-rows:auto minmax(0,1fr)!important;
+      height:auto!important;
+      flex-shrink:0!important;
+      max-height:none!important;
+      min-height:0!important;
+      grid-template-columns:minmax(0,1fr) clamp(280px,25vw,320px)!important;
+      grid-template-rows:auto minmax(0,var(--bq-pdf-workspace-height,calc(100dvh - 104px)))!important;
       column-gap:12px!important;
       row-gap:12px!important;
       width:100%!important;
@@ -101,15 +105,24 @@ function installStyles(document: Document) {
       overflow:hidden!important;
       box-sizing:border-box!important;
     }
+    /* Quest wrappers must not cap or clip the viewport-sized workspace. Keep
+       scrolling inside the PDF and response desk, not these ancestor boxes. */
+    [data-betterquest-pdf-parent="true"]{
+      height:auto!important;
+      flex-shrink:0!important;
+      max-height:none!important;
+      overflow:visible!important;
+    }
     #target[data-betterquest-pdf-workspace="enhanced"][data-betterquest-rail="collapsed"],
     [data-betterquest-pdf-workspace="enhanced"][data-betterquest-rail="collapsed"]{
-      grid-template-columns:minmax(0,1fr) 190px!important;
+      grid-template-columns:minmax(0,1fr) 160px!important;
     }
     [data-betterquest-pdf-workspace="enhanced"] > #pdf-frame{
       grid-column:1!important;
       grid-row:2!important;
       width:100%!important;
       height:100%!important;
+      max-height:none!important;
       min-width:0!important;
       min-height:0!important;
       box-sizing:border-box!important;
@@ -120,6 +133,7 @@ function installStyles(document: Document) {
       min-width:0!important;
       min-height:0!important;
       height:100%!important;
+      max-height:none!important;
       box-sizing:border-box!important;
     }
     /* Header (due date + PDF Download) pins to the top row. */
@@ -175,12 +189,13 @@ function installStyles(document: Document) {
       [data-betterquest-pdf-workspace="enhanced"] > #pdf-frame{
         grid-column:1!important;
         grid-row:2!important;
-        height:70vh!important;
+        height:var(--bq-pdf-workspace-height,85dvh)!important;
       }
       #target[data-betterquest-pdf-workspace="enhanced"] > [data-betterquest="assessment-rail"],
       [data-betterquest-pdf-workspace="enhanced"] > [data-betterquest="assessment-rail"]{
         grid-column:1!important;
         grid-row:3!important;
+        height:auto!important;
       }
     }
     #pdf-frame,
@@ -1136,18 +1151,37 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     }
   }
 
+  const originalWorkspaceHeight = root.style.getPropertyValue('--bq-pdf-workspace-height');
+  const originalWorkspaceHeightPriority = root.style.getPropertyPriority('--bq-pdf-workspace-height');
   function fitWorkspace() {
     if (disposed) return;
     const view = document.defaultView;
     if (!view) return;
-    if (view.matchMedia?.('(max-width: 1050px)').matches) {
-      root.style.removeProperty('height');
-      return;
+    if (document.fullscreenElement || root.dataset.betterquestFullscreen === 'true') return;
+    // Size the reading row itself, not the outer grid that also contains
+    // Quest's headers. Footer height does not participate in this calculation.
+    const sizingRoot = root.querySelector<HTMLElement>('#pdf-frame') || root;
+    const viewportBottom = view.visualViewport
+      ? view.visualViewport.offsetTop + view.visualViewport.height : view.innerHeight;
+    const available = Math.max(240, Math.floor(viewportBottom - sizingRoot.getBoundingClientRect().top - 12));
+    const height = `${available}px`;
+    if (root.style.getPropertyValue('--bq-pdf-workspace-height') !== height) {
+      root.style.setProperty('--bq-pdf-workspace-height', height);
     }
-    const available = Math.max(420, Math.round(view.innerHeight - root.getBoundingClientRect().top - 12));
-    root.style.height = `${available}px`;
   }
+  let fitFrame: number | undefined;
+  const scheduleFitWorkspace = () => {
+    const view = document.defaultView;
+    if (disposed || !view || fitFrame !== undefined) return;
+    fitFrame = view.requestAnimationFrame(() => { fitFrame = undefined; fitWorkspace(); });
+  };
   document.defaultView?.addEventListener('resize', fitWorkspace);
+  document.defaultView?.visualViewport?.addEventListener('resize', fitWorkspace);
+  document.addEventListener('fullscreenchange', scheduleFitWorkspace);
+  const WorkspaceResizeObserver = document.defaultView?.ResizeObserver;
+  const workspaceResizeObserver = WorkspaceResizeObserver ? new WorkspaceResizeObserver(scheduleFitWorkspace) : undefined;
+  workspaceResizeObserver?.observe(root);
+  if (root.parentElement) workspaceResizeObserver?.observe(root.parentElement);
 
   function render() {
     if (disposed) return;
@@ -1159,9 +1193,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     root.dataset.betterquestPdfMode = 'betterquest';
     document.documentElement.dataset.betterquestPdfMode = 'betterquest';
     document.body.dataset.betterquestPdfMode = 'betterquest';
-    fitWorkspace();
     if (host.parentElement !== root || host.previousElementSibling !== elements.pdfFrame) elements.pdfFrame.after(host);
     reconcileLeadingGaps(elements.pdfFrame);
+    fitWorkspace();
     const bindings = withNativeResponsesVisible(elements, () => readAssessmentResponses(elements.table));
     if (!bindings.length && responseSignature) {
       // Quest re-seeds its virtualized rows around submits; a momentarily
@@ -1344,10 +1378,15 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     disposed = true; const elements = findPdfAssessment(document);
     clearPendingSubmit();
     document.defaultView?.removeEventListener('resize', fitWorkspace);
+    document.defaultView?.visualViewport?.removeEventListener('resize', fitWorkspace);
+    document.removeEventListener('fullscreenchange', scheduleFitWorkspace);
+    workspaceResizeObserver?.disconnect();
+    if (fitFrame !== undefined) document.defaultView?.cancelAnimationFrame(fitFrame);
     document.removeEventListener('fullscreenchange', syncFs);
     document.removeEventListener('keydown', handleKeydown);
     syncPdfVisibility(false);
-    root.style.removeProperty('height');
+    if (originalWorkspaceHeight) root.style.setProperty('--bq-pdf-workspace-height', originalWorkspaceHeight, originalWorkspaceHeightPriority);
+    else root.style.removeProperty('--bq-pdf-workspace-height');
     root.removeAttribute('data-betterquest-rail');
     root.removeAttribute('data-betterquest-pdf-workspace');
     root.removeAttribute('data-betterquest-pdf-mode');
