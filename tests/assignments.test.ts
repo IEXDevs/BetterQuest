@@ -121,6 +121,57 @@ test('unknown Quest completion markup does not receive a manual completion contr
   } finally { features.dispose(); dom.window.close(); }
 });
 
+test('the Assignments tab is collapsed even when the page URL is not a course-show URL', async () => {
+  const dom = page(); // /student/fixture-course?unique=58735 is not /student/courses/show
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause(); await pause();
+    const panels = [...dom.window.document.querySelectorAll<HTMLElement>('#tabs-elements div.collapse')];
+    assert.equal(panels.length, 2);
+    assert.equal(panels.every(panel => !panel.classList.contains('show')), true,
+      'Every assignment category is collapsed, not just the first one');
+    const buttons = [...dom.window.document.querySelectorAll<HTMLButtonElement>('#tabs-elements button[data-target^="#header-"]')];
+    assert.equal(buttons.every(button => button.getAttribute('aria-expanded') === 'false'), true);
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('collapsed assignment categories show no BetterQuest box, and a category with nothing pending never gets one', async () => {
+  const dom = page(html, 'https://quest.cns.utexas.edu/student/courses/show?course=58735');
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  const previews = () => [...dom.window.document.querySelectorAll<HTMLElement>('[data-betterquest="assignment-group-preview"]')];
+  const previewText = () => previews().map(host => host.shadowRoot?.querySelector('.content')?.textContent || '');
+  const settle = async () => { await pause(); await pause(); };
+  /** Opens a category the way a student does: clicking Quest's toggle. */
+  const open = (id: string, panel: HTMLElement) => {
+    dom.window.document.querySelector<HTMLButtonElement>(`button[data-target="#${id}"]`)!
+      .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    panel.classList.add('show'); // Quest's Bootstrap collapse does this next.
+  };
+  try {
+    features.reconcile(); await settle();
+    const withWork = dom.window.document.querySelector<HTMLElement>('#header-3769540')!;
+    const allDone = dom.window.document.querySelector<HTMLElement>('#header-3849120')!;
+    assert.equal(withWork.classList.contains('show'), false, 'Assignment categories start collapsed');
+    assert.equal(allDone.classList.contains('show'), false);
+    assert.equal(previews().every(host => host.hidden), true, 'A collapsed category shows no BetterQuest box');
+    assert.equal(previewText().some(text => text.includes('0 pending')), false, 'No empty "0 pending" box is ever built');
+
+    // Opening the category that still has work left reveals its pending list.
+    open('header-3769540', withWork);
+    await settle();
+    assert.equal(previews()[0].hidden, false);
+    assert.match(previewText()[0] || '', /1 pending/);
+
+    // Opening a category with nothing left adds no empty "0 pending" box.
+    open('header-3849120', allDone);
+    await settle();
+    assert.equal(previews()[1].hidden, true);
+    assert.equal(previewText()[1], '');
+  } finally { features.dispose(); dom.window.close(); }
+});
+
 test('multiple assignment groups are collected, empty placeholders ignored, duplicates collapsed', () => {
   const dom = page();
   try {
@@ -286,10 +337,19 @@ test('unknown deadlines sort last; inline errors are visible and do not mutate s
 
 test('full integration keeps the automatic summary while navbar opens Saved Questions', async () => {
   const dom = page(); const f = store();
-  const original = dom.window.document.querySelector('#target')!.outerHTML;
+  const strip = () => {
+    const copy = dom.window.document.querySelector('#target')!.cloneNode(true) as Element;
+    copy.querySelector('[data-betterquest="assignment-section"]')?.remove();
+    copy.querySelectorAll('[data-betterquest="completion-toggle"]').forEach(node => node.remove());
+    copy.querySelectorAll('[data-betterquest="assignment-group-preview"], [data-betterquest="assignment-group-preview-style"]').forEach(node => node.remove());
+    return copy.outerHTML;
+  };
   const integration = startIntegration(dom.window.document, dom.window as unknown as Window, { run: f.run, subscribe: f.subscribe });
   try {
     await pause();
+    // Baseline after the extension settled. Collapsing the Assignments tab is deliberate,
+    // so only what happens afterwards has to leave the native markup untouched.
+    const original = strip();
     const navigation = dom.window.document.querySelector('[data-betterquest="navigation"]')!;
     const button = navigation.querySelector<HTMLButtonElement>('button.qh-nav-link')!;
     const section = dom.window.document.querySelector<HTMLElement>('[data-betterquest="assignment-section"]')!;
@@ -299,11 +359,7 @@ test('full integration keeps the automatic summary while navbar opens Saved Ques
     const saved = dom.window.document.querySelector('[data-betterquest="saved-questions"]')!;
     assert.equal(saved.shadowRoot!.activeElement, saved.shadowRoot!.querySelector('h2'));
     assert.equal(dom.window.document.querySelector('[data-betterquest="panel"]'), null);
-    const targetCopy = dom.window.document.querySelector('#target')!.cloneNode(true) as Element;
-    targetCopy.querySelector('[data-betterquest="assignment-section"]')!.remove();
-    targetCopy.querySelectorAll('[data-betterquest="completion-toggle"]').forEach(node => node.remove());
-    targetCopy.querySelectorAll('[data-betterquest="assignment-group-preview"], [data-betterquest="assignment-group-preview-style"]').forEach(node => node.remove());
-    assert.equal(targetCopy.outerHTML, original);
+    assert.equal(strip(), original);
     assert.equal(dom.window.document.querySelectorAll('[data-betterquest="navigation"]').length, 1);
   } finally { integration.dispose(); dom.window.close(); }
 });

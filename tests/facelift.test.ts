@@ -9,7 +9,7 @@ import { createQuestTheme } from '../src/features/theme/quest';
 import { detectPageCategory } from '../src/adapters/quest/theme';
 import { readAssessmentMetrics, readAssessmentResponses } from '../src/adapters/quest/assessment';
 import { formatMeetingTime, createMeetingTimesEnhancer } from '../src/features/courses/meeting-times';
-import { enhanceCourseInfoCard, collapseCourseCategoriesByDefault, createCourseDetailsFacelift } from '../src/features/courses/details-enhancer';
+import { enhanceCourseInfoCard, collapseCourseCategoriesByDefault, createCourseDetailsFacelift, isCourseShowPage } from '../src/features/courses/details-enhancer';
 import type { Execute } from '../src/shared/client';
 import type { LocalState } from '../src/shared/models';
 
@@ -919,6 +919,47 @@ test('enhanceCourseInfoCard formats instructor contact, meeting schedule, and lo
   assert.ok(columns[3].classList.contains('bq-col-empty'));
 });
 
+test('a repeated course info pass changes nothing, so features stop re-reading their own writes', async () => {
+  const dom = new JSDOM(`<html><body>
+    <div id="target">
+      <div class="card">
+        <div class="collapse show" id="student-course-info-header">
+          <div class="row text-center">
+            <div class="col">
+              <div class="qlabel">Instructor</div>
+              <div>Nicolas Reyes</div>
+              <a href="mailto:nreyes@math.utexas.edu">contact</a>
+            </div>
+            <div class="col">
+              <div class="qlabel">Meets</div>
+              <div>TTH 330-500</div>
+              <br>in PMA 4.102
+            </div>
+            <div class="col"></div>
+            <div class="col"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body></html>`, { pretendToBeVisual: true });
+  const doc = dom.window.document;
+  const root = doc.querySelector<HTMLElement>('#target')!;
+  try {
+    enhanceCourseInfoCard(root);
+    const seen: string[] = [];
+    const observer = new dom.window.MutationObserver(records => seen.push(...records.map(record => `${record.type}:${(record.target as Element).className}`)));
+    observer.observe(doc.querySelector('#student-course-info-header')!, {
+      subtree: true, attributes: true, attributeFilter: ['class'], childList: true, characterData: true,
+    });
+    // Repeating the pass must be a no-op. Otherwise every pass trips the feature observers,
+    // which redraw, which trips the observers again and nothing else on the page ever updates.
+    enhanceCourseInfoCard(root);
+    enhanceCourseInfoCard(root);
+    await pause();
+    assert.deepEqual(seen, [], 'A repeated course info pass must not rewrite the DOM');
+  } finally { dom.window.close(); }
+});
+
 test('collapseCourseCategoriesByDefault collapses all assignment categories by default and respects user expansion', () => {
   const dom = new JSDOM(`<html><body>
     <div id="target">
@@ -963,16 +1004,30 @@ test('collapseCourseCategoriesByDefault collapses all assignment categories by d
   assert.ok(examsBtn.classList.contains('collapsed'));
   assert.equal(hwBtn.querySelector('.material-icons')?.textContent, 'add');
 
-  // Simulate user manually expanding Homework
+  // Quest re-opens a category by itself (tab visits, re-renders). It is not a student choice.
   hw.classList.add('show');
   hwBtn.classList.remove('collapsed');
   hwBtn.setAttribute('aria-expanded', 'true');
+  collapseCourseCategoriesByDefault(doc);
+  assert.equal(hw.classList.contains('show'), false, 'A category Quest re-opens collapses again');
+  assert.equal(hwBtn.getAttribute('aria-expanded'), 'false');
 
-  // Reconcile/run collapse again: user manual choice MUST NOT be overwritten
+  // Clicking the toggle is a real choice, and it must survive every later pass.
+  hwBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+  hw.classList.add('show');
+  hwBtn.classList.remove('collapsed');
+  hwBtn.setAttribute('aria-expanded', 'true');
   collapseCourseCategoriesByDefault(doc);
   assert.equal(hw.classList.contains('show'), true, 'User opened category must remain open');
   assert.equal(hwBtn.getAttribute('aria-expanded'), 'true');
   assert.equal(exams.classList.contains('show'), false, 'Unopened category stays collapsed');
+});
+
+test('course page is recognized with and without the trailing course number so categories always collapse', () => {
+  assert.equal(isCourseShowPage('https://quest.cns.utexas.edu/student/courses/show?course=3491354'), true);
+  assert.equal(isCourseShowPage('https://quest.cns.utexas.edu/student/courses/show/3491354'), true);
+  assert.equal(isCourseShowPage('https://quest.cns.utexas.edu/student/courses'), false);
+  assert.equal(isCourseShowPage('not a url'), false);
 });
 
 test('course details facelift collapses the categories Quest injects after mount', async () => {

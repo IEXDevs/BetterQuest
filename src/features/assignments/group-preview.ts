@@ -54,22 +54,24 @@ export function createAssignmentGroupPreviews(root: Element, run: Execute = exec
           a:hover{text-decoration:underline}a:focus-visible{outline:2px solid var(--bq-accent,#227ab0);outline-offset:3px}
           .deadline{flex-shrink:0;color:var(--bq-muted,#607286);font-size:12px}
           .overdue{color:var(--bq-warning,#a96645)}
-          p{margin:0;color:var(--bq-muted,#607286);font-size:13px}
           @media(max-width:600px){li{flex-wrap:wrap;gap:2px 12px}.deadline{flex-shrink:1}.content{padding:10px 12px}}
         `;
         const content = document.createElement('div'); content.className = 'content';
         shadow.append(style, content); panel.after(host);
         preview = { host, content, signature: '' }; mounted.set(panel, preview);
       }
-      const collapsed = !panel.classList.contains('show') && !panel.classList.contains('collapsing');
-      if (preview.host.hidden === collapsed) preview.host.hidden = !collapsed;
       const pending = sorted.filter(item => item.group?.id === groupId && !assignmentIsCompleted(item, state.completionOverrides));
       const items = pending.map(assignment => ({ assignment, deadline: displayDeadline(assignment, Date.now(), state.completionOverrides) }));
-      const scanned = snapshot.scannedCourseIds?.some(id => courseIds.has(id)) === true;
-      const signature = JSON.stringify({ items, scanned });
+      // Quest marks an open category with `.show`, and `.collapsing` while it animates.
+      const open = panel.classList.contains('show') || panel.classList.contains('collapsing');
+      // A closed category speaks for itself, and a category with nothing pending needs no
+      // "0 pending" box — the native table already shows the work that is left.
+      const visible = open && items.length > 0;
+      if (preview.host.hidden === visible) preview.host.hidden = !visible;
+      const signature = JSON.stringify({ items });
       if (signature === preview.signature) continue;
       preview.signature = signature;
-      const heading = document.createElement('h3'); heading.textContent = !scanned && !pending.length ? 'Pending assignments' : `${pending.length} pending`;
+      const heading = document.createElement('h3'); heading.textContent = `${items.length} pending`;
       const list = document.createElement('ul');
       for (const { assignment, deadline } of items) {
         const item = document.createElement('li');
@@ -82,13 +84,9 @@ export function createAssignmentGroupPreviews(root: Element, run: Execute = exec
         }
         item.append(link, due); list.append(item);
       }
-      preview.content.replaceChildren(heading);
-      if (items.length) preview.content.append(list);
-      else {
-        const empty = document.createElement('p');
-        empty.textContent = scanned ? 'All caught up! No pending assignments.' : 'Loading assignments…';
-        preview.content.append(empty);
-      }
+      // Nothing to show leaves the box empty as well as hidden.
+      preview.content.replaceChildren();
+      if (items.length) preview.content.append(heading, list);
     }
   }
 

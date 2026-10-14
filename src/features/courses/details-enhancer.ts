@@ -4,11 +4,18 @@ import { enhanceCourseHero, disposeCourseHero } from './hero';
 
 export function isCourseShowPage(url: string): boolean {
   try {
-    const parsed = new URL(url);
-    return parsed.pathname === '/student/courses/show' || parsed.pathname.endsWith('/courses/show');
+    const { pathname } = new URL(url);
+    // Quest serves this page as `/student/courses/show` and as `/student/courses/show/58735`.
+    return pathname === '/student/courses/show' || /^\/student\/courses\/show\/\d+$/.test(pathname);
   } catch {
     return false;
   }
+}
+
+/** Writes a class only when it actually changes, so a repeated pass raises no DOM mutation. */
+function setClass(node: Element, name: string, on: boolean) {
+  if (node.classList.contains(name) === on) return;
+  node.classList.toggle(name, on);
 }
 
 export function enhanceCourseInfoCard(root: HTMLElement) {
@@ -19,8 +26,8 @@ export function enhanceCourseInfoCard(root: HTMLElement) {
   const row = infoHeader.querySelector<HTMLElement>(':scope > .row');
   if (!row) return;
 
-  infoHeader.classList.add('bq-course-info-header');
-  row.classList.add('bq-course-info-row');
+  setClass(infoHeader, 'bq-course-info-header', true);
+  setClass(row, 'bq-course-info-row', true);
 
   const cols = [...row.querySelectorAll<HTMLElement>(':scope > .col')];
 
@@ -30,7 +37,7 @@ export function enhanceCourseInfoCard(root: HTMLElement) {
     return /instructor/i.test(qlabel?.textContent || '');
   });
   if (instructorCol) {
-    instructorCol.classList.add('bq-col-instructor');
+    setClass(instructorCol, 'bq-col-instructor', true);
     if (!instructorCol.dataset.betterquestCleaned) {
       instructorCol.dataset.betterquestCleaned = 'true';
       const nameDiv = instructorCol.querySelector<HTMLElement>(':scope > div:not(.qlabel):not(.bq-contact-btn)');
@@ -58,7 +65,7 @@ export function enhanceCourseInfoCard(root: HTMLElement) {
     return /meets/i.test(qlabel?.textContent || '');
   });
   if (meetsCol) {
-    meetsCol.classList.add('bq-col-meets');
+    setClass(meetsCol, 'bq-col-meets', true);
     if (!meetsCol.dataset.betterquestCleaned) {
       meetsCol.dataset.betterquestCleaned = 'true';
       // Format meeting time
@@ -121,42 +128,65 @@ export function enhanceCourseInfoCard(root: HTMLElement) {
   // 3. Mark upcoming assignments column
   const upcomingCol = cols.find(col => col.querySelector('[data-betterquest="assignment-section"]') || col === cols[2]);
   if (upcomingCol) {
-    upcomingCol.classList.add('bq-col-upcoming');
+    setClass(upcomingCol, 'bq-col-upcoming', true);
   }
 
   // 4. Mark empty columns (and release one that gained the assignment panel
   //    after an earlier pass had written it off as empty).
   for (const col of cols) {
     const text = (col.textContent || '').trim();
-    if (!text && !col.querySelector('[data-betterquest="assignment-section"]')) {
-      col.classList.add('bq-col-empty');
-    } else {
-      col.classList.remove('bq-col-empty');
-    }
+    setClass(col, 'bq-col-empty', !text && !col.querySelector('[data-betterquest="assignment-section"]'));
   }
 }
 
-export function collapseCourseCategoriesByDefault(document: Document) {
-  const categories = document.querySelectorAll<HTMLElement>(
-    '#tabs-elements div.collapse.show, div.collapse.show[id^="header-"]'
-  );
-  for (const cat of categories) {
-    // Only target assignment category panels; never course info header or panels in grades
-    if (cat.id === 'student-course-info-header') continue;
-    if (cat.closest('#tabs-grades, [id*="grades"], .grades-tab, #info-tab-grades, .tab-pane#tabs-grades')) continue;
-    if (/grade/i.test(cat.id)) continue;
-    const catButton = document.querySelector<HTMLButtonElement>(`button[data-target*="${cat.id}"]`);
-    if (catButton && /grade/i.test(catButton.textContent || '')) continue;
+/** Every open assignment category on the Assignments tab, newest markup included. */
+const OPEN_CATEGORY_SELECTOR = '#tabs-elements div.collapse.show, div.collapse.show[id^="header-"]';
 
-    if (cat.dataset.betterquestDefaultCollapsed === 'true') continue;
-    cat.dataset.betterquestDefaultCollapsed = 'true';
+/** Categories the student opened with Quest's own toggle; their choice outranks the default. */
+const openedCategories = new WeakMap<Document, Set<string>>();
+const trackedDocuments = new WeakSet<Document>();
+
+function isAssignmentCategory(panel: Element): boolean {
+  // Never the course info card, and never a Grades or Review panel.
+  if (panel.id === 'student-course-info-header') return false;
+  if (panel.closest('#tabs-grades, [id*="grades"], .grades-tab, #info-tab-grades, .tab-pane#tabs-grades')) return false;
+  if (/grade/i.test(panel.id)) return false;
+  const button = panel.ownerDocument.querySelector<HTMLButtonElement>(`button[data-target*="${panel.id}"]`);
+  return !(button && /grade/i.test(button.textContent || ''));
+}
+
+/** Remembers real toggles so a re-rendered or re-opened category can be collapsed again. */
+function trackCategoryClicks(document: Document, opened: Set<string>) {
+  if (trackedDocuments.has(document)) return;
+  trackedDocuments.add(document);
+  // Capture phase, so the panel still carries its pre-click state here.
+  document.addEventListener('click', event => {
+    const button = (event.target as Element | null)?.closest?.('button[data-toggle="collapse"]');
+    const id = (button?.getAttribute('data-target') || '').replace(/^#/, '');
+    if (!id) return;
+    const panel = document.getElementById(id);
+    if (!panel || !isAssignmentCategory(panel)) return;
+    // A click on an open category closes it, so only a click on a closed one opens it.
+    if (panel.classList.contains('show')) opened.delete(id);
+    else opened.add(id);
+  }, true);
+}
+
+export function collapseCourseCategoriesByDefault(document: Document) {
+  const opened = openedCategories.get(document) ?? new Set<string>();
+  openedCategories.set(document, opened);
+  trackCategoryClicks(document, opened);
+  for (const cat of document.querySelectorAll<HTMLElement>(OPEN_CATEGORY_SELECTOR)) {
+    if (!isAssignmentCategory(cat)) continue;
+    // Quest re-renders and re-opens categories on its own; only a real toggle is left alone.
+    if (opened.has(cat.id)) continue;
     cat.classList.remove('show');
     const buttons = document.querySelectorAll<HTMLButtonElement>(
       `button[data-target="#${cat.id}"], button[data-target*="${cat.id}"]`
     );
     for (const button of buttons) {
       button.setAttribute('aria-expanded', 'false');
-      button.classList.add('collapsed');
+      setClass(button, 'collapsed', true);
       const icon = button.querySelector<HTMLElement>('.material-icons');
       if (icon && icon.textContent === 'remove') {
         icon.textContent = 'add';

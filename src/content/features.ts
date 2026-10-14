@@ -19,7 +19,7 @@ import { createPdfController } from '../features/pdf/controller';
 import { findPdfAssessment, findSlideAssessment } from '../adapters/quest/assessment';
 import { createPdfAssessmentWorkspace, createSlideAssessmentEnhancement } from '../features/assessment/workspace';
 import { createAssessmentHeader } from '../features/assessment/header';
-import { createCourseDetailsFacelift, isCourseShowPage } from '../features/courses/details-enhancer';
+import { createCourseDetailsFacelift, collapseCourseCategoriesByDefault, isCourseShowPage } from '../features/courses/details-enhancer';
 import { enhanceCourseReviewTab, findReviewPane, disposeReviewSliders } from '../features/courses/review-enhancer';
 import { execute, subscribeLocal, type Execute } from '../shared/client';
 
@@ -46,6 +46,9 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
             if (!root) return;
             const result = adapter.read(root, context);
             if (result.status !== 'ready' || context.signal.aborted) return;
+            // Quest ships every assignment category open and re-opens them on each tab visit.
+            // This runs with the assignments themselves, so the tab is always collapsed.
+            collapseCourseCategoriesByDefault(document);
             // Page previews need the current snapshot and saved completion choices,
             // not a successful cache write or completion-control refresh.
             await groupPreviews.reconcile(result.value);
