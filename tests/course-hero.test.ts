@@ -6,7 +6,13 @@ import { rememberCourseCodes, lookupCourseCode } from '../src/features/courses/c
 import { enhanceCourseHero, disposeCourseHero } from '../src/features/courses/hero';
 import { createCourseDetailsFacelift } from '../src/features/courses/details-enhancer';
 import { createCourseArtwork } from '../src/features/courses/artwork';
-import { COURSE_EFFECTS, COURSE_EFFECT_CSS, courseArtKey, courseArtMood, courseEffect, isCourseEffect } from '../src/features/courses/effects';
+import {
+  COURSE_EFFECTS, COURSE_EFFECT_CSS, courseArtKey, courseArtMood, courseEffect, isCourseEffect,
+  nextCourseEffect, resolveCourseEffect, setCourseEffectOverrides,
+} from '../src/features/courses/effects';
+import { applyCommand } from '../src/storage/commands';
+import { emptyState } from '../src/shared/models';
+import type { Execute } from '../src/shared/client';
 
 function homepageDom(courseParam: string, courseCode: string, courseUnique = '58360') {
   return new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><div id="main-content"><div id="courses-table-div">
@@ -216,4 +222,65 @@ test('the course-details facelift mounts the hero and follows the animations set
     } finally { facelift.dispose(); }
     assert.equal(dom.window.document.querySelector('[data-betterquest="course-hero"]'), null, 'dispose removes the hero');
   } finally { dom.window.close(); }
+});
+
+test('Switch beside the unique code cycles the course animation and keeps homepage in sync', async () => {
+  setCourseEffectOverrides({});
+  const artKey = artKeyOf('M 408C', '58735');
+  const initial = courseEffect(artKey);
+  const expected = nextCourseEffect(artKey);
+  assert.notEqual(expected, initial);
+
+  let state = emptyState();
+  const run: Execute = async command => {
+    state = applyCommand(state, command);
+    return structuredClone(state);
+  };
+
+  const home = homepageDom('9010', 'M 408C', '58735');
+  rememberCourseCodes(readHomepageCourseRows(home.window.document));
+  const artwork = createCourseArtwork(home.window.document.querySelector('#courses-table-div')!);
+  artwork.reconcile();
+  assert.equal(
+    home.window.document.querySelector<HTMLElement>('[data-betterquest="course-artwork"]')!.shadowRoot!
+      .querySelector('.art-bg')!.classList.contains(`fx-${initial}`),
+    true,
+  );
+
+  const course = courseDom('9010');
+  try {
+    enhanceCourseHero(course.window.document.querySelector<HTMLElement>('#target')!, run);
+    const shadow = course.window.document.querySelector<HTMLElement>('[data-betterquest="course-hero"]')!.shadowRoot!;
+    const unique = shadow.querySelector('.unique');
+    const switchBtn = shadow.querySelector<HTMLButtonElement>('.fx-switch');
+    assert.ok(switchBtn, 'Switch control sits in the hero');
+    assert.equal(switchBtn!.previousElementSibling, unique, 'Switch sits to the right of the unique code');
+    assert.equal(shadow.querySelector('.art-bg')!.classList.contains(`fx-${initial}`), true);
+
+    switchBtn!.click();
+    await new Promise(resolve => setTimeout(resolve, 40));
+
+    assert.equal(state.preferences.courseEffects?.[artKey], expected, 'the pick is saved on this device');
+    assert.equal(resolveCourseEffect(artKey), expected);
+    assert.equal(
+      course.window.document.querySelector<HTMLElement>('[data-betterquest="course-hero"]')!.shadowRoot!
+        .querySelector('.art-bg')!.classList.contains(`fx-${expected}`),
+      true,
+      'the course page updates immediately',
+    );
+
+    artwork.reconcile();
+    assert.equal(
+      home.window.document.querySelector<HTMLElement>('[data-betterquest="course-artwork"]')!.shadowRoot!
+        .querySelector('.art-bg')!.classList.contains(`fx-${expected}`),
+      true,
+      'the homepage square uses the same saved animation',
+    );
+  } finally {
+    disposeCourseHero(course.window.document);
+    course.window.close();
+    artwork.dispose();
+    home.window.close();
+    setCourseEffectOverrides({});
+  }
 });

@@ -1,6 +1,7 @@
 import { formatMeetingTime } from './meeting-times';
 import { enhanceCourseReviewTab } from './review-enhancer';
 import { enhanceCourseHero, disposeCourseHero } from './hero';
+import type { Execute } from '../../shared/client';
 
 export function isCourseShowPage(url: string): boolean {
   try {
@@ -139,20 +140,25 @@ export function enhanceCourseInfoCard(root: HTMLElement) {
   }
 }
 
-/** Every open assignment category on the Assignments tab, newest markup included. */
-const OPEN_CATEGORY_SELECTOR = '#tabs-elements div.collapse.show, div.collapse.show[id^="header-"]';
+/** Assignment category panels on the Assignments tab, open or mid-animation. */
+const CATEGORY_PANEL_SELECTOR =
+  '#tabs-elements div.collapse, div.collapse[id^="header-"]';
 
 /** Categories the student opened with Quest's own toggle; their choice outranks the default. */
 const openedCategories = new WeakMap<Document, Set<string>>();
 const trackedDocuments = new WeakSet<Document>();
 
 function isAssignmentCategory(panel: Element): boolean {
-  // Never the course info card, and never a Grades or Review panel.
+  // Never the course info card.
   if (panel.id === 'student-course-info-header') return false;
-  if (panel.closest('#tabs-grades, [id*="grades"], .grades-tab, #info-tab-grades, .tab-pane#tabs-grades')) return false;
-  if (/grade/i.test(panel.id)) return false;
-  const button = panel.ownerDocument.querySelector<HTMLButtonElement>(`button[data-target*="${panel.id}"]`);
-  return !(button && /grade/i.test(button.textContent || ''));
+  // The tab pane that owns the panel decides what it is. Reading the toggle's
+  // caption instead would skip real categories, because Quest titles them with
+  // weights — "Midterms - 28 percent of grade, lowest dropped" is an assignment
+  // category, not a Grades panel.
+  const pane = panel.closest<HTMLElement>('.tab-pane');
+  if (pane?.id && /grade|review/i.test(pane.id)) return false;
+  if (panel.closest('#tabs-grades, #tabs-review, [id*="grades"]')) return false;
+  return !/grade/i.test(panel.id);
 }
 
 /** Remembers real toggles so a re-rendered or re-opened category can be collapsed again. */
@@ -172,15 +178,29 @@ function trackCategoryClicks(document: Document, opened: Set<string>) {
   }, true);
 }
 
+/**
+ * Force a category closed without Bootstrap's height animation. Leaving
+ * `.collapsing` or an inline height behind keeps the panel in-flow and can
+ * pump the page taller every time Quest and BetterQuest fight over `.show`.
+ */
+function forceCategoryClosed(cat: HTMLElement) {
+  cat.classList.remove('show', 'collapsing');
+  if (cat.style.height) cat.style.removeProperty('height');
+  if (cat.style.overflow) cat.style.removeProperty('overflow');
+}
+
 export function collapseCourseCategoriesByDefault(document: Document) {
   const opened = openedCategories.get(document) ?? new Set<string>();
   openedCategories.set(document, opened);
   trackCategoryClicks(document, opened);
-  for (const cat of document.querySelectorAll<HTMLElement>(OPEN_CATEGORY_SELECTOR)) {
+  for (const cat of document.querySelectorAll<HTMLElement>(CATEGORY_PANEL_SELECTOR)) {
     if (!isAssignmentCategory(cat)) continue;
     // Quest re-renders and re-opens categories on its own; only a real toggle is left alone.
     if (opened.has(cat.id)) continue;
-    cat.classList.remove('show');
+    const isOpen = cat.classList.contains('show') || cat.classList.contains('collapsing');
+    const hasBootstrapHeight = Boolean(cat.style.height || cat.style.overflow);
+    if (!isOpen && !hasBootstrapHeight) continue;
+    forceCategoryClosed(cat);
     const buttons = document.querySelectorAll<HTMLButtonElement>(
       `button[data-target="#${cat.id}"], button[data-target*="${cat.id}"]`
     );
@@ -195,34 +215,35 @@ export function collapseCourseCategoriesByDefault(document: Document) {
   }
 }
 
-export function createCourseDetailsFacelift(root: HTMLElement) {
+export function createCourseDetailsFacelift(root: HTMLElement, run?: Execute) {
   let disposed = false;
   const doc = root.ownerDocument;
 
   function reconcile() {
     if (disposed) return;
     enhanceCourseInfoCard(root);
-    enhanceCourseHero(root);
+    enhanceCourseHero(root, run);
     collapseCourseCategoriesByDefault(doc);
     enhanceCourseReviewTab(doc);
   }
 
   reconcile();
   // Quest injects most category panels AFTER the page settles, and re-renders
-  // them on every tab visit. Watch for late arrivals so every category ends up
-  // collapsed — not only the ones that existed at mount.
+  // them on every tab visit. Watch only the assignments tab for late panels —
+  // a document-wide observer re-enters on every preview/hero childList write.
   let scheduled = false;
   const collapseLateArrivals = () => {
     if (disposed || scheduled) return;
     scheduled = true;
     queueMicrotask(() => {
       scheduled = false;
-      if (!disposed) { collapseCourseCategoriesByDefault(doc); enhanceCourseHero(root); }
+      if (!disposed) collapseCourseCategoriesByDefault(doc);
     });
   };
   const Observer = doc.defaultView?.MutationObserver;
   const observer = Observer ? new Observer(collapseLateArrivals) : undefined;
-  observer?.observe(doc.documentElement, { childList: true, subtree: true });
+  const tabs = doc.querySelector('#tabs-elements') || doc.querySelector('#info-tab-data') || root;
+  observer?.observe(tabs, { childList: true, subtree: true });
 
   return {
     reconcile,

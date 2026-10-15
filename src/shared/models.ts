@@ -4,7 +4,9 @@ export type QuestionId = string;
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type FeatureName = 'assignments' | 'bookmarks' | 'animations' | 'celebrations' | 'whimsy';
 export interface FeaturePreferences { assignments?: boolean; bookmarks?: boolean; animations?: boolean; celebrations?: boolean; whimsy?: boolean }
-export interface Preferences { theme: ThemePreference; features?: FeaturePreferences }
+/** Per-course backdrop picks keyed by course art key (code#unique). */
+export type CourseEffectPreferences = Record<string, string>;
+export interface Preferences { theme: ThemePreference; features?: FeaturePreferences; courseEffects?: CourseEffectPreferences }
 export function featurePreferences(preferences?: Preferences | null): { assignments: boolean; bookmarks: boolean; animations: boolean; celebrations: boolean; whimsy: boolean } {
   const current = preferences?.features;
   return { assignments: current?.assignments ?? true, bookmarks: current?.bookmarks ?? true, animations: current?.animations ?? true, celebrations: current?.celebrations ?? true, whimsy: current?.whimsy ?? false };

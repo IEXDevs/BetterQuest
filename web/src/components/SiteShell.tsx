@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { ThemeProvider } from 'next-themes';
 import { SiteAtmosphere } from './SiteAtmosphere';
+import { ThemeProvider } from './theme-provider';
 
 export function SiteShell({
   children,
@@ -10,13 +10,7 @@ export function SiteShell({
   atmosphere?: 'aurora' | 'threads';
 }) {
   return (
-    <ThemeProvider
-      attribute="data-theme"
-      defaultTheme="system"
-      enableSystem
-      storageKey="betterquest.theme"
-      disableTransitionOnChange={false}
-    >
+    <ThemeProvider>
       <div className="theme-blur-veil" aria-hidden="true" />
       <SiteAtmosphere />
       {children}

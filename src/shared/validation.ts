@@ -79,7 +79,7 @@ export function isLocalState(value: unknown): value is LocalState {
   if (!object(value) || value.schemaVersion !== 1 || !object(value.cache) || !object(value.preferences)) return false;
   const cache = value.cache;
   const overrides = value.completionOverrides;
-  return only(value, ['schemaVersion', 'cache', 'completionOverrides', 'bookmarks', 'study', 'preferences']) && only(cache, ['courses', 'assignments', 'pages', 'refreshRequestedAt']) && only(value.preferences, ['theme', 'features']) &&
+  return only(value, ['schemaVersion', 'cache', 'completionOverrides', 'bookmarks', 'study', 'preferences']) && only(cache, ['courses', 'assignments', 'pages', 'refreshRequestedAt']) && only(value.preferences, ['theme', 'features', 'courseEffects']) &&
     array(cache.courses, isCourse, 2000) && array(cache.assignments, isAssignment, 10000) && array(cache.pages, isCachedPage, 2000) &&
     unique(cache.courses) && unique(cache.assignments) &&
     cache.assignments.every(a => (cache.courses as Course[]).some(c => c.id === a.courseId)) &&
@@ -94,7 +94,11 @@ export function isLocalState(value: unknown): value is LocalState {
       (value.preferences.features.bookmarks === undefined || typeof value.preferences.features.bookmarks === 'boolean') &&
       (value.preferences.features.animations === undefined || typeof value.preferences.features.animations === 'boolean') &&
       (value.preferences.features.celebrations === undefined || typeof value.preferences.features.celebrations === 'boolean') &&
-      (value.preferences.features.whimsy === undefined || typeof value.preferences.features.whimsy === 'boolean')));
+      (value.preferences.features.whimsy === undefined || typeof value.preferences.features.whimsy === 'boolean'))) &&
+    (value.preferences.courseEffects === undefined || (object(value.preferences.courseEffects) &&
+      Object.keys(value.preferences.courseEffects).length <= 200 &&
+      Object.entries(value.preferences.courseEffects).every(([key, effect]) =>
+        typeof key === 'string' && key.length > 0 && key.length <= 200 && typeof effect === 'string' && effect.length > 0 && effect.length <= 40)));
 }
 
 export function isStudyExport(value: unknown): value is StudyExport {

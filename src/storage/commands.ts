@@ -1,6 +1,14 @@
 import { featurePreferences, type AssignmentSnapshot, type Bookmark, type FeatureName, type LocalState, type StudyRecord, type ThemePreference } from '../shared/models';
 import { isBookmark, isSnapshot, isStudyRecord, object, themePreference, timestamp } from '../shared/validation';
 
+/** Keep in sync with `COURSE_EFFECTS` in features/courses/effects.ts — listed
+ *  here so the background worker never imports the CSS-heavy effects module. */
+const COURSE_EFFECT_NAMES = new Set([
+  'ether', 'pixel', 'micro-slats', 'ghost-fibres', 'crt-warp',
+  'scanner', 'light-fall', 'ferrofluid', 'line-waves', 'radar', 'magic-rings',
+  'floating-lines', 'grid-scan', 'gradient-blinds', 'iridescence', 'letter-glitch', 'strands',
+]);
+
 export type Command =
   | { kind: 'state:read' }
   | { kind: 'assignments:cache'; snapshot: AssignmentSnapshot }
@@ -10,6 +18,7 @@ export type Command =
   | { kind: 'bookmarks:remove'; questionId: string }
   | { kind: 'theme:set'; preference: ThemePreference }
   | { kind: 'feature:set'; feature: FeatureName; enabled: boolean }
+  | { kind: 'course-effect:set'; artKey: string; effect: string }
   | { kind: 'study:save'; record: StudyRecord };
 
 export function isCommand(value: unknown): value is Command {
@@ -24,6 +33,7 @@ export function isCommand(value: unknown): value is Command {
     case 'bookmarks:remove': return typeof value.questionId === 'string' && value.questionId.length <= 8000;
     case 'theme:set': return themePreference(value.preference);
     case 'feature:set': return (value.feature === 'assignments' || value.feature === 'bookmarks' || value.feature === 'animations' || value.feature === 'celebrations' || value.feature === 'whimsy') && typeof value.enabled === 'boolean';
+    case 'course-effect:set': return typeof value.artKey === 'string' && value.artKey.length > 0 && value.artKey.length <= 200 && typeof value.effect === 'string' && COURSE_EFFECT_NAMES.has(value.effect);
     case 'study:save': return isStudyRecord(value.record);
     default: return false;
   }
@@ -73,6 +83,17 @@ export function applyCommand(state: LocalState, command: Command): LocalState {
     case 'bookmarks:remove': next.bookmarks = next.bookmarks.filter(bookmark => bookmark.id !== command.questionId); break;
     case 'theme:set': next.preferences.theme = command.preference; break;
     case 'feature:set': next.preferences.features = { ...featurePreferences(next.preferences), [command.feature]: command.enabled }; break;
+    case 'course-effect:set': {
+      const effects = { ...(next.preferences.courseEffects || {}) };
+      effects[command.artKey] = command.effect;
+      // Cap growth so a long-lived install cannot unbounded-grow this map.
+      const keys = Object.keys(effects);
+      if (keys.length > 200) {
+        for (const key of keys.slice(0, keys.length - 200)) delete effects[key];
+      }
+      next.preferences.courseEffects = effects;
+      break;
+    }
     case 'study:save': next.study = [...next.study.filter(record => record.assignment.id !== command.record.assignment.id), command.record]; break;
   }
   return next;

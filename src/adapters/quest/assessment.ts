@@ -124,18 +124,13 @@ export function mapPdfOptionLabels(runs: PdfTextRun[], optionMaximums: ReadonlyM
 
   const commitPending = () => {
     if (questionNumber === null) return;
-    const hasExplicit = optionMaximums.has(questionNumber);
+    // Only emit choices for questions the response table knows about. Inventing
+    // boxes for every PDF header (when DataTables only exposed a few rows)
+    // leaves clickable options on an already-finished homework.
     const max = optionMaximums.get(questionNumber);
-    if (hasExplicit && max !== undefined) {
-      if (pending.length === max) {
-        targets.push(...pending);
-        completed = true;
-      }
-    } else {
-      if (pending.length >= 2) {
-        targets.push(...pending);
-        completed = true;
-      }
+    if (max !== undefined && pending.length === max) {
+      targets.push(...pending);
+      completed = true;
     }
     pending = [];
   };
@@ -155,9 +150,9 @@ export function mapPdfOptionLabels(runs: PdfTextRun[], optionMaximums: ReadonlyM
     }
 
     if (questionNumber === null || completed) continue;
+    if (!optionMaximums.has(questionNumber)) continue;
 
-    const hasExplicit = optionMaximums.has(questionNumber);
-    const maximum = hasExplicit ? optionMaximums.get(questionNumber)! : globalFallback;
+    const maximum = optionMaximums.get(questionNumber) ?? globalFallback;
     if (maximum < 1 || maximum > 9) continue;
 
     let value: number | null = null;
@@ -286,6 +281,41 @@ export function readAssessmentMetrics(document: Document, root: HTMLElement, tal
   return { score, classAverage, standardDeviation };
 }
 
+/** True when Quest's DataTables shell has no response rows (past-due / locked). */
+export function isEmptyResponseTable(table: HTMLTableElement): boolean {
+  if (table.querySelector('.dataTables_empty, td.dataTables_empty')) return true;
+  const bodyText = (table.querySelector('tbody')?.textContent || '').replace(/\s+/g, ' ').trim();
+  return /^no data available in table$/i.test(bodyText);
+}
+
+/**
+ * A past-due or locked assessment: Quest still ships the whole response shell,
+ * but it holds no rows and the PDF frame never loaded.
+ */
+export function findLockedAssessment(document: Document): HTMLElement | null {
+  const root = document.querySelector<HTMLElement>('#target');
+  if (!root) return null;
+  const responses = root.querySelector<HTMLElement>('#view-responses-table-id');
+  if (!responses) return null;
+  const table = responses.querySelector<HTMLTableElement>('table[id^="instance-table-courseuserassignment_"]');
+  return table && isEmptyResponseTable(table) ? root : null;
+}
+
+/**
+ * Quest's Slides view of informational and practice items ("extra homework")
+ * carries no response controls, so the interactive slide workspace has nothing
+ * to work with and the raw MDB layout is all the student sees.
+ */
+export function findPracticeSlides(document: Document): HTMLElement | null {
+  const root = document.querySelector<HTMLElement>('#target > #presentation-div')?.parentElement;
+  if (!root) return null;
+  if (root.querySelector('#view-responses-table-id')) return null;
+  if (!document.querySelector('#question-bar-div')) return null;
+  // Pages with response controls already get the interactive slide workspace;
+  // this shell would fight it for the question bar and the pager.
+  return findSlideAssessment(document) ? null : root;
+}
+
 export function findPdfAssessment(document: Document): PdfAssessmentElements | null {
   const root = document.querySelector<HTMLElement>('#target') ||
     document.querySelector<HTMLElement>('#main-content #target') ||
@@ -348,9 +378,36 @@ export function findPdfAssessment(document: Document): PdfAssessmentElements | n
   return { root, pdfFrame, iframe, responseRoot, table, tally: root.querySelector<HTMLElement>(':scope > #tally-div, #tally-div') };
 }
 
+/**
+ * Quest uses DataTables Scroller (`scroller: true`, `deferRender: true`). Restoring
+ * a short page length after a read drops most rows from the DOM again, so a later
+ * reconcile thinks the homework only has a handful of questions and re-shows PDF
+ * choices. Expand once and leave it expanded — BetterQuest already hides the
+ * native table.
+ */
+function ensureAllDataTableRows(table: HTMLTableElement) {
+  if (table.dataset.betterquestDtExpanded === 'true') return;
+  const win = table.ownerDocument.defaultView as Window & { jQuery?: any; $?: any };
+  const $ = win?.jQuery || win?.$;
+  try {
+    const api = $?.(table)?.DataTable?.({ retrieve: true });
+    if (!api || typeof api.page?.len !== 'function') return;
+    if (Number(api.page.len()) !== -1) api.page.len(-1).draw(false);
+    table.dataset.betterquestDtExpanded = 'true';
+  } catch {
+    /* DataTables not ready yet — the next reconcile retries. */
+  }
+}
+
 export function readAssessmentResponses(table: HTMLTableElement): AssessmentResponseBinding[] {
+  ensureAllDataTableRows(table);
+  return readAssessmentResponsesFromDom(table);
+}
+
+function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResponseBinding[] {
   const rows: AssessmentResponseBinding[] = [];
   const trElements = table.querySelectorAll<HTMLTableRowElement>('tbody > tr, :scope > tr');
+  const revealing = Boolean(table.closest('[data-betterquest-native-visible="true"]'));
 
   for (const row of trElements) {
     if (row.closest('thead')) continue;
@@ -358,7 +415,9 @@ export function readAssessmentResponses(table: HTMLTableElement): AssessmentResp
     const cells = row.querySelectorAll(':scope > td, :scope > th');
     if (!id || cells.length < 2) continue;
 
-    if (!isElementVisible(row)) continue;
+    // While BetterQuest is revealing the clipped native table, trust every real
+    // response row — overflow clipping would otherwise drop most of the homework.
+    if (!revealing && !isElementVisible(row)) continue;
 
     const select = row.querySelector<HTMLSelectElement>('select[name="response"], select[aria-label="Select your response"], select');
     // Never match per-row history toggles or other non-submit buttons: only
@@ -390,7 +449,11 @@ export function readAssessmentResponses(table: HTMLTableElement): AssessmentResp
 
     const statusText = clean(row.querySelector('.status')?.textContent);
     const hasSuccessClass = Boolean(row.querySelector('.status .text-success, .status [class*="text-success"]'));
-    const isCorrect = hasSuccessClass || /\bcorrect\b/i.test(statusText) && !/\b(?:incorrect|not correct)\b/i.test(statusText);
+    // Quest often concatenates the material icon ("check") with "Correct" into
+    // "checkCorrect" — `\bcorrect\b` misses that, so accept it explicitly.
+    const isCorrect = hasSuccessClass
+      || (/\bcorrect\b/i.test(statusText) && !/\b(?:incorrect|not correct)\b/i.test(statusText))
+      || (/check\s*correct/i.test(statusText) && !/incorrect/i.test(statusText));
     const triesExhausted = Boolean(maxTries > 0 && attempts >= maxTries);
 
     // If there is no answer and no attempts recorded, and native submit is hidden, fail closed

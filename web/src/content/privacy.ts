@@ -37,9 +37,9 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
     list: [
       'theme and feature preferences;',
       'course and assignment metadata visible on Quest, including titles, source identifiers, URLs, deadlines, and completion labels;',
-      'a record of which course pages were observed and when they were last observed;',
+      'a record of which course pages you opened and when you last opened them;',
       'question identifiers, question numbers, source links, bookmark status, and bookmark notes; and',
-      'locally cached study records created by enabled features.',
+      'study records saved on this device by enabled features.',
     ],
   },
   {
@@ -49,7 +49,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
     title: 'What BetterQuest can see on Quest.',
     body: [
       'The content script runs only on quest.cns.utexas.edu/student pages. It reads course and assignment metadata, deadlines, status, and question identifiers already visible on the page so enabled overview and bookmark features can work.',
-      'BetterQuest does not scan every course automatically. An assignment appears in the overview only after the relevant Quest page has been visited and observed.',
+      'BetterQuest does not scan every course automatically. An assignment appears in the overview only after you open the relevant Quest page.',
     ],
     boundary: {
       does: 'Enhance pages you visit and cache the limited metadata listed above.',

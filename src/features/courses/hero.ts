@@ -3,17 +3,21 @@
  *  course name, and unique number (the same layout as the marketing preview);
  *  the instructor info row stays right underneath it. */
 
-import { COURSE_EFFECT_CSS, courseArtKey, courseArtMood, courseEffect, palette, solidColor } from './effects';
-import type { CourseEffect } from './effects';
+import {
+  COURSE_EFFECT_CSS, courseArtKey, courseArtMood, isCourseEffect, nextCourseEffect,
+  palette, resolveCourseEffect, setCourseEffectOverrides, solidColor, type CourseEffect,
+} from './effects';
 import { REACTBITS_EFFECTS, type EffectInstance } from './reactbits';
 import { departmentFromCourseCode } from '../../adapters/quest/homepage';
 import { lookupCourseCode } from './course-codes';
+import type { Execute } from '../../shared/client';
 
 const HOST_SELECTOR = '[data-betterquest="course-hero"]';
 const STYLE_SELECTOR = '[data-betterquest="course-hero-style"]';
 
 const observers = new WeakMap<HTMLElement, MutationObserver>();
 const fxInstances = new WeakMap<HTMLElement, EffectInstance>();
+const heroRunners = new WeakMap<HTMLElement, Execute>();
 
 function animationsDisabled(document: Document): boolean {
   return document.documentElement.dataset.betterquestAnimations === 'disabled';
@@ -118,10 +122,12 @@ function syncToggleChrome(document: Document, mounted: boolean): void {
   }
 }
 
-function renderHero(host: HTMLElement, document: Document, identity: { code: string; name: string; unique: string; fx: string; departmentCode: string }): void {
+function renderHero(host: HTMLElement, document: Document, identity: {
+  code: string; name: string; unique: string; fx: CourseEffect; departmentCode: string; artKey: string;
+}): void {
   const [deep, bright, paper] = palette(identity.departmentCode);
   const solid = solidColor(identity.departmentCode);
-  const mood = courseArtMood(courseArtKey({ code: identity.code, unique: identity.unique, departmentCode: identity.departmentCode }));
+  const mood = courseArtMood(identity.artKey);
   const shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = `
@@ -218,6 +224,12 @@ function renderHero(host: HTMLElement, document: Document, identity: { code: str
       text-overflow: ellipsis;
       max-width: 62ch;
     }
+    .meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
     .unique {
       flex-shrink: 0;
       font: 850 28px/0.95 ui-rounded, 'Avenir Next', -apple-system, sans-serif;
@@ -226,6 +238,24 @@ function renderHero(host: HTMLElement, document: Document, identity: { code: str
       white-space: nowrap;
       text-shadow: inherit;
     }
+    .fx-switch {
+      pointer-events: auto;
+      flex-shrink: 0;
+      margin: 0;
+      padding: 6px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      border-radius: 6px;
+      background: rgba(8, 12, 20, 0.45);
+      color: #fff;
+      font: 700 11px/1.1 ui-rounded, 'Avenir Next', -apple-system, sans-serif;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      text-shadow: none;
+      backdrop-filter: blur(6px);
+    }
+    .fx-switch:hover { background: rgba(8, 12, 20, 0.62); border-color: rgba(255, 255, 255, 0.55); }
+    .fx-switch:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .fx-switch:disabled { opacity: 0.6; cursor: wait; }
   ` + COURSE_EFFECT_CSS;
   const hero = document.createElement('div');
   hero.className = 'hero';
@@ -243,15 +273,55 @@ function renderHero(host: HTMLElement, document: Document, identity: { code: str
   const titles = document.createElement('div'); titles.className = 'titles';
   const code = document.createElement('span'); code.className = 'code'; code.textContent = identity.code;
   const name = document.createElement('span'); name.className = 'name'; name.textContent = identity.name;
+  const meta = document.createElement('div'); meta.className = 'meta';
   const unique = document.createElement('span'); unique.className = 'unique'; unique.textContent = identity.unique;
+  const switchBtn = document.createElement('button');
+  switchBtn.type = 'button';
+  switchBtn.className = 'fx-switch';
+  switchBtn.textContent = 'Switch';
+  switchBtn.title = 'Switch animation';
+  switchBtn.setAttribute('aria-label', 'Switch animation');
+  switchBtn.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    void cycleHeroEffect(host, document, identity.artKey);
+  });
   titles.append(code, name);
-  copy.append(titles, unique);
+  meta.append(unique, switchBtn);
+  copy.append(titles, meta);
   hero.append(artBg, fxLayer, vignette, copy);
   shadow.replaceChildren(style, hero);
 }
 
+async function cycleHeroEffect(host: HTMLElement, document: Document, artKey: string): Promise<void> {
+  const run = heroRunners.get(host);
+  const button = host.shadowRoot?.querySelector<HTMLButtonElement>('.fx-switch');
+  if (!run || !button || button.disabled) return;
+  const effect = nextCourseEffect(artKey);
+  button.disabled = true;
+  try {
+    const state = await run({ kind: 'course-effect:set', artKey, effect });
+    const saved = state.preferences.courseEffects || {};
+    const next: Record<string, CourseEffect> = {};
+    for (const [key, value] of Object.entries(saved)) {
+      if (isCourseEffect(value)) next[key] = value;
+    }
+    setCourseEffectOverrides(next);
+    host.dataset.betterquestKey = ''; // Force remount with the new backdrop.
+    const root = document.querySelector<HTMLElement>('#target') ||
+      document.querySelector<HTMLElement>('#student-course-info-header')?.closest<HTMLElement>('.card') ||
+      host.parentElement;
+    if (root) enhanceCourseHero(root, run);
+    document.defaultView?.dispatchEvent(new document.defaultView.Event('betterquest:preferences-changed'));
+  } catch {
+    /* Keep the current backdrop if the save fails. */
+  } finally {
+    button.disabled = false;
+  }
+}
+
 /** Mounts/refreshes the hero banner for the course card under `root`. */
-export function enhanceCourseHero(root: HTMLElement): void {
+export function enhanceCourseHero(root: HTMLElement, run?: Execute): void {
   const document = root.ownerDocument;
   const infoHeader = root.querySelector<HTMLElement>('#student-course-info-header') ||
     (root.id === 'student-course-info-header' ? root : null);
@@ -272,7 +342,7 @@ export function enhanceCourseHero(root: HTMLElement): void {
   const compactCode = known ? known.code.replace(/\s+/g, '').toUpperCase() : '';
   // Same key the homepage card used for this course, so both views agree.
   const artKey = courseArtKey({ code: compactCode, unique, departmentCode });
-  const fx = courseEffect(artKey);
+  const fx = resolveCourseEffect(artKey);
   const key = `${compactCode}|${name}|${unique}|${fx}`;
 
   let host = anchor.querySelector<HTMLElement>(HOST_SELECTOR);
@@ -288,14 +358,16 @@ export function enhanceCourseHero(root: HTMLElement): void {
       observers.set(host, observer);
     }
   } else if (host.dataset.betterquestKey === key) {
+    if (run) heroRunners.set(host, run);
     syncToggleChrome(document, true); // Sized before the layer measures itself.
     syncAnimations(host, document);
     return;
   }
+  if (run) heroRunners.set(host, run);
   host.dataset.betterquestKey = key;
   host.setAttribute('aria-label', `${name} course banner${compactCode ? `, course ${compactCode}` : ''}`);
   destroyFx(host); // The canvas belongs to the previous render's layer.
-  renderHero(host, document, { code: compactCode, name, unique, fx, departmentCode });
+  renderHero(host, document, { code: compactCode, name, unique, fx, departmentCode, artKey });
   syncToggleChrome(document, true); // Layout settles first, so the effect mounts at full-card size.
   syncAnimations(host, document);
 }
@@ -306,6 +378,7 @@ function removeHero(document: Document): void {
     destroyFx(host);
     observers.get(host)?.disconnect();
     observers.delete(host);
+    heroRunners.delete(host);
     host.remove();
   }
   syncToggleChrome(document, false);

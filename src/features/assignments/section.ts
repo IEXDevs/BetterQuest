@@ -150,7 +150,10 @@ export function createAssignmentSection(root: Element, run: Execute = execute, s
     if (!nativeTab || !nativeAssignments) return;
     event.preventDefault();
     nativeTab.click(); // Keep Quest's original tab/loading behavior.
-    nativeAssignments.scrollIntoView?.({ block: 'start' });
+    // Stay at the top — do not jump down to the tab pane anchor.
+    const scrolling = document.scrollingElement || document.documentElement;
+    if (scrolling) scrolling.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
   });
   position();
   const loading = document.createElement('p'); loading.className = 'empty'; loading.textContent = 'Loading assignments…';
@@ -163,7 +166,11 @@ export function createAssignmentSection(root: Element, run: Execute = execute, s
       // Respect the native collapse; never force the course info open.
       const info = host.closest<HTMLElement>('#student-course-info-header');
       if (info && document.defaultView?.getComputedStyle(info).display === 'none') return false;
-      host.scrollIntoView?.({ block: 'start' }); title.focus({ preventScroll: true }); return true;
+      const scrolling = document.scrollingElement || document.documentElement;
+      if (scrolling) scrolling.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+      title.focus({ preventScroll: true });
+      return true;
     },
     isConnected: () => host.isConnected && !disposed,
     dispose() { disposed = true; generation++; unsubscribe?.(); host.remove(); },

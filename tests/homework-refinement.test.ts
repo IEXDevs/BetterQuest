@@ -124,6 +124,74 @@ test('PDF Download sits beside the due date and restores the native link on disp
   } finally { workspace.dispose(); dom.window.close(); }
 });
 
+test('icon-only problem_pdf links still become a visible PDF Download button', () => {
+  const dom = new JSDOM('<main id="main-content"><div id="target">' +
+    '<p id="due">Due date 10/14/26 11:59 PM</p>' +
+    '<p id="download"><a href="/student/images/problem_pdf?instance=courseuserassignment_1" aria-label="Download">' +
+    '<img src="/icons/pdf.png" alt=""></a></p>' +
+    '<div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF" src="/student/images/problem_pdf?instance=1"></iframe></div></div>' +
+    '</div></main>',
+    { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
+  const doc = dom.window.document;
+  const header = createAssessmentHeader(doc.querySelector<HTMLElement>('#main-content')!);
+  header.reconcile();
+  try {
+    const link = doc.querySelector<HTMLAnchorElement>('a[href*="/images/problem_pdf"]')!;
+    assert.equal(link.dataset.betterquestDownload, 'true');
+    assert.equal(link.textContent, 'PDF Download');
+    assert.equal(link.parentElement, doc.querySelector('#due'));
+    assert.equal(doc.querySelector('#download')?.getAttribute('data-betterquest-download-gap'), 'true');
+  } finally { header.dispose(); dom.window.close(); }
+});
+
+test('Slides/Classic links become a segmented control beside the due date', () => {
+  const dom = new JSDOM('<main id="main-content"><div id="target">' +
+    '<div id="info-header-div"><div class="d-flex justify-content-between">' +
+    '<span id="due_date_field">Due date 10/14/26 11:59 PM</span>' +
+    '<div class="view-links"><a href="/student/instances/show?instance=1&view=slides">Slides</a>' +
+    '<a href="/student/instances/show?instance=1&view=classic">Classic</a></div>' +
+    '</div></div>' +
+    '<div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF" src="/student/images/problem_pdf?instance=1"></iframe></div></div>' +
+    '</div></main>',
+    { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=1', pretendToBeVisual: true });
+  const doc = dom.window.document;
+  const header = createAssessmentHeader(doc.querySelector<HTMLElement>('#main-content')!);
+  header.reconcile();
+  try {
+    const toggle = doc.querySelector<HTMLElement>('[data-betterquest="view-toggle"]')!;
+    assert.ok(toggle, 'View toggle host is created');
+    assert.equal(toggle.parentElement, doc.querySelector('.d-flex.justify-content-between'));
+    assert.equal(toggle.querySelectorAll('a').length, 2);
+    assert.equal(toggle.querySelector('[data-betterquest-view-kind="classic"]')?.getAttribute('data-betterquest-view-active'), 'true');
+    assert.equal(toggle.querySelector('[data-betterquest-view-kind="slides"]')?.hasAttribute('data-betterquest-view-active'), false);
+    header.dispose();
+    assert.equal(doc.querySelector('[data-betterquest="view-toggle"]'), null);
+    assert.equal(doc.querySelector('.view-links a')?.textContent, 'Slides');
+  } finally { header.dispose(); dom.window.close(); }
+});
+
+test('on Slides pages a lone Classic switch link is emphasized in the toolbar', () => {
+  const dom = new JSDOM('<main id="main-content"><div id="target">' +
+    '<div id="info-header-div"><div class="d-flex justify-content-between">' +
+    '<span id="due_date_field">Due date 10/14/26 11:59 PM</span>' +
+    '<a href="/student/instances/show?instance=1&view=classic">Classic</a>' +
+    '</div></div>' +
+    '<div id="presentation-div"><div class="instanceitempart"><label><input type="radio" name="response_1" value="1">1</label>' +
+    '<button type="button" class="submit-btn">Submit</button></div></div></div></main>',
+    { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=1', pretendToBeVisual: true });
+  const doc = dom.window.document;
+  const header = createAssessmentHeader(doc.querySelector<HTMLElement>('#main-content')!);
+  header.reconcile();
+  try {
+    const toggle = doc.querySelector<HTMLElement>('[data-betterquest="view-toggle"]')!;
+    assert.ok(toggle);
+    const classic = toggle.querySelector('[data-betterquest-view-kind="classic"]')!;
+    assert.ok(classic);
+    assert.equal(toggle.dataset.betterquestViewSingle, 'true');
+    assert.equal(classic.getAttribute('data-betterquest-view-active'), 'true');
+  } finally { header.dispose(); dom.window.close(); }
+});
+
 test('slides put PDF Download beside the date, not under a bare Due label', () => {
   const dom = new JSDOM('<main id="main-content"><div id="target">' +
     '<div id="sched"><div class="label">Due date</div><div class="val">10/14/26 11:59 PM</div></div>' +

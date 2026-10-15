@@ -738,9 +738,9 @@ export function createSettingsMenu(
     }
     if (restoreFocus && trigger.isConnected) {
       if (activeView === 'quest' && questTrigger && questTrigger.isConnected) {
-        questTrigger.focus();
+        questTrigger.focus({ preventScroll: true });
       } else {
-        trigger.focus();
+        trigger.focus({ preventScroll: true });
       }
     }
   }

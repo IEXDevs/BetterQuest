@@ -60,6 +60,36 @@ export function courseEffect(courseKey: string): CourseEffect {
   return COURSE_EFFECTS[hashOf(courseKey) % COURSE_EFFECTS.length];
 }
 
+/** User-picked backdrops keyed by `courseArtKey`. Empty until preferences load. */
+let courseEffectOverrides: Record<string, CourseEffect> = {};
+
+/** Sync the in-page override map from saved preferences (homepage + course page). */
+export function setCourseEffectOverrides(overrides: Record<string, CourseEffect> | null | undefined): void {
+  const next: Record<string, CourseEffect> = {};
+  if (overrides) {
+    for (const [key, value] of Object.entries(overrides)) {
+      if (typeof key === 'string' && key.length > 0 && key.length <= 200 && isCourseEffect(value)) next[key] = value;
+    }
+  }
+  courseEffectOverrides = next;
+}
+
+export function getCourseEffectOverrides(): Record<string, CourseEffect> {
+  return { ...courseEffectOverrides };
+}
+
+/** Saved pick when present; otherwise the stable hash pick for this course. */
+export function resolveCourseEffect(courseKey: string): CourseEffect {
+  return courseEffectOverrides[courseKey] ?? courseEffect(courseKey);
+}
+
+/** Next allowlisted backdrop after the one currently shown for this course. */
+export function nextCourseEffect(courseKey: string): CourseEffect {
+  const current = resolveCourseEffect(courseKey);
+  const index = COURSE_EFFECTS.indexOf(current);
+  return COURSE_EFFECTS[(index + 1) % COURSE_EFFECTS.length];
+}
+
 /** Two courses can still land on the same backdrop family, so every course
  *  also gets its own hue drift and animation phase: a shared effect reads as
  *  two different pieces of art, and nothing on the page pulses in lockstep. */

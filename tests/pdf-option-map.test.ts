@@ -105,5 +105,17 @@ test('PDF option mapping maps choices using uppercase and lowercase letters', ()
   ]);
 });
 
+test('PDF option mapping does not invent choices for questions missing from the response table', () => {
+  const actual = mapper()([
+    run('001', 20), run('1.', 40), run('2.', 60), run('3.', 80),
+    run('002', 120), run('1.', 140), run('2.', 160), run('3.', 180),
+    run('014', 220), run('1.', 240), run('2.', 260), run('3.', 280),
+  ], new Map([[1, 3]]));
+
+  assert.deepEqual(actual.map(({ questionNumber, optionValue }) => [questionNumber, optionValue]), [
+    [1, 1], [1, 2], [1, 3],
+  ], 'Only response-table questions get clickable PDF choices');
+});
+
 
 

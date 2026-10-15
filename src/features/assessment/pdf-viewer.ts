@@ -214,6 +214,13 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     .tool-btn{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 10px;border:1px solid var(--bq-border,#d7e2f0);border-radius:6px;background:var(--bq-raised,#eef3f6);color:var(--bq-text,#18253a);font:700 12px/1 inherit;cursor:pointer;transition:background .15s ease}
     .tool-btn:hover{background:color-mix(in srgb,var(--bq-raised,#eef3f6) 72%,var(--bq-accent,#2563eb))}
     .tool-btn[aria-pressed="true"]{border-color:var(--bq-accent,#227ab0);color:var(--bq-accent,#227ab0)}
+    /* Slides/Classic switch, hosted here by the assignment header. */
+    [data-betterquest="view-toggle"]{display:inline-flex;align-items:center;gap:2px;padding:3px;margin:0 10px 0 0;border:1px solid var(--bq-border,#d7e2f0);border-radius:8px;background:var(--bq-raised,#eef3f6);flex-shrink:0}
+    [data-betterquest="view-toggle"]:empty{display:none}
+    [data-betterquest="view-toggle"]>a{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:5px 12px;margin:0;border:0;border-radius:6px;background:transparent;color:var(--bq-muted,#64748b);font:700 12px/1.2 inherit;text-decoration:none;box-shadow:none;cursor:pointer;white-space:nowrap;transition:background .15s ease,color .15s ease,box-shadow .15s ease}
+    [data-betterquest="view-toggle"]>a:hover{color:var(--bq-text,#18253a);background:color-mix(in srgb,var(--bq-surface,#fff) 70%,transparent)}
+    [data-betterquest="view-toggle"]>a[data-betterquest-view-active="true"]{background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;box-shadow:0 1px 4px #00000024}
+    [data-betterquest="view-toggle"]>a:focus-visible{outline:2px solid #7c3aed;outline-offset:1px}
     .tool-btn:focus-visible,.zoom button:focus-visible,.option-hit:focus-visible,.pdf-submit-btn:focus-visible,.submit-pill:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
     .submit-pill{border:0;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;white-space:nowrap}
     .submit-pill:hover{background:linear-gradient(135deg,#4f46e5,#4338ca)}
@@ -416,21 +423,32 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   const copy = document.createElement('div'); const title = document.createElement('div'); title.className = 'title'; title.textContent = 'Interactive PDF';
   const meta = document.createElement('div'); meta.className = 'meta'; meta.textContent = 'Loading choices…'; copy.append(title, meta);
   const toolbarActions = document.createElement('div'); toolbarActions.className = 'toolbar-actions';
+  // Home for the Slides/Classic switch, which belongs beside the dark/light
+  // switch. display:contents keeps the slot itself out of the toolbar layout.
+  const viewSlot = document.createElement('div');
+  viewSlot.dataset.betterquest = 'view-toggle-slot';
+  viewSlot.style.cssText = 'display:contents';
   const darkPagesBtn = document.createElement('button');
   darkPagesBtn.type = 'button'; darkPagesBtn.className = 'tool-btn';
-  darkPagesBtn.textContent = 'Dark pages';
+  darkPagesBtn.dataset.betterquestPagesToggle = 'true';
   const DARK_PAGES_KEY = 'betterquest_pdf_dark_pages';
   const applyDarkPages = (dark: boolean) => {
     if (dark) element.dataset.darkPages = 'true';
     else delete element.dataset.darkPages;
     darkPagesBtn.setAttribute('aria-pressed', String(dark));
+    // Name the switch the student would press, never the current state. A dark
+    // PDF offers "Light pages", so the label always says where the button goes.
+    darkPagesBtn.textContent = dark ? 'Light pages' : 'Dark pages';
+    darkPagesBtn.title = dark
+      ? 'Show PDF pages with their original light background. Diagram colors will match the original.'
+      : 'Darken PDF pages only. Diagram colors may change; turn off to see original colors.';
   };
   // Restore before mounting, using the same on-device storage as PDF zoom.
+  // Pages start light so original diagram colors survive until asked otherwise.
   let savedDarkPages = false;
   try { savedDarkPages = document.defaultView?.localStorage?.getItem(DARK_PAGES_KEY) === 'true'; }
   catch { /* Storage unavailable: default to original PDF colors. */ }
   applyDarkPages(savedDarkPages);
-  darkPagesBtn.title = 'Darken PDF pages only. Diagram colors may change; turn off to see original colors.';
   darkPagesBtn.addEventListener('click', event => {
     event.stopPropagation(); // Do not dismiss a pending answer confirmation.
     const dark = element.dataset.darkPages !== 'true';
@@ -515,7 +533,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       : `Submit question ${pillQn}`);
   }
   submitPill.addEventListener('click', () => { if (pillQn !== null) attemptSubmit(pillQn); });
-  zoom.append(zoomOut, zoomValue, zoomIn); toolbarActions.append(submitPill, darkPagesBtn, fullscreenBtn, zoom); toolbar.append(copy, toolbarActions);
+  zoom.append(zoomOut, zoomValue, zoomIn); toolbarActions.append(submitPill, viewSlot, darkPagesBtn, fullscreenBtn, zoom); toolbar.append(copy, toolbarActions);
   const pages = document.createElement('div'); pages.className = 'pages';
   const loading = document.createElement('div'); loading.className = 'loading'; loading.textContent = 'Loading clickable choices…'; pages.append(loading);
   shell.append(toolbar, pages); shadow.append(style, shell); container.append(element);
@@ -756,6 +774,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       }
 
       for (const target of targets) {
+        // Never invent clickable choices for PDF headers the response table did
+        // not list — that is how finished homeworks kept showing 70+ options.
+        if (!options.optionMaximums.has(target.questionNumber)) continue;
         if (currentAnswered.has(target.questionNumber)) {
           // If a user has already answered a question do not show the option to choose answers for that
           continue;

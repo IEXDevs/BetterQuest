@@ -5,6 +5,7 @@ import { findHomepageSlot } from '../adapters/quest/homepage';
 import { createHomepageOverview } from '../features/assignments/homepage';
 import { createCourseArtwork } from '../features/courses/artwork';
 import { createMeetingTimesEnhancer } from '../features/courses/meeting-times';
+import { isCourseEffect, setCourseEffectOverrides, type CourseEffect } from '../features/courses/effects';
 import { featurePreferences, type FeaturePreferences } from '../shared/models';
 import { createQuestTheme } from '../features/theme/quest';
 import { questionAdapter } from '../adapters/quest/questions';
@@ -16,11 +17,14 @@ import { createAssignmentGroupPreviews } from '../features/assignments/group-pre
 import { createBookmarkControls } from '../features/bookmarks/controls';
 import { BookmarkService } from '../features/bookmarks/service';
 import { createPdfController } from '../features/pdf/controller';
-import { findPdfAssessment, findSlideAssessment } from '../adapters/quest/assessment';
+import { findPdfAssessment, findSlideAssessment, findLockedAssessment, findPracticeSlides, isEmptyResponseTable } from '../adapters/quest/assessment';
 import { createPdfAssessmentWorkspace, createSlideAssessmentEnhancement } from '../features/assessment/workspace';
+import { createLockedAssessmentEnhancement } from '../features/assessment/locked';
+import { createPracticeSlideEnhancement } from '../features/assessment/practice';
 import { createAssessmentHeader } from '../features/assessment/header';
 import { createCourseDetailsFacelift, collapseCourseCategoriesByDefault, isCourseShowPage } from '../features/courses/details-enhancer';
 import { enhanceCourseReviewTab, findReviewPane, disposeReviewSliders } from '../features/courses/review-enhancer';
+import { createScrollTopGuard } from '../features/navigation/scroll-top';
 import { execute, subscribeLocal, type Execute } from '../shared/client';
 
 /** Composition point: null adapters create no controls, observers, RPCs, or CSS. */
@@ -31,10 +35,14 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
   let enabled: FeaturePreferences = { assignments: true, bookmarks: true };
   let ready = false, disposed = false, preferenceGeneration = 0;
   const theme = createQuestTheme(document, window);
+  const scrollTop = createScrollTopGuard(document, window);
   if (assignmentAdapter) {
     const adapter = assignmentAdapter;
     const tracker = new AssignmentTracker(run);
     definitions.push({ name: 'assignments', locate: doc => ready && enabled.assignments ? adapter.locate(doc) : null,
+      // `style` is required so DataTables "processing" display toggles re-scan.
+      // Collapse clears Bootstrap height/collapsing so those writes cannot pump
+      // the page taller on every animation frame.
       attributeFilter: ['class', 'href', 'data-order', 'style'],
       mount: root => {
         let fingerprint = '';
@@ -105,7 +113,7 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       return doc.querySelector<HTMLElement>('#target') || doc.querySelector<HTMLElement>('#student-course-info-header') || null;
     },
     mount: root => {
-      const facelift = createCourseDetailsFacelift(root as HTMLElement);
+      const facelift = createCourseDetailsFacelift(root as HTMLElement, run);
       return { refresh: () => facelift.reconcile(), dispose: facelift.dispose };
     },
   });
@@ -173,10 +181,28 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       return { refresh: header.reconcile, dispose: header.dispose };
     },
   });
-  definitions.push({ name: 'pdf-assessment-workspace', locate: doc => findPdfAssessment(doc)?.root || null,
+  definitions.push({ name: 'pdf-assessment-workspace', locate: doc => {
+      const found = findPdfAssessment(doc);
+      // Past-due / locked quizzes still ship an empty DataTables shell + PDF
+      // chrome. Enhancing that shell hides the native page with nothing to show.
+      if (!found || isEmptyResponseTable(found.table)) return null;
+      return found.root;
+    },
     attributeFilter: ['class', 'value', 'disabled', 'hidden'], observeOwnedRemovals: true, mount: root => {
       const workspace = createPdfAssessmentWorkspace(root as HTMLElement);
       return { refresh: () => workspace.reconcile(), dispose: workspace.dispose };
+    },
+  });
+  definitions.push({ name: 'locked-assessment', locate: doc => findLockedAssessment(doc),
+    attributeFilter: ['class', 'value', 'disabled', 'hidden'], observeOwnedRemovals: true, mount: root => {
+      const locked = createLockedAssessmentEnhancement(root as HTMLElement);
+      return { refresh: () => locked.reconcile(), dispose: locked.dispose };
+    },
+  });
+  definitions.push({ name: 'practice-slides', locate: doc => findPracticeSlides(doc),
+    attributeFilter: ['class', 'aria-selected', 'hidden'], observeOwnedRemovals: true, mount: root => {
+      const practice = createPracticeSlideEnhancement(root as HTMLElement);
+      return { refresh: () => practice.reconcile(), dispose: practice.dispose };
     },
   });
   definitions.push({ name: 'slide-assessment-workspace', locate: doc => findSlideAssessment(doc),
@@ -203,6 +229,11 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       if (disposed || current !== preferenceGeneration) return;
       enabled = featurePreferences(state.preferences); ready = true;
       theme.update(state.preferences.theme);
+      const effectOverrides: Record<string, CourseEffect> = {};
+      for (const [key, value] of Object.entries(state.preferences.courseEffects || {})) {
+        if (isCourseEffect(value)) effectOverrides[key] = value;
+      }
+      setCourseEffectOverrides(effectOverrides);
       if (enabled.animations === false) document.documentElement.dataset.betterquestAnimations = 'disabled';
       else document.documentElement.removeAttribute('data-betterquest-animations');
       if (enabled.celebrations === false) document.documentElement.dataset.betterquestCelebrations = 'disabled';
@@ -210,12 +241,13 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       if (enabled.whimsy) document.documentElement.dataset.betterquestWhimsy = 'enabled';
       else document.documentElement.removeAttribute('data-betterquest-whimsy');
       runtime.reconcile();
-      runtime.refresh(['course-artwork', 'bookmarks']);
+      runtime.refresh(['course-artwork', 'course-details-facelift', 'bookmarks']);
     } catch { /* Do not mount storage-backed features with unknown preferences. */ }
   }
   const reconcile = () => {
     theme.reconcile();
     runtime.reconcile();
+    scrollTop.reconcile();
     if (!unsubscribe) { try { unsubscribe = subscribe(() => { void refreshPreferences(); }); } catch { /* Page navigation still reconciles existing controls. */ } }
     if (!ready) void refreshPreferences();
   };
@@ -231,7 +263,7 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
     window.removeEventListener('betterquest:preferences-changed', preferencesChanged);
     window.removeEventListener('focus', preferencesChanged);
     manualAbort.abort();
-    unsubscribe?.(); runtime.dispose(); theme.dispose();
+    unsubscribe?.(); runtime.dispose(); theme.dispose(); scrollTop.dispose();
     document.documentElement.removeAttribute('data-betterquest-animations');
     document.documentElement.removeAttribute('data-betterquest-celebrations');
     document.documentElement.removeAttribute('data-betterquest-whimsy');

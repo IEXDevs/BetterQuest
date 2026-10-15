@@ -15,7 +15,7 @@ export class AssignmentTracker {
   async read() { return (await this.run({ kind: 'state:read' })).cache; }
 
   async requestRefresh(now = new Date().toISOString()) {
-    // Invalidate freshness locally; there is intentionally no background fetcher.
+    // Invalidate freshness locally. Course pages are opened on demand by Sync.
     return this.run({ kind: 'assignments:refresh', requestedAt: now });
   }
 

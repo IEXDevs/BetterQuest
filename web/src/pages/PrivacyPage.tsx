@@ -55,7 +55,7 @@ export function PrivacyPage() {
           <div className="policy-summary">
             <span>In plain English</span>
             <dl>
-              <div><dt>Stored locally</dt><dd>Preferences, observed assignment metadata, bookmarks, and notes.</dd></div>
+              <div><dt>Stored locally</dt><dd>Preferences, assignment details from pages you open, bookmarks, and notes.</dd></div>
               <div><dt>Never collected</dt><dd>Passwords, submitted answers, response text, or solution text.</dd></div>
               <div><dt>Sent only in limited cases</dt><dd>Sanitized diagnostics and de-identified product measurements.</dd></div>
             </dl>
@@ -107,9 +107,9 @@ export function PrivacyPage() {
                 <ul>
                   <li>theme and feature preferences;</li>
                   <li>course and assignment metadata visible on Quest, including titles, source identifiers, URLs, deadlines, and completion labels;</li>
-                  <li>a record of which course pages were observed and when they were last observed;</li>
+                  <li>a record of which course pages you opened and when you last opened them;</li>
                   <li>question identifiers, question numbers, source links, bookmark status, and bookmark notes; and</li>
-                  <li>locally cached study records created by enabled features.</li>
+                  <li>study records saved on this device by enabled features.</li>
                 </ul>
                 <p>
                   This information remains in Chrome storage on your device. BetterQuest does not currently operate an
@@ -140,7 +140,7 @@ export function PrivacyPage() {
                 </div>
                 <p>
                   BetterQuest does not scan every course automatically. An assignment appears in the overview only after
-                  the relevant Quest page has been visited and observed.
+                  you open the relevant Quest page.
                 </p>
               </section>
             </AnimatedContent>

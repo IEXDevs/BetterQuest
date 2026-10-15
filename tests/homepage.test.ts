@@ -58,5 +58,48 @@ test('homepage progress bar flows like liquid and stays accessible', async () =>
     assert.match(css, /@keyframes bq-flow/, 'Bar fill flows like liquid');
     assert.match(css, /\.meter:hover span\{animation-duration:1s\}/, 'Hovering speeds the flow');
     assert.match(css, /bq-sheen/, 'Bar carries a shine sweep');
+    assert.equal(host.shadowRoot!.querySelector('.sync-btn'), null, 'Sync is automatic — no manual button');
   } finally { overview.dispose(); dom.window.close(); }
+});
+
+test('homepage auto-syncs unscanned courses in the background without a Sync button', async () => {
+  const dom = new JSDOM('<div id="courses-table-div"><div id="courses-table_wrapper">' +
+    '<table id="courses-table"><thead><tr><th>Name</th><th>Unique</th></tr></thead><tbody>' +
+    '<tr><td><a href="/student/courses/show?course=3491354">Calculus</a></td><td>3491354</td></tr>' +
+    '</tbody></table></div></div><div id="enroll-div"></div>', { url, pretendToBeVisual: true });
+  const doc = dom.window.document;
+  const current = emptyState();
+  current.cache.courses = [{
+    id: courseId('unique:3491354'),
+    sourceId: 'unique:3491354',
+    title: 'Calculus (3491354)',
+    url: courseUrl,
+  }];
+  const previous = globalThis.chrome;
+  const messages: unknown[] = [];
+  globalThis.chrome = {
+    runtime: {
+      sendMessage: async (message: unknown) => {
+        messages.push(message);
+        return { ok: true, result: 'ok' };
+      },
+    },
+  } as unknown as typeof chrome;
+  const overview = createHomepageOverview(
+    doc.querySelector('#courses-table-div')!,
+    (async () => current) as never,
+  );
+  try {
+    await overview.refresh();
+    // Let the auto-sync pass schedule and call the background worker.
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const host = doc.querySelector('[data-betterquest="homepage-overview"]')!;
+    assert.equal(host.shadowRoot!.querySelector('.sync-btn'), null);
+    assert.ok(messages.some(message =>
+      Boolean(message && typeof message === 'object' && 'type' in message && message.type === 'betterquest:sync-course')));
+  } finally {
+    overview.dispose();
+    globalThis.chrome = previous;
+    dom.window.close();
+  }
 });

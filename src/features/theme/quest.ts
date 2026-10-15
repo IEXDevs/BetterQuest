@@ -15,7 +15,6 @@ export function createQuestTheme(document: Document, window: Window) {
   const scopes = new Map<HTMLElement, { scope: ReturnType<typeof createThemeScope>; original: string | null; originalPage: string | null }>();
   let page: { element: HTMLElement; original: string | null; originalPage: string | null } | undefined;
   const media = window.matchMedia?.('(prefers-color-scheme: dark)');
-  const dark = () => resolveTheme(preference, Boolean(media?.matches)) === 'dark';
 
   function restore(element: HTMLElement, original: string | null, originalPage: string | null) {
     if (original === null) element.removeAttribute('data-betterquest-theme');
@@ -25,8 +24,20 @@ export function createQuestTheme(document: Document, window: Window) {
     else element.setAttribute('data-betterquest-page', originalPage);
   }
 
+  /**
+   * Slides homework and additional/practice HW use Quest's `#presentation-div`
+   * paper deck. Dark mode is only for main Quest pages and the PDF/classic view.
+   */
+  function isPaperDeckPage() {
+    return Boolean(document.querySelector('#target #presentation-div, #main-content #presentation-div, #presentation-div'));
+  }
+
+  function activePreference(): ThemePreference {
+    return isPaperDeckPage() ? 'light' : preference;
+  }
+
   function mark(element: HTMLElement) {
-    const next = dark() ? 'dark' : 'light';
+    const next = resolveTheme(activePreference(), Boolean(media?.matches)) === 'dark' ? 'dark' : 'light';
     if (element.getAttribute('data-betterquest-theme') !== next) element.setAttribute('data-betterquest-theme', next);
 
     const category = detectPageCategory(document);
@@ -39,6 +50,15 @@ export function createQuestTheme(document: Document, window: Window) {
         element.removeAttribute('data-betterquest-page');
       }
     }
+  }
+
+  function paintScopes() {
+    const scoped = activePreference();
+    for (const [root, value] of scopes) {
+      value.scope.update(scoped);
+      mark(root);
+    }
+    if (page) mark(page.element);
   }
 
   function reconcile() {
@@ -56,13 +76,16 @@ export function createQuestTheme(document: Document, window: Window) {
       }
     }
 
+    const scoped = activePreference();
     for (const root of roots) {
       if (!scopes.has(root)) {
         scopes.set(root, {
-          scope: createThemeScope(root, window, preference),
+          scope: createThemeScope(root, window, scoped),
           original: root.getAttribute('data-betterquest-theme'),
           originalPage: root.getAttribute('data-betterquest-page'),
         });
+      } else {
+        scopes.get(root)!.scope.update(scoped);
       }
       mark(root);
     }
@@ -79,10 +102,7 @@ export function createQuestTheme(document: Document, window: Window) {
     if (page) mark(page.element);
   }
 
-  const changed = () => {
-    for (const root of scopes.keys()) mark(root);
-    if (page) mark(page.element);
-  };
+  const changed = () => { paintScopes(); };
   media?.addEventListener('change', changed);
 
   const handleTabClick = (event: Event) => {
@@ -103,10 +123,7 @@ export function createQuestTheme(document: Document, window: Window) {
     available: () => Boolean(themeAdapter.locate(document)),
     reconcile,
     update(next: ThemePreference) {
-      if (preference !== next) {
-        preference = next;
-        for (const value of scopes.values()) value.scope.update(next);
-      }
+      if (preference !== next) preference = next;
       reconcile();
     },
     dispose() {

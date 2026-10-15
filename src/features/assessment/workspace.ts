@@ -1,5 +1,6 @@
 import {
   findPdfAssessment,
+  isEmptyResponseTable,
   isNativeControlAvailable,
   isResponseOptionAvailable,
   readAssessmentMetrics,
@@ -568,9 +569,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     :host([data-collapsed="true"]) .actions{justify-content:space-between}
 
     .question{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--bq-border,#d7e2f0);border-radius:3px;background:var(--bq-surface,#fff);box-shadow:0 2px 8px #0f172a08;transition:border-color .18s ease,box-shadow .18s ease}
-    .question[data-status="done"]{border-left:3.5px solid #16a34a}
-    .question[data-status="retry"]{border-left:3.5px solid #ea580c}
-    .question[data-status="wrong"]{border-left:3.5px solid #dc2626}
+    .question[data-status="done"]{border-color:color-mix(in srgb,#16a34a 45%,var(--bq-border,#d7e2f0))}
+    .question[data-status="retry"]{border-color:color-mix(in srgb,#ea580c 45%,var(--bq-border,#d7e2f0))}
+    .question[data-status="wrong"]{border-color:color-mix(in srgb,#dc2626 45%,var(--bq-border,#d7e2f0))}
     .question:focus-within{border-color:var(--bq-accent,#227ab0)}
     .question-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
     .number{font-weight:800;font-size:13px;color:var(--bq-text,#18253a);border:0;background:transparent;padding:2px 4px;margin:-2px -4px;border-radius:2px;cursor:pointer;font-family:inherit;text-align:left}
@@ -849,6 +850,24 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   /** Questions already styled as correct on the PDF. */
   const markedCorrect = new Set<number>();
   let lastBindings: ReturnType<typeof readAssessmentResponses> = [];
+  /** Survive DataTables Scroller dropping rows from the DOM between reconciles. */
+  const knownByNumber = new Map<number, ReturnType<typeof readAssessmentResponses>[number]>();
+  const knownAnswered = new Set<number>();
+
+  function mergeBindings(bindings: ReturnType<typeof readAssessmentResponses>) {
+    const live = new Map<number, ReturnType<typeof readAssessmentResponses>[number]>();
+    for (const binding of bindings) {
+      const qn = Number(binding.number);
+      if (!Number.isInteger(qn) || qn <= 0) continue;
+      live.set(qn, binding);
+      knownByNumber.set(qn, binding);
+      if (binding.answered) knownAnswered.add(qn);
+      else knownAnswered.delete(qn);
+    }
+    return [...knownByNumber.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([qn, cached]) => live.get(qn) || cached);
+  }
 
   function readTries(table: HTMLTableElement, binding: { id: string }): { used: number; max: number } | null {
     const row = table.querySelector(`tr[data-id="${binding.id}"]`) ||
@@ -872,7 +891,11 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     const status = row.querySelector('.status');
     const statusText = status?.textContent || '';
     const success = Boolean(status?.querySelector('.text-success, [class*="text-success"]'));
-    if (success || (/\bcorrect\b/i.test(statusText) && !/\b(?:incorrect|not correct)\b/i.test(statusText))) return 'correct';
+    if (success
+      || (/\bcorrect\b/i.test(statusText) && !/\b(?:incorrect|not correct)\b/i.test(statusText))
+      || (/check\s*correct/i.test(statusText) && !/incorrect/i.test(statusText))) {
+      return 'correct';
+    }
     const danger = Boolean(status?.querySelector('.text-danger, [class*="text-danger"]'));
     if (danger || /\bincorrect\b/i.test(statusText)) return 'incorrect';
     const prev = row.querySelector('.previous')?.textContent || '';
@@ -1052,6 +1075,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         return;
       }
       syncPdfVisibility(pdfViewerReady !== false);
+      // Re-apply after the async paint: a finished homework must not keep
+      // option boxes that were mapped before every response row was known.
+      pdfViewer.setAnsweredQuestions?.(new Set(knownAnswered));
       applyMarks(lastBindings);
     });
   }
@@ -1116,6 +1142,11 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     if (tag === 'style' || tag === 'script' || tag === 'link') return false;
     if (tag === 'br') return true;
     if (el.id === 'pdf-frame' || el.id === 'view-responses-table-id' || el.id === 'tally-div') return false;
+    // Never collapse the assignment PDF download — icon-only or empty-label links
+    // still have to stay reachable until the header promotes them.
+    if (el.querySelector('a[href*="/images/problem_pdf"], a[href*="/images/download_pdf"], a[data-betterquest-download]')) {
+      return false;
+    }
     if (el.querySelector('table, iframe, canvas, select, button, input, textarea, img, svg, audio, video, embed, object, a[href], [data-betterquest]')) {
       const link = el.querySelector('a[href]');
       if (!link) return false;
@@ -1159,11 +1190,13 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     if (!view) return;
     if (document.fullscreenElement || root.dataset.betterquestFullscreen === 'true') return;
     // Size the reading row itself, not the outer grid that also contains
-    // Quest's headers. Footer height does not participate in this calculation.
+    // Quest's headers. Cap to the viewport so a ResizeObserver feedback loop
+    // cannot grow the page without bound.
     const sizingRoot = root.querySelector<HTMLElement>('#pdf-frame') || root;
     const viewportBottom = view.visualViewport
       ? view.visualViewport.offsetTop + view.visualViewport.height : view.innerHeight;
-    const available = Math.max(240, Math.floor(viewportBottom - sizingRoot.getBoundingClientRect().top - 12));
+    const fromTop = Math.floor(viewportBottom - sizingRoot.getBoundingClientRect().top - 12);
+    const available = Math.max(240, Math.min(fromTop, Math.floor(view.innerHeight - 48)));
     const height = `${available}px`;
     if (root.style.getPropertyValue('--bq-pdf-workspace-height') !== height) {
       root.style.setProperty('--bq-pdf-workspace-height', height);
@@ -1179,13 +1212,53 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   document.defaultView?.visualViewport?.addEventListener('resize', fitWorkspace);
   document.addEventListener('fullscreenchange', scheduleFitWorkspace);
   const WorkspaceResizeObserver = document.defaultView?.ResizeObserver;
+  // Observe only the workspace root. Watching the parent re-enters whenever
+  // our own height variable changes the parent's size.
   const workspaceResizeObserver = WorkspaceResizeObserver ? new WorkspaceResizeObserver(scheduleFitWorkspace) : undefined;
   workspaceResizeObserver?.observe(root);
-  if (root.parentElement) workspaceResizeObserver?.observe(root.parentElement);
+
+  function clearWorkspaceEnhancement() {
+    syncPdfVisibility(false);
+    host.remove();
+    root.removeAttribute('data-betterquest-pdf-workspace');
+    root.removeAttribute('data-betterquest-pdf-mode');
+    root.removeAttribute('data-betterquest-rail');
+    document.documentElement.removeAttribute('data-betterquest-pdf-mode');
+    document.body.removeAttribute('data-betterquest-pdf-mode');
+    for (let p: HTMLElement | null = root.parentElement; p && p !== document.body; p = p.parentElement) {
+      p.removeAttribute('data-betterquest-pdf-parent');
+    }
+    const responseRoot = root.querySelector<HTMLElement>('#view-responses-table-id');
+    responseRoot?.removeAttribute('data-betterquest-native-responses');
+    responseRoot?.removeAttribute('data-betterquest-native-visible');
+    for (const el of root.querySelectorAll<HTMLElement>('[data-betterquest-native-stats="true"]')) {
+      el.style.removeProperty('display');
+      el.removeAttribute('data-betterquest-native-stats');
+    }
+    for (const el of [...collapsedGaps]) restoreGap(el);
+  }
 
   function render() {
     if (disposed) return;
-    const elements = findPdfAssessment(document); if (!elements || elements.root !== root) { host.remove(); return; }
+    const elements = findPdfAssessment(document);
+    if (!elements || elements.root !== root) {
+      clearWorkspaceEnhancement();
+      return;
+    }
+    const freshBindings = withNativeResponsesVisible(elements, () => readAssessmentResponses(elements.table));
+    const emptyShell = isEmptyResponseTable(elements.table);
+    if (!freshBindings.length && !knownByNumber.size) {
+      if (responseSignature && !emptyShell) {
+        // Quest re-seeds its virtualized rows around submits; a momentarily
+        // empty table must not wipe the last good UI.
+        return;
+      }
+      // Past-due / locked quizzes: leave Quest's native page alone.
+      clearWorkspaceEnhancement();
+      return;
+    }
+    const bindings = mergeBindings(freshBindings);
+    if (!bindings.length) return;
     for (let p: HTMLElement | null = root.parentElement; p && p !== document.body; p = p.parentElement) {
       p.dataset.betterquestPdfParent = 'true';
     }
@@ -1196,20 +1269,12 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     if (host.parentElement !== root || host.previousElementSibling !== elements.pdfFrame) elements.pdfFrame.after(host);
     reconcileLeadingGaps(elements.pdfFrame);
     fitWorkspace();
-    const bindings = withNativeResponsesVisible(elements, () => readAssessmentResponses(elements.table));
-    if (!bindings.length && responseSignature) {
-      // Quest re-seeds its virtualized rows around submits; a momentarily
-      // empty table must not wipe the last good UI.
-      return;
-    }
     elements.responseRoot.dataset.betterquestNativeResponses = 'true';
     hideNativeStatsElements(document, root);
     paintSummary(bindings, elements.tally);
     ensurePdfViewer(elements, bindings);
-    const answeredQuestions = new Set<number>(
-      bindings.filter(b => b.answered).map(b => Number(b.number)).filter(Number.isInteger)
-    );
-    pdfViewer?.setAnsweredQuestions?.(answeredQuestions);
+    // Use the accumulated set — Scroller may only expose a window of rows now.
+    pdfViewer?.setAnsweredQuestions?.(new Set(knownAnswered));
     if (pendingSubmit) {
       const target = bindings.find(item => Number(item.number) === pendingSubmit!.questionNumber);
       if (!target || target.answered || target.attempts !== pendingSubmit.attempts) {
@@ -1371,7 +1436,12 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       questions.append(card);
       if (binding.select.value) pdfViewer?.setSelected(Number(binding.number), binding.select.value);
     }
-    if (!bindings.length) { const empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'Loading assignments…'; questions.append(empty); }
+    if (!bindings.length) {
+      const empty = document.createElement('p');
+      empty.className = 'empty';
+      empty.textContent = 'No questions available.';
+      questions.append(empty);
+    }
   }
 
   return { reconcile: render, dispose() {

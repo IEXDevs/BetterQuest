@@ -1,5 +1,5 @@
 import { readHomepageCourseRows } from '../../adapters/quest/homepage';
-import { COURSE_EFFECT_CSS, courseArtKey, courseArtMood, courseEffect, palette, solidColor } from './effects';
+import { COURSE_EFFECT_CSS, courseArtKey, courseArtMood, palette, resolveCourseEffect, solidColor } from './effects';
 import type { CourseEffect } from './effects';
 import { REACTBITS_EFFECTS, type EffectInstance } from './reactbits';
 import { rememberCourseCodes } from './course-codes';
@@ -11,6 +11,8 @@ interface Artwork {
   fx: EffectInstance | null;
   /** Course identity the mounted art was built from; a change remounts. */
   artKey: string;
+  /** Resolved backdrop for this mount; remount when the saved pick changes. */
+  effect: CourseEffect;
 }
 
 /** Live real-effect mounts across the homepage cards. Cards beyond the cap
@@ -109,7 +111,7 @@ export function createCourseArtwork(root: Element) {
     // Keyed by the course, not the department, so every course gets its own
     // backdrop — and so the course-page hero picks the same one.
     const artKey = courseArtKey({ code: item.courseCode, unique: item.courseUnique, departmentCode: item.departmentCode });
-    const fx = courseEffect(artKey);
+    const fx = resolveCourseEffect(artKey);
     const mood = courseArtMood(artKey);
     const animationsDisabled = isAnimationsDisabled();
     if (animationsDisabled) host.setAttribute('data-animations', 'disabled');
@@ -213,7 +215,7 @@ export function createCourseArtwork(root: Element) {
     const imageHidden = Boolean(item.nativeImage?.hidden);
     if (item.nativeImage) item.nativeImage.hidden = true;
     item.artworkCell.prepend(host);
-    const artwork: Artwork = { host, image: item.nativeImage, imageHidden, fx: null, artKey };
+    const artwork: Artwork = { host, image: item.nativeImage, imageHidden, fx: null, artKey, effect: fx };
     mounted.set(item.row, artwork);
     syncFx(artwork, animationsDisabled); // Paint the real effect right away.
   }
@@ -229,7 +231,8 @@ export function createCourseArtwork(root: Element) {
       for (const item of items) {
         const current = mounted.get(item.row);
         const artKey = courseArtKey({ code: item.courseCode, unique: item.courseUnique, departmentCode: item.departmentCode });
-        if (current && (current.artKey !== artKey || current.host.parentElement !== item.artworkCell ||
+        const effect = resolveCourseEffect(artKey);
+        if (current && (current.artKey !== artKey || current.effect !== effect || current.host.parentElement !== item.artworkCell ||
           current.image !== item.nativeImage || Boolean(current.image && !current.image.isConnected))) remove(item.row);
         if (!mounted.has(item.row)) mount(item);
       }

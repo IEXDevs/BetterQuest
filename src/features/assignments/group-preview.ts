@@ -9,7 +9,9 @@ export function createAssignmentGroupPreviews(root: Element, run: Execute = exec
   const document = root.ownerDocument;
   const visibility = document.createElement('style');
   visibility.dataset.betterquest = 'assignment-group-preview-style';
-  visibility.textContent = '.show + [data-betterquest="assignment-group-preview"], .collapsing + [data-betterquest="assignment-group-preview"] { display: none !important; }';
+  // Hide only while Bootstrap is mid-animation; an open category with pending
+  // work keeps its preview visible (collapsed categories stay preview-free).
+  visibility.textContent = '.collapsing + [data-betterquest="assignment-group-preview"] { display: none !important; }';
   root.append(visibility);
   const mounted = new Map<HTMLElement, { host: HTMLElement; content: HTMLElement; signature: string }>();
   let snapshot: AssignmentSnapshot | undefined;

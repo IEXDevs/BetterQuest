@@ -80,7 +80,6 @@ export const QUEST_DARK_STYLES = `
     background:var(--bq-surface,#182434)!important;
     color:var(--bq-muted,#a9b8ca)!important;
     border:1px solid var(--bq-border,#3b4b63)!important;
-    border-left-width:2px!important;
     border-radius:4px!important;
     font-size:.8rem!important;
     line-height:1.45!important;
@@ -147,7 +146,9 @@ export const QUEST_DARK_STYLES = `
   #main-content[data-betterquest-theme="dark"] :where(#courses-table,table[id^="instances-table-eh"],table[id^="instance-table-courseuserassignment_"]) thead th { background:#2b3c52!important; color:#e7eef8!important; border-color:var(--bq-border); }
   #main-content[data-betterquest-theme="dark"] :where(#courses-table,table[id^="instances-table-eh"],table[id^="instance-table-courseuserassignment_"]) tbody :where(td,th) { color:inherit; border-color:var(--bq-border); }
   #main-content[data-betterquest-theme="dark"] :where(.table-striped) tbody tr:nth-of-type(odd) { background-color:#223144!important; }
-  #main-content[data-betterquest-theme="dark"] :where(.table-hover, table, .table) tbody tr:hover, #main-content[data-betterquest-theme="dark"] :where(.table-hover, table, .table) tbody tr:hover :where(td, th, span, div, p, strong, b, em) { background-color:#253952!important; color:#f8fafc!important; }
+  /* Paint only the cells on row hover. Nested spans (meeting times, badges)
+     kept their own backgrounds and showed as light blocks over the row. */
+  #main-content[data-betterquest-theme="dark"] :where(.table-hover, table, .table) tbody tr:hover :where(td, th) { background-color:#253952!important; color:#f8fafc!important; }
   #main-content[data-betterquest-theme="dark"] :where(.table-hover, table, .table, #courses-table, table[id^="instances-table-eh"], table[id^="instance-table-courseuserassignment_"]) tbody tr:hover a:not(.btn) { color:#818cf8!important; text-shadow:0 0 8px rgba(129,140,248,.35); text-decoration:underline; }
   :root[data-betterquest-animations="disabled"] *, :root[data-betterquest-animations="disabled"] *::before, :root[data-betterquest-animations="disabled"] *::after { animation:none!important; transition:none!important; }
   #main-content[data-betterquest-theme="dark"] #courses-table td:first-child img { background:#fff; border-radius:4px; }
@@ -485,7 +486,7 @@ export const QUEST_DARK_STYLES = `
     letter-spacing: 0.01em;
     white-space: nowrap !important;
     line-height: 1.3 !important;
-    background: transparent !important;
+    background: none !important;
     border: none !important;
     padding: 0 !important;
     border-radius: 0 !important;
@@ -496,7 +497,7 @@ export const QUEST_DARK_STYLES = `
   }
   #main-content[data-betterquest-theme="dark"] .bq-meeting-hours {
     color: #94a3b8 !important;
-    background: transparent !important;
+    background: none !important;
     border: none !important;
   }
   #main-content[data-betterquest-theme="light"] .bq-meeting-days {
@@ -504,8 +505,14 @@ export const QUEST_DARK_STYLES = `
   }
   #main-content[data-betterquest-theme="light"] .bq-meeting-hours {
     color: #475569 !important;
-    background: transparent !important;
+    background: none !important;
     border: none !important;
+  }
+  /* Meeting-time chips must never pick up a light hover fill inside dark rows. */
+  #main-content[data-betterquest-theme="dark"] :where(.table-hover, table, .table) tbody tr:hover .bq-meeting-time,
+  #main-content[data-betterquest-theme="dark"] :where(.table-hover, table, .table) tbody tr:hover .bq-meeting-time :where(.bq-meeting-days, .bq-meeting-hours) {
+    background: none !important;
+    box-shadow: none !important;
   }
 
   /* =========================================================================

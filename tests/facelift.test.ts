@@ -7,9 +7,10 @@ import { createSettingsMenu } from '../src/features/settings/menu';
 import { LocalRepository } from '../src/storage/repository';
 import { createQuestTheme } from '../src/features/theme/quest';
 import { detectPageCategory } from '../src/adapters/quest/theme';
-import { readAssessmentMetrics, readAssessmentResponses } from '../src/adapters/quest/assessment';
+import { isEmptyResponseTable, readAssessmentMetrics, readAssessmentResponses } from '../src/adapters/quest/assessment';
 import { formatMeetingTime, createMeetingTimesEnhancer } from '../src/features/courses/meeting-times';
 import { enhanceCourseInfoCard, collapseCourseCategoriesByDefault, createCourseDetailsFacelift, isCourseShowPage } from '../src/features/courses/details-enhancer';
+import { createAssessmentHeader } from '../src/features/assessment/header';
 import type { Execute } from '../src/shared/client';
 import type { LocalState } from '../src/shared/models';
 
@@ -182,6 +183,338 @@ test('PDF assessment workspace synchronizes answer chips with native controls wi
     features.dispose();
     assert.equal(dom.window.document.querySelector('[data-betterquest="assessment-rail"]'), null);
     assert.equal(dom.window.document.querySelector('#target')?.hasAttribute('data-betterquest-pdf-workspace'), false);
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('past-due quizzes with an empty response table keep the native Quest page', async () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target">
+    <div id="info-header-div"><div class="d-flex justify-content-between"><span id="due_date_field">Due date 9/21/26 12:00 AM</span></div></div>
+    <p>This module is past due, and submissions are prevented.</p>
+    <p>Due Date has Passed.</p>
+    <div id="pdf-frame"><div id="presentation-pdf-frame"><iframe src="/student/images/download_pdf?instance=courseuserassignment_1" title="Assignment PDF"></iframe></div></div>
+    <div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><thead><tr><th>Response</th><th>Status</th><th>Tries</th><th>Points Earned</th></tr></thead>
+      <tbody><tr class="odd"><td valign="top" colspan="4" class="dataTables_empty">No data available in table</td></tr></tbody>
+    </table></div>
+    <div id="tally-div">55 out of 100 points (55%) Class Average 74.93 points / 74.93% Standard Deviation 25.74</div>
+  </div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
+  prepare(dom);
+  const table = dom.window.document.querySelector<HTMLTableElement>('#instance-table-courseuserassignment_1')!;
+  assert.equal(isEmptyResponseTable(table), true);
+  assert.equal(readAssessmentResponses(table).length, 0);
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    assert.equal(dom.window.document.querySelector('[data-betterquest="assessment-rail"]'), null);
+    assert.equal(dom.window.document.querySelector('#target')?.hasAttribute('data-betterquest-pdf-workspace'), false);
+    assert.equal(dom.window.document.querySelector('#target')?.getAttribute('data-betterquest-pdf-mode'), null);
+    const iframe = dom.window.document.querySelector<HTMLIFrameElement>('iframe')!;
+    assert.equal(iframe.hidden, false);
+    assert.notEqual(dom.window.getComputedStyle(iframe).display, 'none');
+    assert.equal(dom.window.document.querySelector('#tally-div')?.textContent?.includes('55 out of 100'), true);
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('a past-due assessment gets a clear locked card instead of an empty table shell', async () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target">
+    <div id="info-header-div"><div class="d-flex justify-content-between">
+      <div id="due_date_field"><span id="due_date_span"><span class="qlabel">Due date</span><span class="qtext">9/27/26 12:00 AM</span></span></div>
+      <div class="qsize"><span class="text-danger font-weight-bold">This module is past due, and submissions are prevented.</span></div>
+    </div></div>
+    <div class="row">
+      <div class="col-md-8"><div id="pdf-frame"></div></div>
+      <div class="col-md-4">
+        <div class="view-responses" id="view-responses-table-id">
+          <div class="h5">Due Date has Passed.</div>
+          <div id="instance-table-courseuserassignment_1_wrapper" class="dataTables_wrapper">
+            <div class="row"><div class="col-sm-12 col-md-6"><div class="dataTables_length"><label>Show <select><option>10</option></select> entries</label></div></div></div>
+            <div class="row"><div class="col-sm-12"><div class="dataTables_scroll"><div class="dataTables_scrollHead"><table><thead><tr><th>Response</th></tr></thead></table></div>
+              <div class="dataTables_scrollBody"><table id="instance-table-courseuserassignment_1"><thead><tr><th>Response</th></tr></thead>
+                <tbody><tr class="odd"><td colspan="1" class="dataTables_empty">No data available in table</td></tr></tbody></table></div></div></div></div>
+            <div class="row"><div class="col-sm-12 col-md-7"><div class="dataTables_paginate"><ul class="pagination"><li class="paginate_button disabled"><a>Previous</a></li><li class="paginate_button disabled"><a>Next</a></li></ul></div></div></div>
+          </div>
+          <div class="SubmitFeedback"></div>
+        </div>
+        <hr>
+        <div id="tally-div" class="tally"><div class="text-center"><div class="h4">92 out of 100 points (92%)</div>
+          <div><span class="qlabel">Class Average</span><span class="qtext">88.04 points / 88.04%</span></div>
+          <div><span class="qlabel">Standard Deviation</span><span class="qtext">15.54</span></div></div></div>
+      </div>
+    </div>
+  </div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    const doc = dom.window.document;
+    const target = doc.querySelector<HTMLElement>('#target')!;
+    assert.equal(target.dataset.betterquestLocked, 'true');
+
+    const notice = doc.querySelector<HTMLElement>('[data-betterquest="locked-notice"]')!;
+    assert.ok(notice, 'A past-due assessment gets an explanation of its own');
+    assert.match(notice.textContent || '', /Past due/, 'The card leads with a plain status');
+    assert.match(notice.textContent || '', /9\/27\/26 12:00 AM/, 'The notice repeats the closing date in plain language');
+    assert.equal(notice.parentElement?.id, 'view-responses-table-id', 'The notice belongs to the response column');
+
+    // Quest's own content survives; only the empty table chrome is styled away.
+    assert.equal(doc.querySelector('#tally-div')?.textContent?.includes('92 out of 100'), true);
+    assert.match(doc.querySelector('#view-responses-table-id .h5')?.textContent || '', /Due Date has Passed/);
+    assert.equal(doc.querySelector('#info-header-div .text-danger')?.textContent?.includes('past due'), true);
+
+    const css = [...doc.querySelectorAll('style')].map(s => s.textContent || '').join('\n');
+    assert.match(css, /\.dataTables_paginate[^{]*\{ display: none !important; \}/, 'Dead pagination is not rendered');
+    assert.match(css, /\.dataTables_scrollHead[^{]*\{ display: none !important; \}/, 'The empty table header is not rendered');
+    assert.match(css, /\.col-md-8:not\(:has\(iframe/, 'The column Quest reserves for a PDF that never loaded is dropped');
+    assert.match(css, /\.col-md-4\s*\{[^}]*flex: 0 0 100% !important/, 'The score summary gets the full width');
+    assert.doesNotMatch(css, /border-left:\s*4px solid/, 'Past-due cards do not use a colored accent strip');
+    assert.match(css, /#tally-div \.qtext[^}]*text-align:\s*right/, 'Class average stretches across the wide score card');
+
+    features.dispose();
+    assert.equal(target.hasAttribute('data-betterquest-locked'), false, 'Disposing restores the page');
+    assert.equal(doc.querySelector('[data-betterquest="locked-notice"]'), null);
+  } finally { dom.window.close(); }
+});
+
+test('the toolbar reads Due date, then Completed, then the downloads', async () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target">
+    <div id="info-header-div"><div class="d-flex justify-content-between">
+      <div id="due_date_field"><div class="d-flex justify-content-start">
+        <div id="timer-div" class=""><span class="qsize"><i class="material-icons text-primary">schedule</i></span><span id="timerId" class="qsize"></span></div>
+        <div id="due-date-messaging-div" class="d-flex justify-content-start">
+          <span id="due_date_span"><div><span class="qlabel">Due date</span><span class="qtext">10/7/26 11:59 PM</span></div></span>
+          <div>&nbsp;&nbsp;&nbsp;</div>
+          <div><span class="qlabel">Completed</span><span class="qtext">10/6/26 11:17 PM</span></div>
+        </div>
+      </div></div>
+      <div><span class="float-right"></span></div>
+    </div></div>
+    <div><div class="d-flex justify-content-start"><div><div class="d-flex justify-content-start">
+      <div><a href="/student/images/problem_pdf?instance=courseuserassignment_1" target="_blank">PDF Download</a></div>
+      <div>&nbsp;</div>
+      <div><a href="/student/images/explanation_pdf?instance=courseuserassignment_1" target="_blank">PDF w/ expl</a></div>
+    </div></div></div></div>
+  </div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    const doc = dom.window.document;
+    const download = doc.querySelector<HTMLAnchorElement>('[data-betterquest-download]')!;
+    const completed = [...doc.querySelectorAll<HTMLElement>('#due-date-messaging-div > div')]
+      .find(el => /^completed/i.test(el.textContent?.trim() || ''))!;
+    const dueSpan = doc.querySelector('#due_date_span')!;
+
+    assert.equal(download.parentElement, completed, 'The download sits on the Completed block');
+    assert.ok(!dueSpan.contains(download), 'The download no longer splits Due date from Completed');
+    assert.equal(dueSpan.textContent?.replace(/\s+/g, ''), 'Duedate10/7/2611:59PM', 'The due line is left clean');
+
+    const explanation = doc.querySelector<HTMLAnchorElement>('[data-betterquest-explanation]')!;
+    assert.ok(explanation, 'The worked-solutions PDF stays reachable');
+    assert.equal(explanation.parentElement, completed, 'It joins the download instead of its own leftover row');
+    assert.equal(download.nextElementSibling, explanation);
+    assert.match(explanation.textContent || '', /solutions/i);
+
+    features.dispose();
+    const restored = doc.querySelector<HTMLAnchorElement>('a[href*="/images/problem_pdf"]')!;
+    assert.ok(restored, 'The download link survives dispose');
+    assert.equal(restored.hasAttribute('data-betterquest-download'), false, 'Disposing hands the page back to Quest');
+    assert.ok(!completed.contains(restored), 'and returns it to its native row');
+  } finally { dom.window.close(); }
+});
+
+test('the download falls back to the due date when nothing was completed', async () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target">
+    <div id="info-header-div"><div class="d-flex justify-content-between">
+      <div id="due_date_field"><div class="d-flex justify-content-start">
+        <div id="due-date-messaging-div" class="d-flex justify-content-start">
+          <span id="due_date_span"><div><span class="qlabel">Due date</span><span class="qtext">12/12/26 12:01 AM</span></div></span>
+        </div>
+      </div></div>
+      <div><span class="float-right"></span></div>
+    </div></div>
+    <div><div class="d-flex justify-content-start"><div><div class="d-flex justify-content-start">
+      <div><a href="/student/images/problem_pdf?instance=courseuserassignment_2" target="_blank">PDF Download</a></div>
+    </div></div></div></div>
+  </div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_2', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    const doc = dom.window.document;
+    const download = doc.querySelector<HTMLAnchorElement>('[data-betterquest-download]')!;
+    const row = doc.querySelector('#due_date_span > div')!;
+    assert.equal(download.parentElement, row, 'Without a Completed block the download stays on the due date');
+  } finally { features.dispose(); dom.window.close(); }
+});
+
+test('the view switch joins the PDF dark/light switch, and stays top right on slides', () => {
+  const dom = new JSDOM(`<html><body><main id="main-content"><div id="target">
+    <div id="info-header-div"><div class="d-flex justify-content-between">
+      <div id="due_date_field"><span id="due_date_span"><span class="qtext">10/7/26 11:59 PM</span></span></div>
+      <div class="view-links"><a href="/student/instances/show?instance=1&view=slides">Slides</a><a href="/student/instances/show?instance=1&view=classic">Classic</a></div>
+    </div></div>
+  </div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=1' });
+  const doc = dom.window.document;
+  const header = createAssessmentHeader(doc.querySelector<HTMLElement>('#main-content')!);
+  header.reconcile();
+  try {
+    // Slides mode: no PDF toolbar, so the switch stays at the top right.
+    const toggle = doc.querySelector<HTMLElement>('[data-betterquest="view-toggle"]')!;
+    assert.equal(toggle.dataset.betterquestViewPlacement, 'header');
+
+    // The interactive PDF toolbar hosts the switch beside the dark/light switch.
+    const pdfHost = doc.createElement('section');
+    pdfHost.dataset.betterquest = 'interactive-pdf';
+    const shadow = pdfHost.attachShadow({ mode: 'open' });
+    shadow.innerHTML = '<div class="toolbar"><div class="toolbar-actions">' +
+      '<div data-betterquest="view-toggle-slot" style="display:contents"></div>' +
+      '<button type="button" class="tool-btn" data-betterquest-pages-toggle="true">Dark pages</button>' +
+      '</div></div>';
+    doc.querySelector('#target')!.append(pdfHost);
+
+    header.reconcile();
+    assert.equal(toggle.dataset.betterquestViewPlacement, 'pdf-toolbar');
+    const slot = shadow.querySelector('[data-betterquest="view-toggle-slot"]')!;
+    assert.equal(toggle.parentElement, slot, 'The switch lives inside the PDF toolbar');
+    const actions = shadow.querySelector('.toolbar-actions')!;
+    assert.equal(actions.children[0].getAttribute('data-betterquest'), 'view-toggle-slot');
+    assert.equal(actions.children[1].getAttribute('data-betterquest-pages-toggle'), 'true',
+      'and sits immediately left of the dark/light switch');
+    const headerCss = [...doc.querySelectorAll('style')].map(s => s.textContent || '').join('\n');
+    assert.match(headerCss, /background:linear-gradient\(135deg,#8b5cf6,#7c3aed\)!important/, 'The switch is purple');
+
+    // Reconcile again: light-DOM queries cannot see shadow-hosted links, but the
+    // purple switch must stay put — never bounce back to Quest's blue buttons.
+    header.reconcile();
+    header.reconcile();
+    assert.equal(toggle.isConnected, true);
+    assert.equal(toggle.parentElement, slot, 'Repeated reconciles leave the purple switch in the toolbar');
+    assert.equal(doc.querySelector('#info-header-div .view-links a'), null,
+      'Native Slides/Classic links are not restored into the header');
+    assert.equal(toggle.querySelectorAll('a').length, 2);
+
+    // Quest reinjects a blue Slides control — hide it, keep purple in the toolbar.
+    const reinjected = doc.createElement('a');
+    reinjected.className = 'btn btn-primary float-right';
+    reinjected.href = '/student/instances/show?instance=1&view=slides';
+    reinjected.textContent = 'Slides';
+    doc.querySelector('#info-header-div .d-flex')!.append(reinjected);
+    header.reconcile();
+    assert.equal(reinjected.getAttribute('data-betterquest-view-duplicate'), 'true');
+    assert.equal(toggle.parentElement, slot);
+    assert.equal(doc.getElementById('main-content')?.getAttribute('data-betterquest-view-hosted'), 'true');
+    assert.match(
+      [...doc.querySelectorAll('style')].map(s => s.textContent || '').join('\n'),
+      /data-betterquest-view-hosted="true".*a\.btn-primary/s,
+      'CSS hides reinjected blue buttons before the next paint',
+    );
+
+    // PDF toolbar slot briefly missing during remount — do not bounce to header.
+    slot.remove();
+    header.reconcile();
+    assert.equal(toggle.isConnected, true);
+    assert.ok(shadow.contains(toggle), 'Toggle stays inside the PDF shadow without a slot');
+    assert.equal(toggle.parentElement, actions, 'Toggle parks in toolbar-actions until the slot returns');
+    assert.equal(toggle.dataset.betterquestViewPlacement, 'pdf-toolbar');
+  } finally {
+    header.dispose();
+    dom.window.close();
+  }
+});
+
+test('the extra-homework Slides page gets a styled question bar and pager', async () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target">
+    <div id="info-header-div"><div class="d-flex justify-content-between"><div id="due_date_field"><span id="due_date_span"><span class="qlabel">Due date</span><span class="qtext">12/12/26 12:01 AM</span></span></div></div>
+      <div id="upper-paging-div"><div class="d-flex justify-content-end">
+        <div><button type="button" class="btn btn-primary" aria-label="Previous slide"><i class="material-icons">navigate_before</i></button></div>
+        <div>&nbsp;&nbsp;&nbsp;</div>
+        <div class="h5"><br><span class="currentQuestionIndex">11</span><span> of </span><span class="activeElementCount">11</span>&nbsp;</div>
+        <div>&nbsp;&nbsp;&nbsp;</div>
+        <div><button type="button" class="btn btn-primary" aria-label="Next slide"><i class="material-icons">navigate_next</i></button></div>
+      </div></div>
+    </div>
+    <div id="question-bar-div"><h2 class="questionBar"><span class="currentQuestionIndex">11</span>.
+      <span class="elementName">The squeeze (or sandwich) theorem</span><span class="pooledQuestions"></span>
+      <span class="itemPoints">10 pts possible</span></h2></div>
+    <div class="" id="presentation-div" tabindex="0" role="region" aria-label="Slide content">
+      <div class="instanceitempart bg-light"><p>The Sandwich (aka Squeeze) Theorem is very useful.</p></div>
+    </div>
+  </div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/administer?instance=modulesession_1', pretendToBeVisual: true });
+  prepare(dom);
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    const doc = dom.window.document;
+    const target = doc.querySelector<HTMLElement>('#target')!;
+    assert.equal(target.dataset.betterquestPractice, 'true');
+
+    const bar = doc.querySelector('#upper-paging-div .h5')!;
+    const progress = bar.querySelector<HTMLElement>('[data-betterquest="practice-progress"]')!;
+    assert.ok(progress, 'The pager shows how far through the set you are');
+    assert.equal(progress.firstElementChild?.getAttribute('style')?.includes('width: 100%'), true, 'Last of eleven slides fills the track');
+
+    const css = [...doc.querySelectorAll('style')].map(s => s.textContent || '').join('\n');
+    assert.match(css, /#question-bar-div \.questionBar/, 'The question bar is restyled');
+    assert.match(css, /#upper-paging-div button\.btn-primary/, 'The pager buttons are restyled');
+    assert.equal(doc.querySelector('#question-bar-div .elementName')?.textContent?.trim(), 'The squeeze (or sandwich) theorem', 'Quest owns the title');
+    assert.match(doc.querySelector('#presentation-div p')?.textContent || '', /Sandwich/, 'Quest owns the slide body');
+
+    features.dispose();
+    assert.equal(target.hasAttribute('data-betterquest-practice'), false);
+    assert.equal(doc.querySelector('[data-betterquest="practice-progress"]'), null);
+  } finally { dom.window.close(); }
+});
+
+test('practice slides drop the orphan period and omit an empty points pill', async () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target">
+    <div id="info-header-div"><div class="d-flex justify-content-between"><div id="due_date_field"><span id="due_date_span"><span class="qtext">12/12/26 12:01 AM</span></span></div></div>
+      <div id="upper-paging-div"><div class="d-flex justify-content-end">
+        <div><button type="button" class="btn btn-primary" aria-label="Previous slide"><i class="material-icons">navigate_before</i></button></div>
+        <div class="h5"><br><span class="currentQuestionIndex">7</span><span> of </span><span class="activeElementCount">8</span>&nbsp;</div>
+        <div><button type="button" class="btn btn-primary" aria-label="Next slide"><i class="material-icons">navigate_next</i></button></div>
+      </div></div>
+    </div>
+    <div id="question-bar-div"><h2 class="questionBar"><span class="currentQuestionIndex">7</span>.
+      <span class="elementName">Try New Version (not for credit)</span><span class="pooledQuestions"></span>
+      <span class="itemPoints">
+      </span></h2></div>
+    <div class="" id="presentation-div" tabindex="0" role="region" aria-label="Slide content">
+      <div class="instanceitempart bg-light"><button type="button" class="btn btn-primary">Try it</button></div>
+    </div>
+  </div></main></body></html>`, { url: 'https://quest.cns.utexas.edu/student/instances/administer?instance=modulesession_2', pretendToBeVisual: true });
+  prepare(dom);
+  const scrolled: number[] = [];
+  (dom.window as unknown as { scrollTo: (o: unknown) => void }).scrollTo = o => { scrolled.push((o as { top: number }).top); };
+  const f = store();
+  const features = startPageFeatures(dom.window.document, dom.window as unknown as Window, f.run, f.subscribe);
+  try {
+    features.reconcile(); await pause();
+    const doc = dom.window.document;
+    const bar = doc.querySelector<HTMLElement>('#question-bar-div .questionBar')!;
+    assert.equal(bar.textContent?.includes('7.'), false, 'The orphan period after the index pill is gone');
+    assert.match(bar.textContent || '', /^7Try New Version/, 'Quest still owns the title');
+
+    const points = doc.querySelector<HTMLElement>('#question-bar-div .itemPoints')!;
+    assert.equal(points.textContent?.trim(), '', 'Quest owns the points element and is left untouched');
+    assert.equal(points.dataset.betterquestEmpty, 'true', 'Whitespace-only points are marked empty');
+    const css = [...doc.querySelectorAll('style')].map(s => s.textContent || '').join('\n');
+    assert.match(css, /itemPoints\[data-betterquest-empty="true"\]/, 'A blank points pill is omitted even with whitespace');
+    assert.ok(!/\.pooledQuestions \{/.test(css), 'Nothing hides Quest\'s own pooled-questions element');
+
+    // A button Quest put on the slide stays clickable.
+    const questButton = doc.querySelector<HTMLButtonElement>('#presentation-div button')!;
+    assert.equal(questButton.textContent, 'Try it');
+    assert.ok(doc.querySelector('#presentation-div button'), 'Quest slide controls survive');
+
+    // Advancing returns the reader to the top of the new slide.
+    doc.querySelector<HTMLButtonElement>('#upper-paging-div button[aria-label="Next slide"]')!.click();
+    assert.deepEqual(scrolled, [0], 'Clicking next returns to the top');
+    doc.querySelector<HTMLElement>('#question-bar-div')!.click();
+    assert.deepEqual(scrolled, [0], 'Clicking elsewhere on the slide does not scroll');
   } finally { features.dispose(); dom.window.close(); }
 });
 
@@ -781,6 +1114,90 @@ test('grades and review pages make all text white in dark mode and black in ligh
   }
 });
 
+test('slides view stays light even when the preferred theme is dark', () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin" id="body-id"><div id="quest-nav-header-div"></div>
+    <main id="main-content"><div id="target">
+      <div id="presentation-div"><div class="instanceitempart"><label><input type="radio" name="response_1" value="1">1</label>
+        <button type="button" class="submit-btn">Submit</button></div></div>
+    </div></main></body></html>`, {
+    url: 'https://quest.cns.utexas.edu/student/instances/show?instance=1&view=slides',
+    pretendToBeVisual: true,
+  });
+  prepare(dom);
+  const theme = createQuestTheme(dom.window.document, dom.window as unknown as Window);
+  try {
+    theme.update('dark');
+    theme.reconcile();
+    const main = dom.window.document.querySelector<HTMLElement>('#main-content')!;
+    const nav = dom.window.document.querySelector<HTMLElement>('#quest-nav-header-div')!;
+    const body = dom.window.document.querySelector<HTMLElement>('#body-id')!;
+    assert.equal(main.getAttribute('data-betterquest-theme'), 'light',
+      'Slides keep a light page; dark mode is for the PDF/classic workspace');
+    assert.equal(nav.getAttribute('data-betterquest-theme'), 'light');
+    assert.equal(body.getAttribute('data-betterquest-theme'), 'light');
+    assert.equal(main.style.getPropertyValue('--bq-surface').trim(), '#ffffff',
+      'Slides must not keep dark CSS tokens from the preference');
+  } finally {
+    theme.dispose();
+    dom.window.close();
+  }
+});
+
+test('additional/practice HW pages stay light when the preferred theme is dark', () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin" id="body-id"><div id="quest-nav-header-div"></div>
+    <main id="main-content"><div id="target">
+      <div id="question-bar-div"><h2 class="questionBar"><span class="currentQuestionIndex">1</span>.
+        <span class="elementName">Practice topic</span></h2></div>
+      <div id="presentation-div"><div class="instanceitempart bg-light"><p>Read this.</p></div></div>
+    </div></main></body></html>`, {
+    url: 'https://quest.cns.utexas.edu/student/instances/administer?instance=modulesession_1',
+    pretendToBeVisual: true,
+  });
+  prepare(dom);
+  const theme = createQuestTheme(dom.window.document, dom.window as unknown as Window);
+  try {
+    theme.update('dark');
+    theme.reconcile();
+    const main = dom.window.document.querySelector<HTMLElement>('#main-content')!;
+    assert.equal(main.getAttribute('data-betterquest-theme'), 'light');
+    assert.equal(main.style.getPropertyValue('--bq-surface').trim(), '#ffffff');
+    assert.equal(dom.window.document.querySelector('#body-id')?.getAttribute('data-betterquest-theme'), 'light');
+  } finally {
+    theme.dispose();
+    dom.window.close();
+  }
+});
+
+test('PDF classic homework still gets dark mode when preferred', () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin" id="body-id"><div id="quest-nav-header-div"></div>
+    <main id="main-content"><div id="target">
+      <div id="pdf-frame"><div id="presentation-pdf-frame">
+        <iframe title="Assignment PDF" src="/student/images/problem_pdf?instance=1"></iframe>
+      </div></div>
+      <div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody>
+        <tr data-id="cuaip_1"><td>1.</td><td class="input">3</td><td class="status"><span class="sr-only">Correct</span></td>
+        <td class="previous">1 / 4</td><td class="correct">10</td><td></td></tr>
+      </tbody></table></div>
+    </div></main></body></html>`, {
+    url: 'https://quest.cns.utexas.edu/student/instances/show?instance=1',
+    pretendToBeVisual: true,
+  });
+  prepare(dom);
+  const theme = createQuestTheme(dom.window.document, dom.window as unknown as Window);
+  try {
+    theme.update('dark');
+    theme.reconcile();
+    assert.equal(dom.window.document.querySelector('#main-content')?.getAttribute('data-betterquest-theme'), 'dark');
+    assert.equal(
+      dom.window.document.querySelector<HTMLElement>('#main-content')!.style.getPropertyValue('--bq-surface').trim(),
+      '#182434',
+    );
+  } finally {
+    theme.dispose();
+    dom.window.close();
+  }
+});
+
 test('detectPageCategory recognizes grades and review from urls, active tabs, and assessment headers', () => {
   const dom1 = new JSDOM('<html><body><div id="tabs-grades" class="tab-pane active"></div></body></html>', {
     url: 'https://quest.cns.utexas.edu/student/courses/show?course=54321',
@@ -1012,6 +1429,16 @@ test('collapseCourseCategoriesByDefault collapses all assignment categories by d
   assert.equal(hw.classList.contains('show'), false, 'A category Quest re-opens collapses again');
   assert.equal(hwBtn.getAttribute('aria-expanded'), 'false');
 
+  // A mid-animation Bootstrap panel with a stuck inline height must be cleared,
+  // or the Assignments tab keeps growing as Quest and BetterQuest fight.
+  exams.classList.add('collapsing');
+  exams.style.height = '4800px';
+  exams.style.overflow = 'hidden';
+  collapseCourseCategoriesByDefault(doc);
+  assert.equal(exams.classList.contains('collapsing'), false, 'Stuck collapsing state is cleared');
+  assert.equal(exams.style.height, '', 'Bootstrap height is removed so the page cannot grow');
+  assert.equal(exams.style.overflow, '', 'Bootstrap overflow is removed');
+
   // Clicking the toggle is a real choice, and it must survive every later pass.
   hwBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
   hw.classList.add('show');
@@ -1021,6 +1448,51 @@ test('collapseCourseCategoriesByDefault collapses all assignment categories by d
   assert.equal(hw.classList.contains('show'), true, 'User opened category must remain open');
   assert.equal(hwBtn.getAttribute('aria-expanded'), 'true');
   assert.equal(exams.classList.contains('show'), false, 'Unopened category stays collapsed');
+});
+
+test('categories titled with grade weights still collapse, while the Grades tab stays open', () => {
+  const dom = new JSDOM(`<html><body class="mdb-skin"><div id="main-content"><div id="target">
+    <div id="info-tab-data" class="tab-content">
+      <div id="tabs-elements" class="tab-pane fade show active" role="tabpanel">
+        <div class="card-header"><button type="button" class="btn btn-link" data-toggle="collapse" data-target="#header-3932400" aria-expanded="true">
+          <span class="h4">Midterms - 28 percent of grade, lowest dropped</span>
+          <i class="material-icons">remove</i>
+        </button></div>
+        <div class="collapse show" id="header-3932400"><table><tr><td>Midterm 1</td></tr></table></div>
+        <div class="card-header"><button type="button" class="btn btn-link" data-toggle="collapse" data-target="#header-3836280" aria-expanded="true">
+          <span class="h4">OPTIONAL Week 1 Learning Modules - not part of grade</span>
+          <i class="material-icons">remove</i>
+        </button></div>
+        <div class="collapse show" id="header-3836280"><table><tr><td>Module 1</td></tr></table></div>
+      </div>
+      <div id="tabs-grades" class="tab-pane fade">
+        <div class="card-header"><button type="button" class="btn btn-link" data-toggle="collapse" data-target="#header-grades-9" aria-expanded="true">
+          <span class="h4">Homework Grades</span>
+        </button></div>
+        <div class="collapse show" id="header-grades-9"><table><tr><td>HW 1: 100%</td></tr></table></div>
+      </div>
+    </div>
+  </div></div></body></html>`, {
+    url: 'https://quest.cns.utexas.edu/student/courses/show?course=3491354&tab_0a=student-elements-a',
+  });
+  const doc = dom.window.document;
+  try {
+    collapseCourseCategoriesByDefault(doc);
+    const midterms = doc.getElementById('header-3932400')!;
+    const optional = doc.getElementById('header-3836280')!;
+    assert.equal(midterms.classList.contains('show'), false, 'A category titled with a grade weight is still an assignment category');
+    assert.equal(optional.classList.contains('show'), false, 'Optional modules titled "not part of grade" collapse too');
+    for (const id of ['header-3932400', 'header-3836280']) {
+      const btn = doc.querySelector<HTMLButtonElement>(`button[data-target="#${id}"]`)!;
+      assert.equal(btn.getAttribute('aria-expanded'), 'false');
+      assert.ok(btn.classList.contains('collapsed'));
+      assert.equal(btn.querySelector('.material-icons')?.textContent, 'add');
+    }
+    const grades = doc.getElementById('header-grades-9')!;
+    assert.equal(grades.classList.contains('show'), true, 'The Grades tab must stay expanded');
+  } finally {
+    dom.window.close();
+  }
 });
 
 test('course page is recognized with and without the trailing course number so categories always collapse', () => {
@@ -1165,6 +1637,22 @@ test('readAssessmentResponses parses all questions with full choice lists from c
     assert.ok(b.options.length >= 4, `Question ${i + 1} must have complete choice options`);
     assert.ok(b.select.value, `Question ${i + 1} must preserve submitted value`);
   }
+});
+
+test('checkCorrect status counts as answered even without a word-boundary around Correct', () => {
+  const dom = new JSDOM(`<table id="instance-table-courseuserassignment_1"><tbody>
+    <tr data-id="cuaip_1"><td>1.</td><td class="input">3</td>
+      <td class="status"><i class="material-icons" aria-hidden="true">check</i><span class="sr-only">Correct</span></td>
+      <td class="previous"></td><td class="correct">10</td></tr>
+    <tr data-id="cuaip_2"><td>2.</td><td><select aria-label="Select your response"><option value="2" selected>2</option><option value="3">3</option></select></td>
+      <td class="status">checkCorrect</td><td class="previous">1 / 4</td><td class="correct">10</td>
+      <td><button aria-label="Submit response" hidden>Submit</button></td></tr>
+  </tbody></table>`);
+  const table = dom.window.document.querySelector('table')!;
+  const bindings = readAssessmentResponses(table);
+  assert.equal(bindings.length, 2);
+  assert.ok(bindings.every(b => b.answered), 'Finished rows are answered');
+  dom.window.close();
 });
 
 test('PDF workspace hides choice selectors for answered questions and renders all possible choice buttons for unanswered questions', async () => {
