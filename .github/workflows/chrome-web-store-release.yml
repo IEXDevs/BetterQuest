@@ -1,0 +1,154 @@
+name: Chrome Web Store release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - public/manifest.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chrome-web-store-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Test and package extension
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.version.outputs.should_release }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Detect version increase
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT="$(node -p "JSON.parse(require('fs').readFileSync('public/manifest.json','utf8')).version")"
+          if ! [[ "$CURRENT" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]]; then
+            echo "::error::Invalid extension version: $CURRENT"
+            exit 1
+          fi
+          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
+          BEFORE="${{ github.event.before }}"
+          if [[ -z "$BEFORE" || "$BEFORE" =~ ^0+$ ]]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PREVIOUS="$(git show "$BEFORE:public/manifest.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version" 2>/dev/null || true)"
+          if [[ -z "$PREVIOUS" ]]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node - "$PREVIOUS" "$CURRENT" "$GITHUB_OUTPUT" <<'NODE'
+          const fs = require('fs');
+          const [oldVersion, newVersion, output] = process.argv.slice(2);
+          const valid = v => /^\d+(\.\d+){0,3}$/.test(v) && v.split('.').every(n => Number(n) <= 65535);
+          if (!valid(oldVersion) || !valid(newVersion)) throw new Error('Invalid manifest version');
+          const a = oldVersion.split('.').map(Number), b = newVersion.split('.').map(Number);
+          let comparison = 0;
+          for (let i = 0; i < 4; i++) {
+            const x = a[i] || 0, y = b[i] || 0;
+            if (x !== y) { comparison = y > x ? 1 : -1; break; }
+          }
+          if (comparison < 0) throw new Error(`Version must increase: ${oldVersion} -> ${newVersion}`);
+          fs.appendFileSync(output, `should_release=${comparison === 1}\n`);
+          NODE
+      - name: Install dependencies
+        if: steps.version.outputs.should_release == 'true'
+        run: npm ci
+      - name: Run tests
+        if: steps.version.outputs.should_release == 'true'
+        run: npm test
+      - name: Build extension
+        if: steps.version.outputs.should_release == 'true'
+        run: npm run build:extn
+      - name: Validate and zip production output
+        if: steps.version.outputs.should_release == 'true'
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { existsSync, readFileSync } from 'node:fs';
+          const m = JSON.parse(readFileSync('dist/manifest.json', 'utf8'));
+          if (m.version !== process.env.EXPECTED_VERSION) throw new Error('Built manifest version mismatch');
+          for (const f of ['content.js','background.js','pdf.worker.min.mjs','icons/icon16.png','icons/icon32.png','icons/icon48.png','icons/icon128.png']) {
+            if (!existsSync('dist/' + f)) throw new Error('Missing dist/' + f);
+          }
+          NODE
+          mkdir -p release
+          (cd dist && zip -qr "../release/betterquest-${EXPECTED_VERSION}.zip" .)
+          unzip -p "release/betterquest-${EXPECTED_VERSION}.zip" manifest.json | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{if(JSON.parse(s).version!==process.env.EXPECTED_VERSION)process.exit(1)})'
+      - name: Upload immutable package
+        if: steps.version.outputs.should_release == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: betterquest-extension-${{ steps.version.outputs.version }}
+          path: release/betterquest-${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish to Chrome Web Store
+    needs: build
+    if: needs.build.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: chrome-web-store
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: betterquest-extension-${{ needs.build.outputs.version }}
+          path: release
+      - name: Upload and submit using Chrome Web Store API v2
+        env:
+          CWS_CLIENT_ID: ${{ secrets.CHROME_WEBSTORE_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CHROME_WEBSTORE_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CHROME_WEBSTORE_REFRESH_TOKEN }}
+          CWS_PUBLISHER_ID: ${{ vars.CHROME_WEBSTORE_PUBLISHER_ID }}
+          CWS_EXTENSION_ID: ${{ vars.CHROME_WEBSTORE_EXTENSION_ID }}
+          EXTENSION_VERSION: ${{ needs.build.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in CWS_CLIENT_ID CWS_CLIENT_SECRET CWS_REFRESH_TOKEN CWS_PUBLISHER_ID CWS_EXTENSION_ID; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "::error::Missing required Chrome Web Store environment value: $key"
+              exit 1
+            fi
+          done
+          ZIP="release/betterquest-${EXTENSION_VERSION}.zip"
+          test -s "$ZIP"
+          TOKEN_JSON="$(curl --fail-with-body --silent --show-error -X POST 'https://oauth2.googleapis.com/token' \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode "client_id=$CWS_CLIENT_ID" \
+            --data-urlencode "client_secret=$CWS_CLIENT_SECRET" \
+            --data-urlencode "refresh_token=$CWS_REFRESH_TOKEN" \
+            --data-urlencode 'grant_type=refresh_token')"
+          ACCESS_TOKEN="$(printf '%s' "$TOKEN_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const t=JSON.parse(s).access_token;if(!t)process.exit(1);process.stdout.write(t)})')"
+          unset TOKEN_JSON
+          echo "::add-mask::$ACCESS_TOKEN"
+          ITEM="publishers/$CWS_PUBLISHER_ID/items/$CWS_EXTENSION_ID"
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            --upload-file "$ZIP" \
+            "https://chromewebstore.googleapis.com/upload/v2/$ITEM:upload"
+          echo
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://chromewebstore.googleapis.com/v2/$ITEM:publish"
+          echo
+          echo "Submitted to Chrome Web Store; Google review/processing may still be required."
