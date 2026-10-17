@@ -470,6 +470,11 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
       || (/\bcorrect\b/i.test(statusText) && !/\b(?:incorrect|not correct)\b/i.test(statusText))
       || (/check\s*correct/i.test(statusText) && !/incorrect/i.test(statusText));
     const triesExhausted = Boolean(maxTries > 0 && attempts >= maxTries);
+    // Real, recorded evidence that a response exists for this row. Quest re-seeds
+    // its virtualized response table around a submit, so a row can be caught
+    // half-rendered (no value, no attempts, no status). Such a row must never be
+    // reported as answered — doing so hides the option boxes for a live question.
+    const recorded = isCorrect || triesExhausted || attempts > 0 || Boolean(statusText);
 
     // If there is no answer and no attempts recorded, and native submit is hidden, fail closed
     if (!val && attempts === 0 && !isSubmitAvailable) {
@@ -490,7 +495,7 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
         options = Array.from({ length: optionCount }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
       }
       const selectDisabled = select.disabled || select.getAttribute('aria-disabled') === 'true';
-      const isAnswered = selectDisabled || isCorrect || triesExhausted || Boolean(!isSubmitAvailable && val);
+      const isAnswered = isCorrect || triesExhausted || (selectDisabled && Boolean(val)) || Boolean(!isSubmitAvailable && val && recorded);
       rows.push({
         id,
         number: clean(cells[0]?.textContent).replace(/\.$/, '') || String(rows.length + 1),
@@ -504,6 +509,10 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
     }
 
     // No select input: static completed answer in cell 1 (e.g. "3" in quest-responses.html)
+    // Only treat this as an answered row when there is real evidence (a value,
+    // a recorded attempt/status, or a correctness mark). A half-rendered row with
+    // none of these is indeterminate and must be skipped rather than reported answered.
+    if (!val && !recorded) continue;
     const optionCount = Math.max(val ? Number(val) : 1, maxTries, 5);
     const options = Array.from({ length: optionCount }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
     const syntheticSelect = row.ownerDocument.createElement('select');

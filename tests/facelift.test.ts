@@ -1655,6 +1655,26 @@ test('checkCorrect status counts as answered even without a word-boundary around
   dom.window.close();
 });
 
+test('a half-rendered response row is skipped instead of reported answered', () => {
+  // Quest re-seeds its virtualized response rows around a submit. A row caught
+  // half-rendered has no answer control, no value, no attempts and no status.
+  // Reporting such a row as answered hides the option boxes for a live question.
+  const dom = new JSDOM(`<table id="instance-table-courseuserassignment_1"><tbody>
+    <tr data-id="cuaip_1"><td>1.</td><td class="input"></td>
+      <td class="status"></td><td class="previous"></td><td class="correct"></td>
+      <td><button aria-label="Submit response">Submit</button></td></tr>
+    <tr data-id="cuaip_2"><td>2.</td><td><select aria-label="Select your response"><option value="">- select -</option><option value="1">1</option></select></td>
+      <td class="status"></td><td class="previous"></td><td class="correct"></td>
+      <td><button aria-label="Submit response">Submit</button></td></tr>
+  </tbody></table>`);
+  const table = dom.window.document.querySelector('table')!;
+  const bindings = readAssessmentResponses(table);
+  assert.equal(bindings.length, 1, 'The empty half-rendered row must be skipped, not synthesized as an answered question');
+  assert.equal(bindings[0].number, '2');
+  assert.equal(bindings[0].answered, false);
+  dom.window.close();
+});
+
 test('PDF workspace hides choice selectors for answered questions and renders all possible choice buttons for unanswered questions', async () => {
   const dom = new JSDOM(`<html><body class="mdb-skin"><div id="quest-nav-header-div"></div><main id="main-content"><div id="target">
     <div id="pdf-frame"><div id="presentation-pdf-frame"><iframe src="/student/images/download_pdf?instance=courseuserassignment_1" title="Assignment PDF"></iframe></div></div>
