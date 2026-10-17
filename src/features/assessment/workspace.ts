@@ -1034,16 +1034,23 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   function ensurePdfViewer(elements: PdfAssessmentElements, bindings: ReturnType<typeof readAssessmentResponses>) {
     if (!viewerFactory || pdfViewerStarted || !bindings.length) return;
     const optionMaximums = new Map<number, number>();
+    const getBindingMax = (binding: (typeof bindings)[number]): number => {
+      const selectOptions = binding.select ? [...binding.select.options] : [];
+      const fromSelect = Math.max(0, ...selectOptions.map(opt => Number(opt.value)).filter(v => Number.isInteger(v) && v >= 1 && v <= 9));
+      const fromBinding = Math.max(0, ...binding.options.map(opt => Number(opt.value)).filter(v => Number.isInteger(v) && v >= 1 && v <= 9));
+      return Math.max(fromSelect, fromBinding);
+    };
+
     let fallbackMax = 0;
     for (const binding of bindings) {
-      const max = Math.max(...binding.options.map(option => Number(option.value)).filter(Number.isInteger));
+      const max = getBindingMax(binding);
       if (max > fallbackMax && max <= 9) fallbackMax = max;
     }
     if (fallbackMax < 2) fallbackMax = 5;
 
     for (const binding of bindings) {
       const questionNumber = Number(binding.number);
-      let maximum = Math.max(...binding.options.map(option => Number(option.value)).filter(Number.isInteger));
+      let maximum = getBindingMax(binding);
       if (!maximum || maximum <= 1) maximum = fallbackMax;
       if (Number.isInteger(questionNumber) && questionNumber > 0 && maximum > 0 && maximum <= 9) {
         optionMaximums.set(questionNumber, maximum);

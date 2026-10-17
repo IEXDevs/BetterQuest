@@ -909,3 +909,49 @@ test('interactive PDF viewer provides question anchors and scrollToQuestion scro
     dom.window.close();
   }
 });
+
+test('interactive PDF viewer bounds left-column options on two-column pages so they do not bleed into the right column', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const pRun = (text: string, top: number, left: number, width = 12, height = 12) => ({ text, page: 2, left, top, width, height });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[5, 6]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 2,
+      renderPage: async (pageNumber: number) => ({
+        width: 600, height: 800,
+        runs: pageNumber === 1
+          ? [pRun('005 (part 1 of 4)', 50, 320), pRun('1.', 100, 320), pRun('2.', 140, 320), pRun('3.', 180, 320), pRun('4.', 220, 320)]
+          : [
+              // Page 2: Column 1 has options 5 and 6
+              pRun('5. f\'(x) = -2x/(9+x^2)', 60, 45, 120),
+              pRun('6. f\'(x) = -1/(9+x^2)^2', 100, 45, 120),
+              pRun('006 (part 2 of 4)', 160, 45),
+              // Page 2: Column 2 has other content spanning across the right side
+              pRun('properties of the function f(x) = (9-x)^1/2 on its domain', 60, 320, 240),
+            ],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    const page2 = viewer.element.shadowRoot!.querySelector<HTMLElement>('[aria-label="PDF page 2"]')!;
+    assert.ok(page2);
+    const opt5 = page2.querySelector<HTMLButtonElement>('.option-hit[data-option="5"]');
+    const opt6 = page2.querySelector<HTMLButtonElement>('.option-hit[data-option="6"]');
+    assert.ok(opt5, 'Option 5 must exist on page 2');
+    assert.ok(opt6, 'Option 6 must exist on page 2');
+
+    const width5 = Number.parseFloat(opt5!.style.width);
+    const width6 = Number.parseFloat(opt6!.style.width);
+    assert.ok(width5 < 45, `Option 5 width must stay within the left column (<45%), got ${width5}%`);
+    assert.ok(width6 < 45, `Option 6 width must stay within the left column (<45%), got ${width6}%`);
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+

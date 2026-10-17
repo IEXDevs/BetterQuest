@@ -111,88 +111,103 @@ export function extractQuestionPoints(runs: PdfTextRun[]): Map<number, number> {
 /**
  * Quest PDFs delimit questions with zero-padded three-digit markers or headers.
  * Within each boundary, accept valid choice sequences 1..N.
+ * Numeric sequences always take precedence over letter sequences (e.g. A, B statements).
  */
 export function mapPdfOptionLabels(runs: PdfTextRun[], optionMaximums: ReadonlyMap<number, number>): PdfOptionTarget[] {
   const targets: PdfOptionTarget[] = [];
-  let questionNumber: number | null = null;
-  let expected = 1;
-  let pending: PdfOptionTarget[] = [];
-  let completed = false;
-
   const positiveMaxes = [...optionMaximums.values()].filter(v => v >= 1 && v <= 9);
   const globalFallback = positiveMaxes.length ? Math.max(...positiveMaxes) : 5;
 
-  const commitPending = () => {
-    if (questionNumber === null) return;
-    // Only emit choices for questions the response table knows about. Inventing
-    // boxes for every PDF header (when DataTables only exposed a few rows)
-    // leaves clickable options on an already-finished homework.
-    const max = optionMaximums.get(questionNumber);
-    if (max !== undefined && pending.length === max) {
-      targets.push(...pending);
-      completed = true;
-    }
-    pending = [];
-  };
+  interface QuestionBlock {
+    qNum: number;
+    runs: PdfTextRun[];
+  }
+
+  const blocks: QuestionBlock[] = [];
+  let currentBlock: QuestionBlock | null = null;
 
   for (const run of runs) {
     const text = clean(run.text);
     const boundary = parseQuestionBoundary(text);
     if (boundary !== null) {
-      if (!completed && pending.length > 0) {
-        commitPending();
-      }
-      questionNumber = boundary;
-      expected = 1;
-      pending = [];
-      completed = false;
+      if (currentBlock) blocks.push(currentBlock);
+      currentBlock = { qNum: boundary, runs: [] };
       continue;
     }
-
-    if (questionNumber === null || completed) continue;
-    if (!optionMaximums.has(questionNumber)) continue;
-
-    const maximum = optionMaximums.get(questionNumber) ?? globalFallback;
-    if (maximum < 1 || maximum > 9) continue;
-
-    let value: number | null = null;
-    const numMatch = text.match(/^([1-9])\.(?!\d)/) ||
-                     text.match(/^\(([1-9])\)/) ||
-                     text.match(/^([1-9])\)(?!\d)/) ||
-                     text.match(/^([1-9]):(?!\d)/) ||
-                     text.match(/^([1-9])\s*[-–—]/);
-    if (numMatch) {
-      value = Number(numMatch[1]);
-    } else {
-      const letterMatch = text.match(/^([a-iA-I])\.(?!\w)/) ||
-                          text.match(/^\(([a-iA-I])\)/) ||
-                          text.match(/^([a-iA-I])\)(?!\w)/) ||
-                          text.match(/^([a-iA-I]):(?!\w)/) ||
-                          text.match(/^([a-iA-I])\s*[-–—]/);
-      if (letterMatch) {
-        value = letterMatch[1].toUpperCase().charCodeAt(0) - 64;
-      }
-    }
-    if (value === null) continue;
-    if (value > maximum) continue;
-
-    if (value === 1) {
-      pending = [{ ...run, questionNumber, optionValue: 1 }];
-      expected = 2;
-    } else if (pending.length && value === expected) {
-      pending.push({ ...run, questionNumber, optionValue: value });
-      expected++;
-    }
-
-    if (pending.length === maximum) {
-      targets.push(...pending);
-      pending = [];
-      completed = true;
+    if (currentBlock) {
+      currentBlock.runs.push(run);
     }
   }
+  if (currentBlock) blocks.push(currentBlock);
 
-  if (!completed && pending.length > 0) {
-    commitPending();
+  for (const block of blocks) {
+    const qNum = block.qNum;
+    if (!optionMaximums.has(qNum)) continue;
+
+    const maximum = optionMaximums.get(qNum) ?? globalFallback;
+    if (maximum < 1 || maximum > 9) continue;
+
+    const parseSequences = (isLetter: boolean): PdfOptionTarget[][] => {
+      const seqs: PdfOptionTarget[][] = [];
+      let currentSeq: PdfOptionTarget[] = [];
+      let expected = 1;
+
+      for (const run of block.runs) {
+        const text = clean(run.text);
+        let value: number | null = null;
+
+        if (!isLetter) {
+          const numMatch = text.match(/^([1-9])\.(?!\d)/) ||
+                           text.match(/^\(([1-9])\)/) ||
+                           text.match(/^([1-9])\)(?!\d)/) ||
+                           text.match(/^([1-9]):(?!\d)/) ||
+                           text.match(/^([1-9])\s*[-–—]/);
+          if (numMatch) value = Number(numMatch[1]);
+        } else {
+          const letterMatch = text.match(/^([a-iA-I])\.(?!\w)/) ||
+                              text.match(/^\(([a-iA-I])\)/) ||
+                              text.match(/^([a-iA-I])\)(?!\w)/) ||
+                              text.match(/^([a-iA-I]):(?!\w)/) ||
+                              text.match(/^([a-iA-I])\s*[-–—]/);
+          if (letterMatch) value = letterMatch[1].toUpperCase().charCodeAt(0) - 64;
+        }
+
+        if (value === null) continue;
+
+        if (value === 1) {
+          if (currentSeq.length) seqs.push(currentSeq);
+          currentSeq = [{ ...run, questionNumber: qNum, optionValue: 1 }];
+          expected = 2;
+        } else if (currentSeq.length && value === expected) {
+          currentSeq.push({ ...run, questionNumber: qNum, optionValue: value });
+          expected++;
+        } else {
+          if (currentSeq.length) seqs.push(currentSeq);
+          currentSeq = [];
+          expected = 1;
+        }
+      }
+      if (currentSeq.length) seqs.push(currentSeq);
+      return seqs;
+    };
+
+    const numSeqs = parseSequences(false);
+    const validNumSeq = numSeqs.find(seq => seq.length >= maximum);
+
+    if (validNumSeq) {
+      targets.push(...validNumSeq.slice(0, maximum));
+    } else {
+      // If no complete numeric sequence reached maximum, only check letters if NO numeric sequence of length >= 2 exists at all.
+      // Statements like A. ..., B. ... must never supersede numeric choices.
+      const hasAnyNumSequence = numSeqs.some(seq => seq.length >= 2);
+      if (!hasAnyNumSequence) {
+        const letterSeqs = parseSequences(true);
+        const validLetterSeq = letterSeqs.find(seq => seq.length >= maximum);
+        if (validLetterSeq) {
+          targets.push(...validLetterSeq.slice(0, maximum));
+        }
+      }
+    }
   }
 
   return targets;

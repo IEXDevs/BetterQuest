@@ -117,5 +117,27 @@ test('PDF option mapping does not invent choices for questions missing from the 
   ], 'Only response-table questions get clickable PDF choices');
 });
 
+test('PDF option mapping prefers numeric choices over lettered statements like A. and B.', () => {
+  const actual = mapper()([
+    run('003 10.0 points', 20),
+    run('Let f be the function defined by', 40),
+    run('f(x) = 3 + 2x^{1/3}.', 60),
+    run('Consider the following properties:', 80),
+    run('A. concave up on (-\\infty, 0);', 100),
+    run('B. has a critical point at x = 0.', 120),
+    run('Which does f have?', 140),
+    run('1. B only', 160),
+    run('2. Both of them', 180),
+    run('3. A only', 200),
+    run('4. Neither of them', 220),
+    run('004 10.0 points', 260),
+  ], new Map([[3, 4]]));
+
+  assert.deepEqual(actual.map(({ questionNumber, optionValue, top }) => [questionNumber, optionValue, top]), [
+    [3, 1, 160], [3, 2, 180], [3, 3, 200], [3, 4, 220],
+  ]);
+});
+
+
 
 

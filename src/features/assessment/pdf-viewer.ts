@@ -112,17 +112,23 @@ function hitArea(
   pageHeight: number
 ) {
   const isLeftColumn = target.left < pageWidth * 0.5;
-  const hasRightColumnTargets = targets.some(item => item.page === target.page && item.left >= pageWidth * 0.5);
-  const columnRight = (isLeftColumn && hasRightColumnTargets) ? pageWidth * 0.48 : pageWidth * 0.96;
+  const isTwoColumn = targets.some(item => item.left >= pageWidth * 0.45) ||
+                      pageRuns.some(item => item.left >= pageWidth * 0.45 && item.top > 30);
+  const columnRight = (isLeftColumn && isTwoColumn) ? pageWidth * 0.48 : pageWidth * 0.96;
   const sameColumn = targets.find(item =>
     item.page === target.page &&
     item.questionNumber === target.questionNumber &&
     item.top > target.top + 2 &&
     Math.abs(item.left - target.left) < pageWidth * 0.25
   );
+  const nextTargetInColumn = targets.find(item =>
+    item.page === target.page &&
+    item.top > target.top + 2 &&
+    Math.abs(item.left - target.left) < pageWidth * 0.25
+  );
   const verticalLimit = sameColumn
     ? sameColumn.top
-    : Math.min(pageHeight, target.top + Math.max(34, target.height * 2.8));
+    : Math.min(nextTargetInColumn ? nextTargetInColumn.top : pageHeight, target.top + Math.max(34, target.height * 2.8));
 
   // Identify runs that are part of the equation (excluding the label marker itself)
   const equationRuns = pageRuns.filter(r => {
@@ -147,9 +153,12 @@ function hitArea(
     right = Math.min(columnRight, Math.max(target.left + 50, maxEquationRight + 12));
     bottom = Math.min(verticalLimit - 2, Math.max(target.top + target.height + 4, maxEquationBottom + 4));
   } else {
-    // No text content (e.g. image answers): cover the option's full territory
-    // between consecutive labels instead of a thin strip.
-    right = columnRight;
+    // If target itself contains text (e.g. run contains "5. f'(x) = ...")
+    const textTargetRight = target.left + target.width;
+    const hasMeaningfulTargetText = clean(target.text).length > 3 && target.width > target.height * 2;
+    right = hasMeaningfulTargetText
+      ? Math.min(columnRight, Math.max(target.left + 50, textTargetRight + 12))
+      : columnRight;
     bottom = Math.max(verticalLimit - 4, target.top + Math.max(22, target.height * 1.8));
   }
 

@@ -1,10 +1,13 @@
 {
   "manifest_version": 3,
   "name": "BetterQuest",
-  "version": "1.2.420",
+  "version": "1.2.500",
   "description": "A polished Quest workspace with assignment tracking, response tools, dark mode, and local bookmarks.",
   "minimum_chrome_version": "120",
-  "permissions": ["storage", "tabs"],
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -30,7 +33,9 @@
         "https://quest.cns.utexas.edu/student",
         "https://quest.cns.utexas.edu/student/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -45,7 +50,9 @@
         "correct*.png",
         "wrong*.png"
       ],
-      "matches": ["https://quest.cns.utexas.edu/*"]
+      "matches": [
+        "https://quest.cns.utexas.edu/*"
+      ]
     }
   ]
 }
