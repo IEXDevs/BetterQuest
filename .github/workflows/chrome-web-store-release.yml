@@ -120,7 +120,7 @@ jobs:
           CWS_REFRESH_TOKEN: ${{ secrets.CHROME_WEBSTORE_REFRESH_TOKEN }}
           CWS_PUBLISHER_ID: ${{ vars.CHROME_WEBSTORE_PUBLISHER_ID }}
           CWS_EXTENSION_ID: ${{ vars.CHROME_WEBSTORE_EXTENSION_ID }}
-          EXTENSION_VERSION: ${{ needs.build.outputs.version }}
+          EXTENSION_VERSION: ${{ env.EXTENSION_VERSION }}
         shell: bash
         run: |
           set -euo pipefail
@@ -142,13 +142,51 @@ jobs:
           unset TOKEN_JSON
           echo "::add-mask::$ACCESS_TOKEN"
           ITEM="publishers/$CWS_PUBLISHER_ID/items/$CWS_EXTENSION_ID"
+
+          echo "Current store item status:"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://chromewebstore.googleapis.com/v2/$ITEM:fetchStatus" || echo "Status check unavailable."
+          echo
+
+          echo "Uploading release/betterquest-${EXTENSION_VERSION}.zip"
           curl --fail-with-body --silent --show-error -X POST \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             --upload-file "$ZIP" \
             "https://chromewebstore.googleapis.com/upload/v2/$ITEM:upload"
           echo
-          curl --fail-with-body --silent --show-error -X POST \
+
+          echo "Submitting the uploaded version for review"
+          RESPONSE_FILE="$(mktemp)"
+          if ! curl --fail-with-body --silent --show-error -X POST \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
-            "https://chromewebstore.googleapis.com/v2/$ITEM:publish"
+            -H 'Content-Type: application/json' \
+            --data '{"blockOnWarnings":true}' \
+            "https://chromewebstore.googleapis.com/v2/$ITEM:publish" > "$RESPONSE_FILE"; then
+            node -e '
+              const fs = require("fs");
+              let raw = "";
+              try { raw = fs.readFileSync(process.argv[1], "utf8"); } catch {}
+              const out = [];
+              try {
+                const e = JSON.parse(raw).error;
+                if (e) {
+                  out.push(`Chrome Web Store rejected the submission (${e.code} ${e.status}): ${e.message}`);
+                  for (const d of e.details || []) {
+                    if (d.reason) out.push(`Reason: ${d.reason}`);
+                    if (d.message) out.push(d.message);
+                    if (d.url) out.push(d.url);
+                    for (const link of d.links || []) out.push(`${link.description || "Link"}: ${link.url}`);
+                    for (const w of d.warnings || []) out.push(`Warning ${w.reason}: ${w.description}`);
+                  }
+                }
+              } catch { if (raw.trim()) out.push("Chrome Web Store returned a response that could not be read."); }
+              if (!raw.trim()) out.push("Chrome Web Store returned an empty response.");
+              process.stdout.write([...new Set(out)].map(line => `::error::${line}`).join("\n") + "\n");
+            ' "$RESPONSE_FILE" || echo "::error::Could not read the Chrome Web Store response."
+            echo "::error::Resolve the required steps in the developer dashboard, then re-run this job: https://chrome.google.com/webstore/devconsole/$CWS_PUBLISHER_ID/$CWS_EXTENSION_ID/edit"
+            exit 1
+          fi
+          cat "$RESPONSE_FILE"
           echo
           echo "Submitted to Chrome Web Store; Google review/processing may still be required."

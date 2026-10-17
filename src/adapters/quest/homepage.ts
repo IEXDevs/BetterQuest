@@ -47,7 +47,9 @@ export function readHomepageCourses(document: Document): Course[] {
     try {
       const url = sourceUrl(link.getAttribute('href')!, document.URL);
       const parsed = new URL(url);
-      if (parsed.pathname !== '/student/courses/show' || !/^\d+$/.test(parsed.searchParams.get('course') || '')) continue;
+      const isShow = parsed.pathname === '/student/courses/show' && /^\d+$/.test(parsed.searchParams.get('course') || '');
+      const isShowPath = /^\/student\/courses\/show\/\d+$/.test(parsed.pathname);
+      if (!isShow && !isShowPath) continue;
       const sourceId = `unique:${unique}`;
       courses.set(sourceId, { id: courseId(sourceId), sourceId, title: `${title} (${unique})`, url });
     } catch { /* Invalid/non-Quest course links do not become records. */ }

@@ -7,9 +7,9 @@ export type CourseSyncResult = 'ok' | 'timeout' | 'error';
 export function isSyncableCourseUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    return url.origin === QUEST_ORIGIN
-      && url.pathname === '/student/courses/show'
-      && /^\d+$/.test(url.searchParams.get('course') || '');
+    const isShow = url.pathname === '/student/courses/show' && /^\d+$/.test(url.searchParams.get('course') || '');
+    const isShowPath = /^\/student\/courses\/show\/\d+$/.test(url.pathname);
+    return url.origin === QUEST_ORIGIN && (isShow || isShowPath);
   } catch {
     return false;
   }

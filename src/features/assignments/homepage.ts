@@ -10,12 +10,22 @@ function canonical(value: string) { const url = new URL(value); url.hash = ''; u
 /** Only assignment IDs observed on the exact current course URL count as coverage. */
 export function homepageOverview(courses: Course[], cache: LocalState['cache'], overrides: CompletionOverrides = {}) {
   const summaries = courses.map(course => {
-    const page = cache.pages.filter(page => page.courseIds.includes(course.id) && canonical(page.sourceUrl) === canonical(course.url))
+    const courseAssignments = cache.assignments.filter(a => a.courseId === course.id);
+    const page = cache.pages
+      .filter(page =>
+        Boolean(page.scannedCourseIds?.includes(course.id)) ||
+        (page.courseIds.includes(course.id) && (
+          canonical(page.sourceUrl) === canonical(course.url) ||
+          page.assignmentIds.some(id => courseAssignments.some(a => a.id === id))
+        ))
+      )
       .sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt))[0];
-    const scanned = Boolean(page?.scannedCourseIds?.includes(course.id));
-    const ids = new Set(scanned ? page!.assignmentIds : []);
-    const assignments = cache.assignments.filter(a => a.courseId === course.id && ids.has(a.id));
-    return { course, scanned, assignments, observedAt: scanned ? page!.observedAt : null };
+    const scanned = Boolean(page?.scannedCourseIds?.includes(course.id) || courseAssignments.length > 0 || (page && canonical(page.sourceUrl) === canonical(course.url)));
+    const ids = new Set(page ? page.assignmentIds : []);
+    const assignments = ids.size > 0
+      ? courseAssignments.filter(a => ids.has(a.id))
+      : courseAssignments;
+    return { course, scanned, assignments, observedAt: scanned ? (page?.observedAt || null) : null };
   });
   const assignments = summaries.flatMap(summary => summary.assignments);
   const completed = assignments.filter(a => assignmentIsCompleted(a, overrides)).length;
@@ -57,7 +67,7 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
     .manual-list{list-style:none;margin:8px 0 0;padding:0;border-top:1px dashed var(--bq-border,#cbd7e3)}
     a{color:var(--bq-accent,#227ab0);text-decoration:none}a:hover{text-decoration:underline}a:focus-visible,button:focus-visible{outline:2px solid var(--bq-accent,#227ab0);outline-offset:3px}
     .meta{display:block;font-size:12px;color:var(--bq-muted,#748491);margin-top:3px}.due{text-align:right;font-size:12px;white-space:nowrap}.due small{display:block;color:var(--bq-muted,#748491)}.overdue{color:var(--bq-warning,#a96645)}
-    .course-title{font-weight:500}.unscanned{color:var(--bq-warning,#a96645)}button{font:inherit;font-size:12px;cursor:pointer;border:0;color:var(--bq-accent,#227ab0);background:transparent;padding:6px 0}.reload-btn{padding:0;font-weight:600;text-decoration:underline;white-space:nowrap}.empty{color:var(--bq-muted,#748491);font-size:13px}.error{color:var(--bq-warning,#a3453c)}
+    .course-title{font-weight:500}.course-meter{height:4px;margin-top:6px;border-radius:2px;overflow:hidden;background:var(--bq-raised,#eef3f6);position:relative}.course-meter span{display:block;height:100%;border-radius:inherit;background:var(--bq-good,#26a69a);transition:width .25s ease}.unscanned{color:var(--bq-warning,#a96645);cursor:pointer;text-decoration:underline}.unscanned:hover{color:var(--bq-accent,#227ab0)}button{font:inherit;font-size:12px;cursor:pointer;border:0;color:var(--bq-accent,#227ab0);background:transparent;padding:6px 0}.reload-btn{padding:0;font-weight:600;text-decoration:underline;white-space:nowrap}.empty{color:var(--bq-muted,#748491);font-size:13px}.error{color:var(--bq-warning,#a3453c)}
     @media(max-width:750px){section{padding:16px}.grid{grid-template-columns:1fr;gap:18px}header{align-items:flex-start;flex-direction:column;gap:5px}.progress-label{flex-wrap:wrap}.assignment{gap:10px}}
   `;
   const section = document.createElement('section'); section.setAttribute('aria-labelledby', 'bq-home-title');
@@ -239,9 +249,39 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
     for (const item of data.summaries) {
       const row = document.createElement('li'); const link = document.createElement('a'); link.className = 'course-title'; link.href = item.course.url; link.textContent = item.course.title;
       const status = document.createElement('span'); status.className = 'meta' + (!item.scanned ? ' unscanned' : '');
-      status.textContent = item.scanned ? `${item.assignments.filter(a => assignmentIsCompleted(a, overrides)).length} of ${item.assignments.length} completed` : 'Not synced yet';
-      if (item.observedAt) status.title = `Last synced: ${new Date(item.observedAt).toLocaleString()}`;
-      row.append(link, status); courseList.append(row);
+      const courseTotal = item.assignments.length;
+      const courseCompleted = item.assignments.filter(a => assignmentIsCompleted(a, overrides)).length;
+      const coursePending = item.assignments.filter(a => !assignmentIsCompleted(a, overrides) && a.completion !== 'unknown').length;
+      if (item.scanned) {
+        status.textContent = coursePending > 0
+          ? `${coursePending} pending · ${courseCompleted} of ${courseTotal} completed`
+          : `${courseCompleted} of ${courseTotal} completed`;
+        if (item.observedAt) status.title = `Last synced: ${new Date(item.observedAt).toLocaleString()}`;
+        row.append(link, status);
+        if (courseTotal > 0) {
+          const courseMeter = document.createElement('div');
+          courseMeter.className = 'course-meter';
+          courseMeter.setAttribute('role', 'progressbar');
+          courseMeter.setAttribute('aria-label', `${item.course.title} completion progress`);
+          courseMeter.setAttribute('aria-valuemin', '0');
+          courseMeter.setAttribute('aria-valuemax', String(courseTotal));
+          courseMeter.setAttribute('aria-valuenow', String(courseCompleted));
+          const courseFill = document.createElement('span');
+          courseFill.style.width = `${Math.round((courseCompleted / courseTotal) * 100)}%`;
+          courseMeter.append(courseFill);
+          row.append(courseMeter);
+        }
+      } else {
+        status.textContent = 'Not synced yet';
+        status.title = 'Click to sync this course now';
+        status.onclick = (e) => {
+          e.preventDefault();
+          autoSyncAttempted.delete(item.course.id);
+          void autoSyncPending();
+        };
+        row.append(link, status);
+      }
+      courseList.append(row);
     }
     summary.append(courseList); grid.append(upcoming, summary); content.append(coverage, label, progress, caption, grid);
   }
