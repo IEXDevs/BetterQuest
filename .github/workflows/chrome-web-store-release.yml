@@ -120,7 +120,7 @@ jobs:
           CWS_REFRESH_TOKEN: ${{ secrets.CHROME_WEBSTORE_REFRESH_TOKEN }}
           CWS_PUBLISHER_ID: ${{ vars.CHROME_WEBSTORE_PUBLISHER_ID }}
           CWS_EXTENSION_ID: ${{ vars.CHROME_WEBSTORE_EXTENSION_ID }}
-          EXTENSION_VERSION: ${{ env.EXTENSION_VERSION }}
+          EXTENSION_VERSION: ${{ needs.build.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
