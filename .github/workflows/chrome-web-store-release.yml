@@ -1,6 +1,7 @@
 name: Chrome Web Store release
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
