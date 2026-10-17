@@ -1,3 +1,5 @@
+import { betterQuestDebugLog } from '../../shared/debug';
+
 export interface AssessmentResponseBinding {
   id: string;
   number: string;
@@ -37,14 +39,18 @@ export function parseQuestionBoundary(text: string): number | null {
   const cleaned = clean(text);
   if (!cleaned) return null;
 
-  // 1. Exactly 3 digits: "001", "002", etc.
-  if (/^\d{3}$/.test(cleaned)) {
+  // 1. Zero-padded Quest question numbers: "001", "002", etc.
+  // Quest question numbers are always zero-padded to 3 digits (e.g. 001..099).
+  // A bare 3-digit number starting with 1-9 (e.g. 100, 250, 500) in prompt text
+  // or physics units must NOT be treated as a question boundary.
+  if (/^0\d{2}$/.test(cleaned)) {
     return Number(cleaned);
   }
 
   // 2. Three digits followed by delimiter or header text:
-  // e.g. "002 10.0 points", "002 (part 1 of 2)", "002: 10.0 pts", "002.", "002 - "
-  const threeDigitHeader = cleaned.match(/^(\d{3})(?:[:.\-–—]|\s+(?:[-+]?\d|\(part|points|pts|version)|\s*\(part)/i);
+  // e.g. "002 10.0 points", "002 (part 1 of 2)", "002: 10.0 pts", "002."
+  // Note: we do not treat subtraction hyphens like "100 - x" as header delimiters.
+  const threeDigitHeader = cleaned.match(/^(\d{3})(?:[:.]|\s+(?:[-+]?\d|\(part|points|pts|version)|\s*\(part)/i);
   if (threeDigitHeader) {
     return Number(threeDigitHeader[1]);
   }
@@ -158,17 +164,11 @@ export function mapPdfOptionLabels(runs: PdfTextRun[], optionMaximums: ReadonlyM
 
         if (!isLetter) {
           const numMatch = text.match(/^([1-9])\.(?!\d)/) ||
-                           text.match(/^\(([1-9])\)/) ||
-                           text.match(/^([1-9])\)(?!\d)/) ||
-                           text.match(/^([1-9]):(?!\d)/) ||
-                           text.match(/^([1-9])\s*[-–—]/);
+                           text.match(/^([1-9])\)(?:\s+|$)/);
           if (numMatch) value = Number(numMatch[1]);
         } else {
           const letterMatch = text.match(/^([a-iA-I])\.(?!\w)/) ||
-                              text.match(/^\(([a-iA-I])\)/) ||
-                              text.match(/^([a-iA-I])\)(?!\w)/) ||
-                              text.match(/^([a-iA-I]):(?!\w)/) ||
-                              text.match(/^([a-iA-I])\s*[-–—]/);
+                              text.match(/^([a-iA-I])\)(?:\s+|$)/);
           if (letterMatch) value = letterMatch[1].toUpperCase().charCodeAt(0) - 64;
         }
 
@@ -179,12 +179,12 @@ export function mapPdfOptionLabels(runs: PdfTextRun[], optionMaximums: ReadonlyM
           currentSeq = [{ ...run, questionNumber: qNum, optionValue: 1 }];
           expected = 2;
         } else if (currentSeq.length && value === expected) {
-          currentSeq.push({ ...run, questionNumber: qNum, optionValue: value });
-          expected++;
-        } else {
-          if (currentSeq.length) seqs.push(currentSeq);
-          currentSeq = [];
-          expected = 1;
+          // In Quest, options are line-by-line (each option must be vertically below the previous)
+          const prev = currentSeq[currentSeq.length - 1];
+          if (run.page > prev.page || run.top > prev.top + 3) {
+            currentSeq.push({ ...run, questionNumber: qNum, optionValue: value });
+            expected++;
+          }
         }
       }
       if (currentSeq.length) seqs.push(currentSeq);
@@ -197,8 +197,6 @@ export function mapPdfOptionLabels(runs: PdfTextRun[], optionMaximums: ReadonlyM
     if (validNumSeq) {
       targets.push(...validNumSeq.slice(0, maximum));
     } else {
-      // If no complete numeric sequence reached maximum, only check letters if NO numeric sequence of length >= 2 exists at all.
-      // Statements like A. ..., B. ... must never supersede numeric choices.
       const hasAnyNumSequence = numSeqs.some(seq => seq.length >= 2);
       if (!hasAnyNumSequence) {
         const letterSeqs = parseSequences(true);
@@ -419,6 +417,9 @@ export function readAssessmentResponses(table: HTMLTableElement): AssessmentResp
   return readAssessmentResponsesFromDom(table);
 }
 
+// Remembers the last parsed summary so debug logs fire only when it changes.
+let lastResponseSummary = '';
+
 function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResponseBinding[] {
   const rows: AssessmentResponseBinding[] = [];
   const trElements = table.querySelectorAll<HTMLTableRowElement>('tbody > tr, :scope > tr');
@@ -508,11 +509,12 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
       continue;
     }
 
-    // No select input: static completed answer in cell 1 (e.g. "3" in quest-responses.html)
-    // Only treat this as an answered row when there is real evidence (a value,
-    // a recorded attempt/status, or a correctness mark). A half-rendered row with
-    // none of these is indeterminate and must be skipped rather than reported answered.
-    if (!val && !recorded) continue;
+    // No select input: normally a static completed answer in cell 1 (e.g. "3" in
+    // quest-responses.html). Quest re-seeds its virtualized rows around a submit,
+    // so a row can briefly appear with no answer control, value, attempts or
+    // status. That half-rendered row must stay in the list — dropping it removes
+    // the question from the viewer's option map, which would leave the whole PDF
+    // without any clickable boxes. It must simply not be reported as answered.
     const optionCount = Math.max(val ? Number(val) : 1, maxTries, 5);
     const options = Array.from({ length: optionCount }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
     const syntheticSelect = row.ownerDocument.createElement('select');
@@ -535,8 +537,13 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
       submit: effectiveSubmit,
       options,
       attempts: attempts || (val ? 1 : 0),
-      answered: true,
+      answered: Boolean(val) || isCorrect || triesExhausted,
     });
+  }
+  const summary = `${rows.length} rows | answered: ${rows.filter(r => r.answered).map(r => r.number).join(', ') || '(none)'}`;
+  if (summary !== lastResponseSummary) {
+    lastResponseSummary = summary;
+    betterQuestDebugLog(table.ownerDocument, `Parsed response table -> ${summary}`);
   }
   return rows;
 }

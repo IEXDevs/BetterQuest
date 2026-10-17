@@ -138,6 +138,37 @@ test('PDF option mapping prefers numeric choices over lettered statements like A
   ]);
 });
 
+test('PDF option mapping is not confused by 3-digit numbers or subtraction in equations and prompts', () => {
+  const actual = mapper()([
+    run('009 10.0 points', 20),
+    run('A block of mass 250 g is suspended at 300 K.', 40),
+    run('Find the equation where y = 100 - x.', 60),
+    run('1. y = 1 - x', 80),
+    run('2. y = 2 - x', 100),
+    run('3. y = 3 - 2x', 120),
+    run('4. y = 4 - 3x', 140),
+    run('5. None of these', 160),
+    run('010 10.0 points', 200),
+  ], new Map([[9, 5]]));
 
+  assert.deepEqual(actual.map(({ questionNumber, optionValue, top }) => [questionNumber, optionValue, top]), [
+    [9, 1, 80], [9, 2, 100], [9, 3, 120], [9, 4, 140], [9, 5, 160],
+  ]);
+});
 
+test('PDF option mapping tolerates internal formula numbers, coordinates, and evaluations like f(1)', () => {
+  const actual = mapper()([
+    run('012 10.0 points', 20),
+    run('Let f(x) be defined on [0, 500].', 40),
+    run('1. f(1) = 2 and (1, 0) is a minimum', 60),
+    run('2. f(2) = 4 and (2, 0) is a minimum', 80),
+    run('3. f(3) = 6 and (3, 0) is a minimum', 100),
+    run('4. f(4) = 8 and (4, 0) is a minimum', 120),
+    run('5. None of these', 140),
+    run('013 10.0 points', 180),
+  ], new Map([[12, 5]]));
 
+  assert.deepEqual(actual.map(({ questionNumber, optionValue, top }) => [questionNumber, optionValue, top]), [
+    [12, 1, 60], [12, 2, 80], [12, 3, 100], [12, 4, 120], [12, 5, 140],
+  ]);
+});

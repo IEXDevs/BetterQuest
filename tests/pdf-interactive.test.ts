@@ -955,3 +955,116 @@ test('interactive PDF viewer bounds left-column options on two-column pages so t
   }
 });
 
+test('interactive PDF image answers give the final option full height matching preceding options', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 3]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      // 3 options spaced 100px apart: option 1 at 100, option 2 at 200, option 3 at 300
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 200), textRun('3.', 300)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    const opt1 = viewer.element.shadowRoot!.querySelector<HTMLElement>('.option-hit[data-option="1"]')!;
+    const opt3 = viewer.element.shadowRoot!.querySelector<HTMLElement>('.option-hit[data-option="3"]')!;
+    const h1 = Number.parseFloat(opt1.style.height);
+    const h3 = Number.parseFloat(opt3.style.height);
+    assert.ok(h1 > 10, `Option 1 must fill inter-label span, got ${h1}%`);
+    assert.ok(h3 > 10, `Final option 3 must have full territory matching previous options, got ${h3}%`);
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('interactive PDF options are vertically line-by-line and do not swallow the next question header', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [
+          textRun('001 10.0 points', 50, 45),
+          textRun('What is the value of x?', 80, 45),
+          textRun('1.', 120, 45),
+          textRun('2.', 160, 45),
+          textRun('002 10.0 points', 220, 45),
+        ],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    const opt1 = viewer.element.shadowRoot!.querySelector<HTMLElement>('.option-hit[data-option="1"]')!;
+    const opt2 = viewer.element.shadowRoot!.querySelector<HTMLElement>('.option-hit[data-option="2"]')!;
+    const top1 = Number.parseFloat(opt1.style.top);
+    const height1 = Number.parseFloat(opt1.style.height);
+    const top2 = Number.parseFloat(opt2.style.top);
+    const height2 = Number.parseFloat(opt2.style.height);
+
+    // Option 1 must not overlap Option 2
+    assert.ok(top1 + height1 <= top2 + 0.5, `Option 1 must end before Option 2 starts (${top1 + height1}% <= ${top2}%)`);
+    // Option 2 (last option of Q1) must NEVER extend into Question 2 (at y=220px, which is 27.5% of 800px)
+    assert.ok(top2 + height2 <= 27.5, `Option 2 must end before Question 2 header (${top2 + height2}% <= 27.5%)`);
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+
+test('interactive PDF estimated fallback options start after the prompt and distribute down to the next question', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 4]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      // Prompt spans from 50 to 200, next question starts at 600. No text labels for options.
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [
+          textRun('001 10.0 points', 50),
+          textRun('A complicated diagram with equations and formula text.', 120),
+          textRun('The prompt text ends here around y=180.', 180),
+          textRun('002 10.0 points', 600),
+        ],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    const hits = [...viewer.element.shadowRoot!.querySelectorAll<HTMLElement>('.option-hit[data-question="1"]')];
+    assert.equal(hits.length, 4, 'Must generate 4 options for unanswered question');
+    const top1 = Number.parseFloat(hits[0].style.top);
+    const top4 = Number.parseFloat(hits[3].style.top);
+    const height1 = Number.parseFloat(hits[0].style.height);
+    // top1 must start AFTER the prompt (y=180px in 800px page is 22.5%)
+    assert.ok(top1 >= 22, `Option 1 must start after the prompt text, got top=${top1}%`);
+    // top4 must span down near the next question (y=600px is 75%), NOT bunched up at top1
+    assert.ok(top4 - top1 > 25, `Options must span across the question territory, span was only ${top4 - top1}%`);
+    assert.ok(height1 >= 8, `Option boxes must be tall enough for image/equation territory, got height=${height1}%`);
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+

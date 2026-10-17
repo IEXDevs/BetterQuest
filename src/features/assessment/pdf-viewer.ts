@@ -1,5 +1,6 @@
 import { mapPdfOptionLabels, parseQuestionBoundary, extractQuestionPoints, clean, type PdfOptionTarget, type PdfTextRun } from '../../adapters/quest/assessment';
 import { celebrateScreen, flashScreen } from './celebration';
+import { isBetterQuestDebug } from '../../shared/debug';
 
 export interface InteractivePdfPage {
   width: number;
@@ -115,57 +116,75 @@ function hitArea(
   const isTwoColumn = targets.some(item => item.left >= pageWidth * 0.45) ||
                       pageRuns.some(item => item.left >= pageWidth * 0.45 && item.top > 30);
   const columnRight = (isLeftColumn && isTwoColumn) ? pageWidth * 0.48 : pageWidth * 0.96;
-  const sameColumn = targets.find(item =>
+  const columnLeft = (isTwoColumn && !isLeftColumn) ? pageWidth * 0.5 : 0;
+
+  // Options on Quest PDFs are strictly line-by-line down a column.
+  // There are no side-by-side options; boxes span across the column.
+  const left = Math.max(columnLeft, target.left - 6);
+  const right = columnRight;
+  const top = Math.max(0, target.top - Math.min(6, target.height * 0.4));
+
+  // Target below in the SAME question
+  const nextInSameQuestion = targets.find(item =>
     item.page === target.page &&
     item.questionNumber === target.questionNumber &&
-    item.top > target.top + 2 &&
-    Math.abs(item.left - target.left) < pageWidth * 0.25
+    item.top > target.top + 2
   );
-  const nextTargetInColumn = targets.find(item =>
-    item.page === target.page &&
-    item.top > target.top + 2 &&
-    Math.abs(item.left - target.left) < pageWidth * 0.25
-  );
-  const verticalLimit = sameColumn
-    ? sameColumn.top
-    : Math.min(nextTargetInColumn ? nextTargetInColumn.top : pageHeight, target.top + Math.max(34, target.height * 2.8));
 
-  // Identify runs that are part of the equation (excluding the label marker itself)
-  const equationRuns = pageRuns.filter(r => {
-    const isSameAsLabel = Math.abs(r.left - target.left) < 6 && Math.abs(r.top - target.top) < 6;
-    if (isSameAsLabel) return false;
-    return (
-      r.left >= target.left - 2 &&
-      r.left < columnRight &&
-      r.top >= target.top - target.height * 0.75 &&
-      r.top < verticalLimit - 2
-    );
+  // Preceding option in the same question (to match height for the last option)
+  const prevInQuestion = targets.find(item =>
+    item.page === target.page &&
+    item.questionNumber === target.questionNumber &&
+    item.optionValue === target.optionValue - 1 &&
+    target.top > item.top + 2
+  );
+  const prevHeight = prevInQuestion ? target.top - prevInQuestion.top : null;
+
+  // Next question boundary run on the page in this column
+  const nextQuestionRun = pageRuns.find(r => {
+    if (r.page !== target.page || r.top <= target.top + 5) return false;
+    const b = parseQuestionBoundary(clean(r.text));
+    if (b === null || b === target.questionNumber) return false;
+    if (isTwoColumn) {
+      if (isLeftColumn && r.left >= pageWidth * 0.5) return false;
+      if (!isLeftColumn && r.left < pageWidth * 0.45) return false;
+    }
+    return true;
   });
 
-  const left = Math.max(0, target.left - 6);
-  const top = Math.max(0, target.top - target.height * 0.4);
-  let right: number;
-  let bottom: number;
+  // Next target from a different question in this column
+  const nextTargetInColumn = targets.find(item => {
+    if (item.page !== target.page || item.questionNumber === target.questionNumber || item.top <= target.top + 5) return false;
+    if (isTwoColumn) {
+      if (isLeftColumn && item.left >= pageWidth * 0.5) return false;
+      if (!isLeftColumn && item.left < pageWidth * 0.45) return false;
+    }
+    return true;
+  });
 
-  if (equationRuns.length > 0) {
-    const maxEquationRight = Math.max(...equationRuns.map(r => r.left + r.width));
-    const maxEquationBottom = Math.max(...equationRuns.map(r => r.top + r.height));
-    right = Math.min(columnRight, Math.max(target.left + 50, maxEquationRight + 12));
-    bottom = Math.min(verticalLimit - 2, Math.max(target.top + target.height + 4, maxEquationBottom + 4));
+  const verticalCeiling = nextQuestionRun
+    ? nextQuestionRun.top - 8
+    : (nextTargetInColumn ? nextTargetInColumn.top - 35 : pageHeight - 20);
+
+  let bottom: number;
+  if (nextInSameQuestion) {
+    bottom = Math.min(nextInSameQuestion.top - 2, verticalCeiling);
   } else {
-    // If target itself contains text (e.g. run contains "5. f'(x) = ...")
-    const textTargetRight = target.left + target.width;
-    const hasMeaningfulTargetText = clean(target.text).length > 3 && target.width > target.height * 2;
-    right = hasMeaningfulTargetText
-      ? Math.min(columnRight, Math.max(target.left + 50, textTargetRight + 12))
-      : columnRight;
-    bottom = Math.max(verticalLimit - 4, target.top + Math.max(22, target.height * 1.8));
+    // This is the last option of the question.
+    // It must NEVER exceed verticalCeiling (the next question header).
+    const optionSpan = prevHeight
+      ? Math.max(prevHeight - 4, 30)
+      : Math.max(30, target.height * 2.5);
+    bottom = Math.min(verticalCeiling, target.top + optionSpan);
   }
+
+  // Ensure minimum height while staying strictly within verticalCeiling
+  bottom = Math.min(pageHeight - 10, Math.min(verticalCeiling, Math.max(top + 18, bottom)));
 
   const safeLeft = Math.max(0, Math.min(pageWidth - 40, left));
   const safeTop = Math.max(0, Math.min(pageHeight - 20, top));
   const safeWidth = Math.min(pageWidth - safeLeft, Math.max(40, right - safeLeft));
-  const safeHeight = Math.min(pageHeight - safeTop, Math.max(20, bottom - safeTop));
+  const safeHeight = Math.min(pageHeight - safeTop, Math.max(16, bottom - safeTop));
 
   return {
     left: (safeLeft / pageWidth) * 100,
@@ -279,72 +298,75 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     }
     .option-hit{
       position:absolute;
-      z-index:2;      border:1.5px dashed rgba(99,102,241,.5);
-      border-radius:6px;
-      background:rgba(99,102,241,.06);
-      color:transparent;
-      cursor:pointer;
-      transition:background .15s ease,border-color .15s ease,box-shadow .15s ease
-    }
-    .option-hit::before{
-      content:attr(data-option);
-      position:absolute;
-      /* Sits just outside the box, so it never covers the PDF's own text. */
-      right:calc(100% + 6px);
-      left:auto;
-      top:50%;
+      z-index:10;
       display:grid;
       place-items:center;
-      width:22px;
-      height:22px;
+      width:24px!important;
+      height:24px!important;
+      border-radius:50%!important;
+      border:2px solid #6366f1;
+      background:rgba(255,255,255,.94);
+      color:#4338ca;
+      font:800 12px/1 ui-rounded,"Avenir Next",system-ui,sans-serif;
+      box-shadow:0 1px 4px rgba(79,70,229,.25);
+      cursor:pointer;
+      box-sizing:border-box;
+      transform:translate(-2px,-2px);
+      transition:transform .15s cubic-bezier(.16,1,.3,1),background .15s ease,border-color .15s ease,box-shadow .15s ease,color .15s ease;
+    }
+    .option-hit::before{
+      content:'';
+      position:absolute;
+      inset:-6px;
       border-radius:50%;
+      pointer-events:auto;
+    }
+    :host([data-dark-pages="true"]) .option-hit{
+      background:rgba(24,37,58,.94);
+      color:#e0e7ff;
+      border-color:#818cf8;
+      box-shadow:0 1px 4px rgba(0,0,0,.45);
+    }
+    .option-hit:hover,.option-hit:focus-visible{
+      transform:translate(-2px,-2px) scale(1.15);
+      border-color:#4338ca;
       background:#4f46e5;
       color:#fff;
-      font:800 12px/1 ui-rounded,"Avenir Next",sans-serif;
-      transform:translateY(-50%);
-      opacity:.95;
-      box-shadow:0 2px 6px rgba(79,70,229,.45);
-      transition:transform .15s ease,background .15s ease,opacity .15s ease;
-      pointer-events:none
+      box-shadow:0 3px 10px rgba(79,70,229,.45);
     }
-    .option-hit:hover{
-      border:1.5px solid #6366f1;
-      background:rgba(99,102,241,.14);
-      box-shadow:0 0 0 3px rgba(99,102,241,.24)
-    }
-    .option-hit:hover::before,.option-hit:focus-visible::before{
-      transform:translateY(-50%) scale(1.1);
-      background:#4338ca;
-      opacity:1
+    :host([data-dark-pages="true"]) .option-hit:hover,
+    :host([data-dark-pages="true"]) .option-hit:focus-visible{
+      border-color:#a5b4fc;
+      background:#6366f1;
+      color:#fff;
     }
     .option-hit:active{
-      transform:scale(.96);
-    }
-    .option-hit:active::before{
-      transform:translateY(-50%) scale(1.2);
+      transform:translate(-2px,-2px) scale(1.05);
     }
     .option-hit[hidden]{
       display:none!important;
     }
     .option-hit[aria-pressed="true"]{
-      border:2px solid #4f46e5;
-      background:rgba(99,102,241,.2);
-      box-shadow:0 0 0 3px rgba(79,70,229,.35)
-    }
-    .option-hit[aria-pressed="true"]::before{
-      background:#312e81;
+      border:2px solid #312e81;
+      background:#4f46e5;
       color:#fff;
-      transform:translateY(-50%) scale(1.15);
-      opacity:1;
-      box-shadow:0 2px 8px rgba(49,46,129,.6)
+      transform:translate(-2px,-2px) scale(1.12);
+      box-shadow:0 0 0 3px rgba(79,70,229,.35),0 3px 8px rgba(49,46,129,.5);
+    }
+    :host([data-dark-pages="true"]) .option-hit[aria-pressed="true"]{
+      border-color:#c7d2fe;
+      background:#6366f1;
+      color:#fff;
+      box-shadow:0 0 0 3px rgba(129,140,248,.4),0 3px 8px rgba(0,0,0,.5);
     }
     .option-hit.is-wrong{
-      border:1.5px solid #dc2626;
-      background:rgba(220,38,38,.10);
+      border-color:#b91c1c;
+      background:#dc2626;
+      color:#fff;
+      box-shadow:0 2px 6px rgba(220,38,38,.45);
     }
     .option-hit.is-wrong::before{
-      background:#b91c1c;
-      text-decoration:line-through;
+      display:none;
     }
     .option-hit.is-wrong::after{
       content:'✕';
@@ -568,6 +590,11 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   let zoomLevel = readZoom();
   let fitScale = 1;
   let currentAnswered = new Set<number>(options.answeredQuestions ?? []);
+  // The set of questions and their option counts can grow while the workspace
+  // reads Quest's lazily-rendered response table, so it is kept mutable.
+  let optionMaximums = new Map<number, number>(options.optionMaximums);
+  let pdfRuns: PdfTextRun[] = [];
+  let paintChoices: () => void = () => {};
 
   function dismissConfirm() {
     for (const [qNum, btn] of submitButtons.entries()) {
@@ -644,170 +671,254 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         pageElements.set(pageNumber, { root, width: page.width, height: page.height, runs: page.runs }); runs.push(...page.runs);
       }
       fitPagesToViewer();
-      const targets = mapPdfOptionLabels(runs, options.optionMaximums);
-      try {
-        options.onPoints?.(extractQuestionPoints(runs));
-      } catch { /* points are a bonus; never break choice mapping */ }
+      pdfRuns = runs;
+      paintChoices = () => {
+        const doc = source;
+        if (!doc) return;
+        // Rebuild from scratch: this runs again when the question map grows.
+        for (const { root: pageRoot } of pageElements.values()) {
+          pageRoot.querySelectorAll('.question-anchor, .option-hit').forEach(node => node.remove());
+        }
+        const targets = mapPdfOptionLabels(pdfRuns, optionMaximums);
+        if (isBetterQuestDebug(document)) {
+          const found = new Map<number, number>();
+          for (const t of targets) found.set(t.questionNumber, (found.get(t.questionNumber) ?? 0) + 1);
+          const report = [...optionMaximums.entries()].sort((a, b) => a[0] - b[0])
+            .map(([q, max]) => {
+              const n = found.get(q) ?? 0;
+              return `Q${q}:${n}/${max}${n === 0 ? '*estimated*' : ''}`;
+            });
+          console.info(`[BetterQuest debug] PDF option labels found per question (found/max): ${report.join(' ')}`);
+        }
+        try {
+          options.onPoints?.(extractQuestionPoints(pdfRuns));
+        } catch { /* points are a bonus; never break choice mapping */ }
 
-      // Build persistent question anchors for every question on the PDF so that jump
-      // navigation can scroll directly to any question even when all questions are complete.
-      const allQuestionNumbers = new Set<number>();
-      for (const qNum of options.optionMaximums.keys()) allQuestionNumbers.add(qNum);
-      for (const t of targets) allQuestionNumbers.add(t.questionNumber);
-      for (const r of runs) {
-        const b = parseQuestionBoundary(clean(r.text));
-        if (b !== null && b > 0) allQuestionNumbers.add(b);
-      }
+        // Build persistent question anchors for every question on the PDF so that jump
+        // navigation can scroll directly to any question even when all questions are complete.
+        const allQuestionNumbers = new Set<number>();
+        for (const qNum of optionMaximums.keys()) allQuestionNumbers.add(qNum);
+        for (const t of targets) allQuestionNumbers.add(t.questionNumber);
+        for (const r of pdfRuns) {
+          const b = parseQuestionBoundary(clean(r.text));
+          if (b !== null && b > 0) allQuestionNumbers.add(b);
+        }
 
-      for (const qNum of [...allQuestionNumbers].sort((a, b) => a - b)) {
-        if (!Number.isInteger(qNum) || qNum <= 0) continue;
-        const qBoundaryRun = runs.find(r => parseQuestionBoundary(clean(r.text)) === qNum) ||
-          runs.find(r => clean(r.text) === String(qNum).padStart(3, '0')) ||
-          runs.find(r => new RegExp(`^0*${qNum}(?:\\b|[:.)\\s])`).test(clean(r.text)));
-        let targetPage = 1;
-        let topPercent = 0;
-        if (qBoundaryRun) {
-          targetPage = qBoundaryRun.page;
-          const pageInfo = pageElements.get(targetPage);
-          const height = pageInfo?.height || 800;
-          topPercent = Math.max(0, Math.min(100, ((qBoundaryRun.top - 12) / height) * 100));
-        } else {
-          const qTarget = targets.find(t => t.questionNumber === qNum);
-          if (qTarget) {
-            targetPage = qTarget.page;
+        for (const qNum of [...allQuestionNumbers].sort((a, b) => a - b)) {
+          if (!Number.isInteger(qNum) || qNum <= 0) continue;
+          const qBoundaryRun = pdfRuns.find(r => parseQuestionBoundary(clean(r.text)) === qNum) ||
+            pdfRuns.find(r => clean(r.text) === String(qNum).padStart(3, '0')) ||
+            pdfRuns.find(r => new RegExp(`^0*${qNum}(?:\\b|[:.)\\s])`).test(clean(r.text)));
+          let targetPage = 1;
+          let topPercent = 0;
+          if (qBoundaryRun) {
+            targetPage = qBoundaryRun.page;
             const pageInfo = pageElements.get(targetPage);
             const height = pageInfo?.height || 800;
-            topPercent = Math.max(0, Math.min(100, ((qTarget.top - 40) / height) * 100));
+            topPercent = Math.max(0, Math.min(100, ((qBoundaryRun.top - 12) / height) * 100));
           } else {
-            const totalQ = Math.max(1, allQuestionNumbers.size);
-            targetPage = Math.max(1, Math.min(source.pageCount, Math.ceil((qNum / totalQ) * source.pageCount)));
-            topPercent = 10;
+            const qTarget = targets.find(t => t.questionNumber === qNum);
+            if (qTarget) {
+              targetPage = qTarget.page;
+              const pageInfo = pageElements.get(targetPage);
+              const height = pageInfo?.height || 800;
+              topPercent = Math.max(0, Math.min(100, ((qTarget.top - 40) / height) * 100));
+            } else {
+              const totalQ = Math.max(1, allQuestionNumbers.size);
+              targetPage = Math.max(1, Math.min(doc.pageCount, Math.ceil((qNum / totalQ) * doc.pageCount)));
+              topPercent = 10;
+            }
+          }
+          const pageRoot = pageElements.get(targetPage)?.root;
+          if (pageRoot) {
+            const anchor = document.createElement('div');
+            anchor.className = 'question-anchor';
+            anchor.dataset.question = String(qNum);
+            anchor.style.top = `${topPercent}%`;
+            pageRoot.append(anchor);
           }
         }
-        const pageRoot = pageElements.get(targetPage)?.root;
-        if (pageRoot) {
-          const anchor = document.createElement('div');
-          anchor.className = 'question-anchor';
-          anchor.dataset.question = String(qNum);
-          anchor.style.top = `${topPercent}%`;
-          pageRoot.append(anchor);
-        }
-      }
 
-      // Ensure boxes for ALL answers possible for every unanswered question
-      for (const [qNum, max] of options.optionMaximums.entries()) {
-        if (currentAnswered.has(qNum)) continue;
-        if (max < 1 || max > 9) continue;
-        const qTargets = targets.filter(t => t.questionNumber === qNum);
-        if (qTargets.length > 0 && qTargets.length < max) {
-          const existingValues = new Set(qTargets.map(t => t.optionValue));
-          const sorted = [...qTargets].sort((a, b) => a.optionValue - b.optionValue);
-          const first = sorted[0];
-          const last = sorted[sorted.length - 1];
-          const dy = sorted.length > 1
-            ? (last.top - first.top) / (sorted.length - 1)
-            : Math.max(30, last.height * 2.8);
-          for (let v = 1; v <= max; v++) {
-            if (!existingValues.has(v)) {
-              const offset = v - last.optionValue;
-              targets.push({
-                text: `${v}.`,
-                page: last.page,
-                left: last.left,
-                top: last.top + dy * offset,
-                width: last.width,
-                height: last.height,
-                questionNumber: qNum,
-                optionValue: v,
-              });
-            }
-          }
-        } else if (qTargets.length === 0) {
-          const qBoundaryRun = runs.find(r => parseQuestionBoundary(clean(r.text)) === qNum) ||
-            runs.find(r => clean(r.text) === String(qNum).padStart(3, '0')) ||
-            runs.find(r => new RegExp(`^0*${qNum}(?:\\b|[:.)\\s])`).test(clean(r.text)));
-          if (qBoundaryRun) {
-            const dy = Math.max(30, qBoundaryRun.height * 2.5);
-            const startTop = qBoundaryRun.top + Math.max(40, qBoundaryRun.height * 3);
-            for (let v = 1; v <= max; v++) {
-              targets.push({
-                text: `${v}.`,
-                page: qBoundaryRun.page,
-                left: Math.max(40, qBoundaryRun.left),
-                top: startTop + (v - 1) * dy,
-                width: 14,
-                height: 12,
-                questionNumber: qNum,
-                optionValue: v,
-              });
-            }
-          }
-        }
-      }
+        // Ensure boxes for ALL answers possible for every unanswered question
+        for (const [qNum, max] of optionMaximums.entries()) {
+          if (currentAnswered.has(qNum)) continue;
+          if (max < 1 || max > 9) continue;
+          const qTargets = targets.filter(t => t.questionNumber === qNum);
+          if (qTargets.length > 0 && qTargets.length < max) {
+            const existingValues = new Set(qTargets.map(t => t.optionValue));
+            const sorted = [...qTargets].sort((a, b) => a.optionValue - b.optionValue);
+            const first = sorted[0];
+            const last = sorted[sorted.length - 1];
+            const pageInfo = pageElements.get(last.page);
+            const pageH = pageInfo?.height || 800;
+            const pageW = pageInfo?.width || 600;
+            const isLeft = last.left < pageW * 0.5;
+            const isTwoCol = pdfRuns.some(r => r.left >= pageW * 0.45 && r.top > 30);
 
-      if (!targets.length) {
-        if (currentAnswered.size > 0 && currentAnswered.size >= options.optionMaximums.size) {
-          const pageLabel = `${source.pageCount} ${source.pageCount === 1 ? 'page' : 'pages'}`;
-          meta.textContent = `${pageLabel} · All questions completed`;
-          return true;
-        }
-        const page1 = pageElements.get(1);
-        if (page1 && options.optionMaximums.size > 0) {
-          let currentTop = 80;
-          for (const [qNum, max] of options.optionMaximums.entries()) {
-            if (currentAnswered.has(qNum)) continue;
-            for (let v = 1; v <= max; v++) {
-              targets.push({
-                text: `${v}.`,
-                page: 1,
-                left: 60,
-                top: currentTop,
-                width: 14,
-                height: 12,
-                questionNumber: qNum,
-                optionValue: v,
-              });
-              currentTop += 28;
+            const nextQRun = pdfRuns.find(r => {
+              if (r.page !== last.page || r.top <= last.top + 20) return false;
+              const b = parseQuestionBoundary(clean(r.text));
+              if (b === null || b === qNum) return false;
+              if (isTwoCol) {
+                if (isLeft && r.left >= pageW * 0.5) return false;
+                if (!isLeft && r.left < pageW * 0.45) return false;
+              }
+              return true;
+            });
+            const nextQBottom = nextQRun ? nextQRun.top - 12 : pageH - 40;
+
+            const missingBelow = max - last.optionValue;
+            let dy = sorted.length > 1
+              ? (last.top - first.top) / (sorted.length - 1)
+              : Math.max(35, (nextQBottom - last.top) / Math.max(1, missingBelow + 1));
+
+            if (missingBelow > 0 && last.top + dy * missingBelow > nextQBottom - 8) {
+              dy = Math.max(20, (nextQBottom - 8 - last.top) / missingBelow);
             }
-            currentTop += 20;
+
+            for (let v = 1; v <= max; v++) {
+              if (!existingValues.has(v)) {
+                const offset = v - last.optionValue;
+                targets.push({
+                  text: `${v}.`,
+                  page: last.page,
+                  left: last.left,
+                  top: last.top + dy * offset,
+                  width: last.width,
+                  height: last.height,
+                  questionNumber: qNum,
+                  optionValue: v,
+                });
+              }
+            }
+          } else if (qTargets.length === 0) {
+            const qBoundaryRun = pdfRuns.find(r => parseQuestionBoundary(clean(r.text)) === qNum) ||
+              pdfRuns.find(r => clean(r.text) === String(qNum).padStart(3, '0')) ||
+              pdfRuns.find(r => new RegExp(`^0*${qNum}(?:\\b|[:.)\\s])`).test(clean(r.text)));
+            if (qBoundaryRun) {
+              const pageInfo = pageElements.get(qBoundaryRun.page);
+              const pageH = pageInfo?.height || 800;
+              const pageW = pageInfo?.width || 600;
+              const isLeft = qBoundaryRun.left < pageW * 0.5;
+              const isTwoCol = pdfRuns.some(r => r.left >= pageW * 0.45 && r.top > 30);
+              const colLeft = (isTwoCol && !isLeft) ? pageW * 0.5 : 40;
+
+              // Find where the next question begins on this page & column
+              const nextQRun = pdfRuns.find(r => {
+                if (r.page !== qBoundaryRun.page || r.top <= qBoundaryRun.top + 20) return false;
+                const b = parseQuestionBoundary(clean(r.text));
+                if (b === null || b === qNum) return false;
+                if (isTwoCol) {
+                  if (isLeft && r.left >= pageW * 0.5) return false;
+                  if (!isLeft && r.left < pageW * 0.45) return false;
+                }
+                return true;
+              });
+              const nextQBottom = nextQRun ? nextQRun.top - 12 : pageH - 40;
+
+              const minOptionH = 28;
+              const maxStartTop = Math.max(qBoundaryRun.top + 35, nextQBottom - max * minOptionH);
+              const minStartTop = qBoundaryRun.top + 35;
+
+              // Find where the prompt text ends (runs before maxStartTop)
+              const promptRuns = pdfRuns.filter(r =>
+                r.page === qBoundaryRun.page &&
+                r.top >= qBoundaryRun.top &&
+                r.top <= maxStartTop &&
+                r.top < nextQBottom - 30 &&
+                (isTwoCol ? (isLeft ? r.left < pageW * 0.5 : r.left >= pageW * 0.45) : true)
+              );
+              const promptBottom = promptRuns.length > 0
+                ? Math.max(...promptRuns.map(r => r.top + r.height))
+                : qBoundaryRun.top + 25;
+
+              const startTop = Math.min(maxStartTop, Math.max(minStartTop, promptBottom + 10));
+              const availableHeight = Math.max(max * 20, nextQBottom - 6 - startTop);
+              const dy = availableHeight / max;
+
+              for (let v = 1; v <= max; v++) {
+                targets.push({
+                  text: `${v}.`,
+                  page: qBoundaryRun.page,
+                  left: Math.max(colLeft, qBoundaryRun.left),
+                  top: startTop + (v - 1) * dy,
+                  width: 14,
+                  height: Math.max(12, dy - 6),
+                  questionNumber: qNum,
+                  optionValue: v,
+                });
+              }
+            }
           }
         }
+
         if (!targets.length) {
-          if (currentAnswered.size > 0) {
-            const pageLabel = `${source.pageCount} ${source.pageCount === 1 ? 'page' : 'pages'}`;
+          if (currentAnswered.size > 0 && currentAnswered.size >= optionMaximums.size) {
+            const pageLabel = `${doc.pageCount} ${doc.pageCount === 1 ? 'page' : 'pages'}`;
             meta.textContent = `${pageLabel} · All questions completed`;
-            return true;
+            return;
           }
-          throw new Error('Interactive choices unavailable for this document.');
+          const page1 = pageElements.get(1);
+          if (page1 && optionMaximums.size > 0) {
+            let currentTop = 80;
+            for (const [qNum, max] of optionMaximums.entries()) {
+              if (currentAnswered.has(qNum)) continue;
+              for (let v = 1; v <= max; v++) {
+                targets.push({
+                  text: `${v}.`,
+                  page: 1,
+                  left: 60,
+                  top: currentTop,
+                  width: 14,
+                  height: 12,
+                  questionNumber: qNum,
+                  optionValue: v,
+                });
+                currentTop += 28;
+              }
+              currentTop += 20;
+            }
+          }
+          if (!targets.length) {
+            if (currentAnswered.size > 0) {
+              const pageLabel = `${doc.pageCount} ${doc.pageCount === 1 ? 'page' : 'pages'}`;
+              meta.textContent = `${pageLabel} · All questions completed`;
+              return;
+            }
+            throw new Error('Interactive choices unavailable for this document.');
+          }
         }
-      }
 
-      for (const target of targets) {
-        // Never invent clickable choices for PDF headers the response table did
-        // not list — that is how finished homeworks kept showing 70+ options.
-        if (!options.optionMaximums.has(target.questionNumber)) continue;
-        if (currentAnswered.has(target.questionNumber)) {
-          // If a user has already answered a question do not show the option to choose answers for that
-          continue;
+        for (const target of targets) {
+          // Never invent clickable choices for PDF headers the response table did
+          // not list — that is how finished homeworks kept showing 70+ options.
+          if (!optionMaximums.has(target.questionNumber)) continue;
+          if (currentAnswered.has(target.questionNumber)) {
+            // If a user has already answered a question do not show the option to choose answers for that
+            continue;
+          }
+          const page = pageElements.get(target.page); if (!page) continue;
+          const area = hitArea(target, targets, page.runs, page.width, page.height);
+          const button = document.createElement('button'); button.type = 'button'; button.className = 'option-hit';
+          button.dataset.question = String(target.questionNumber); button.dataset.option = String(target.optionValue);
+          const label = clean(target.text).replace(/[^a-zA-Z0-9]/g, '') || String(target.optionValue);
+          button.textContent = label;
+          button.setAttribute('aria-label', `Select option ${target.optionValue} for question ${target.questionNumber}`); button.setAttribute('aria-pressed', 'false');
+          button.style.left = `${area.left}%`; button.style.top = `${area.top}%`; button.style.width = `${area.width}%`; button.style.height = `${area.height}%`;
+          button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            options.onChoose(target.questionNumber, target.optionValue);
+          });
+          page.root.append(button);
         }
-        const page = pageElements.get(target.page); if (!page) continue;
-        const area = hitArea(target, targets, page.runs, page.width, page.height);
-        const button = document.createElement('button'); button.type = 'button'; button.className = 'option-hit';
-        button.dataset.question = String(target.questionNumber); button.dataset.option = String(target.optionValue);
-        button.setAttribute('aria-label', `Select option ${target.optionValue} for question ${target.questionNumber}`); button.setAttribute('aria-pressed', 'false');
-        button.style.left = `${area.left}%`; button.style.top = `${area.top}%`; button.style.width = `${area.width}%`; button.style.height = `${area.height}%`;
-        button.addEventListener('click', (event) => {
-          event.stopPropagation();
-          options.onChoose(target.questionNumber, target.optionValue);
-        });
-        page.root.append(button);
-      }
-      const activeTargets = targets.filter(t => !currentAnswered.has(t.questionNumber));
-      const pageLabel = `${source.pageCount} ${source.pageCount === 1 ? 'page' : 'pages'}`;
-      const choiceLabel = activeTargets.length > 0
-        ? `${activeTargets.length} answer ${activeTargets.length === 1 ? 'choice' : 'choices'}`
-        : 'All questions completed';
-      meta.textContent = `${pageLabel} · ${choiceLabel}`;
+        const activeTargets = targets.filter(t => !currentAnswered.has(t.questionNumber));
+        const pageLabel = `${doc.pageCount} ${doc.pageCount === 1 ? 'page' : 'pages'}`;
+        const choiceLabel = activeTargets.length > 0
+          ? `${activeTargets.length} answer ${activeTargets.length === 1 ? 'choice' : 'choices'}`
+          : 'All questions completed';
+        meta.textContent = `${pageLabel} · ${choiceLabel}`;
+      };
+      paintChoices();
       return true;
     } catch (error) {
       if (abort.signal.aborted || disposed) return false;
@@ -893,14 +1004,12 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg> Confirm`;
           const leftPct = Number.parseFloat(activeHit.style.left) || 0;
           const topPct = Number.parseFloat(activeHit.style.top) || 0;
-          const widthPct = Number.parseFloat(activeHit.style.width) || 0;
-          const heightPct = Number.parseFloat(activeHit.style.height) || 0;
-          if (leftPct + widthPct > 78) {
+          if (leftPct > 78) {
             btn.style.right = '8px';
           } else {
-            btn.style.left = `calc(${Math.min(84, leftPct + widthPct)}% + 10px)`;
+            btn.style.left = `calc(${leftPct}% + 34px)`;
           }
-          btn.style.top = `calc(${topPct + heightPct / 2}% - 14px)`;
+          btn.style.top = `calc(${topPct}% - 4px)`;
           btn.addEventListener('click', (event) => {
             event.stopPropagation();
             attemptSubmit(questionNumber);
@@ -967,6 +1076,10 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     },
     setAnsweredQuestions(answered: ReadonlySet<number>) {
       currentAnswered = new Set(answered);
+      if (isBetterQuestDebug(element.ownerDocument)) {
+        const list = [...currentAnswered].sort((a, b) => a - b);
+        console.info(`[BetterQuest debug] PDF treats these questions as completed (boxes hidden): ${list.length ? list.join(', ') : '(none)'}`);
+      }
       for (const button of shadow.querySelectorAll<HTMLButtonElement>('.option-hit')) {
         const q = Number(button.dataset.question);
         // Hide, never delete: a half-rendered row during Quest's reseed can
@@ -981,6 +1094,26 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         }
       }
       refreshMeta();
+    },
+    setOptionMaximums(next: ReadonlyMap<number, number>): boolean {
+      // Quest renders its response rows lazily, so the workspace keeps feeding
+      // the map as more questions become readable. Rebuild choices whenever the
+      // map grows so every question gets its answer boxes. Nothing is applied
+      // until the pages are painted, so the workspace re-feeds the map from its
+      // ready handler.
+      if (!pdfRuns.length) return false;
+      let grew = false;
+      for (const [qNum, max] of next) {
+        if ((optionMaximums.get(qNum) ?? 0) < max) { optionMaximums.set(qNum, max); grew = true; }
+      }
+      if (!grew) return false;
+      paintChoices();
+      for (const button of shadow.querySelectorAll<HTMLButtonElement>('.option-hit')) {
+        const q = Number(button.dataset.question);
+        button.hidden = currentAnswered.has(q) && !keptCorrect.has(q);
+      }
+      refreshMeta();
+      return true;
     },
     scrollToQuestion(questionNumber: number): boolean {
       const anchor = shadow.querySelector<HTMLElement>(`.question-anchor[data-question="${questionNumber}"]`);

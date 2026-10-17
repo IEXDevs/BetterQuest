@@ -9,6 +9,7 @@ import {
 } from '../../adapters/quest/assessment';
 import { createInteractivePdfViewer } from './pdf-viewer';
 import { celebrateScreen, flashScreen } from './celebration';
+import { isBetterQuestDebug } from '../../shared/debug';
 
 type PdfViewer = ReturnType<typeof createInteractivePdfViewer>;
 type PdfViewerFactory = (container: HTMLElement, options: Parameters<typeof createInteractivePdfViewer>[1]) => any;
@@ -1031,8 +1032,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     });
   }
 
-  function ensurePdfViewer(elements: PdfAssessmentElements, bindings: ReturnType<typeof readAssessmentResponses>) {
-    if (!viewerFactory || pdfViewerStarted || !bindings.length) return;
+  function computeOptionMaximums(bindings: ReturnType<typeof readAssessmentResponses>): Map<number, number> {
     const optionMaximums = new Map<number, number>();
     const getBindingMax = (binding: (typeof bindings)[number]): number => {
       const selectOptions = binding.select ? [...binding.select.options] : [];
@@ -1056,7 +1056,19 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         optionMaximums.set(questionNumber, maximum);
       }
     }
+    return optionMaximums;
+  }
+
+  function ensurePdfViewer(elements: PdfAssessmentElements, bindings: ReturnType<typeof readAssessmentResponses>) {
+    if (!viewerFactory || pdfViewerStarted || !bindings.length) return;
+    const optionMaximums = computeOptionMaximums(bindings);
     if (!optionMaximums.size) return;
+    if (isBetterQuestDebug(root.ownerDocument)) {
+      const map = [...optionMaximums.entries()].sort((a, b) => a[0] - b[0]).map(([q, m]) => `Q${q}:${m}`);
+      const done = bindings.filter(b => b.answered).map(b => b.number);
+      console.info(`[BetterQuest debug] Viewer build: ${bindings.length} response row(s), marked answered: ${done.join(', ') || '(none)'}`);
+      console.info(`[BetterQuest debug] Answer boxes will be mapped for ${map.length} questions -> ${map.join(' ')}`);
+    }
     pdfViewerStarted = true;
     const answeredQuestions = new Set<number>(
       bindings.filter(b => b.answered).map(b => Number(b.number)).filter(Number.isInteger)
@@ -1083,7 +1095,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       }
       syncPdfVisibility(pdfViewerReady !== false);
       // Re-apply after the async paint: a finished homework must not keep
-      // option boxes that were mapped before every response row was known.
+      // option boxes that were mapped before every response row was known, and
+      // the map may have grown while the pages were still rendering.
+      if (lastBindings.length) pdfViewer.setOptionMaximums?.(computeOptionMaximums(lastBindings));
       pdfViewer.setAnsweredQuestions?.(new Set(knownAnswered));
       applyMarks(lastBindings);
     });
@@ -1280,6 +1294,10 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     hideNativeStatsElements(document, root);
     paintSummary(bindings, elements.tally);
     ensurePdfViewer(elements, bindings);
+    // Quest's Scroller renders response rows lazily, so the viewer can be built
+    // from a partial table. Feed it the growing map as more rows arrive so every
+    // question ends up with its answer boxes.
+    if (pdfViewerStarted) pdfViewer?.setOptionMaximums?.(computeOptionMaximums(bindings));
     // Use the accumulated set — Scroller may only expose a window of rows now.
     pdfViewer?.setAnsweredQuestions?.(new Set(knownAnswered));
     if (pendingSubmit) {

@@ -1655,10 +1655,12 @@ test('checkCorrect status counts as answered even without a word-boundary around
   dom.window.close();
 });
 
-test('a half-rendered response row is skipped instead of reported answered', () => {
+test('a half-rendered response row is kept but not reported answered', () => {
   // Quest re-seeds its virtualized response rows around a submit. A row caught
   // half-rendered has no answer control, no value, no attempts and no status.
-  // Reporting such a row as answered hides the option boxes for a live question.
+  // It must not be reported as answered (that hides the option boxes for a live
+  // question), but it must stay in the list so its choices are still mapped —
+  // dropping it would leave the whole PDF without clickable boxes.
   const dom = new JSDOM(`<table id="instance-table-courseuserassignment_1"><tbody>
     <tr data-id="cuaip_1"><td>1.</td><td class="input"></td>
       <td class="status"></td><td class="previous"></td><td class="correct"></td>
@@ -1669,9 +1671,11 @@ test('a half-rendered response row is skipped instead of reported answered', () 
   </tbody></table>`);
   const table = dom.window.document.querySelector('table')!;
   const bindings = readAssessmentResponses(table);
-  assert.equal(bindings.length, 1, 'The empty half-rendered row must be skipped, not synthesized as an answered question');
-  assert.equal(bindings[0].number, '2');
-  assert.equal(bindings[0].answered, false);
+  assert.equal(bindings.length, 2, 'The half-rendered row must stay so its choices remain mapped');
+  assert.equal(bindings[0].number, '1');
+  assert.equal(bindings[0].answered, false, 'A row with no value and no evidence must not be reported answered');
+  assert.ok(bindings[0].options.length >= 4, 'The half-rendered row still needs its choice options mapped');
+  assert.equal(bindings[1].answered, false);
   dom.window.close();
 });
 

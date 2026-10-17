@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createPdfAssessmentWorkspace, createSlideAssessmentEnhancement } from '../src/features/assessment/workspace';
+import { createInteractivePdfViewer } from '../src/features/assessment/pdf-viewer';
 import { observeScoped } from '../src/features/lifecycle';
 import { createAssessmentHeader } from '../src/features/assessment/header';
 import { enhanceCourseReviewTab, disposeReviewSliders } from '../src/features/courses/review-enhancer';
@@ -683,6 +684,66 @@ test('sidebar provides go to question on expanded view with green, orange, red, 
     const pctValue = r.querySelector('.pct-value');
     assert.ok(pctValue, 'Percentage readout exists at the bottom');
     assert.match(pctValue!.textContent || '', /\d+%/);
+  } finally { workspace.dispose(); dom.window.close(); }
+});
+
+function responseRow(q: number): string {
+  return `<tr data-id="cuaip_${q}"><td>${q}.</td><td><select name="response"><option value=""></option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></td><td class="status"></td><td class="previous">0 / 5</td><td><button type="button" aria-label="Submit response">Submit</button></td></tr>`;
+}
+
+function pdfRunsFor(questions: number) {
+  const runs: { text: string; page: number; left: number; top: number; width: number; height: number }[] = [];
+  let top = 40;
+  for (let q = 1; q <= questions; q++) {
+    runs.push({ text: String(q).padStart(3, '0'), page: 1, left: 55, top, width: 24, height: 12 });
+    top += 40;
+    for (let v = 1; v <= 5; v++) {
+      runs.push({ text: `${v}.`, page: 1, left: 80, top, width: 12, height: 12 });
+      top += 40;
+    }
+  }
+  return runs;
+}
+
+test('answer boxes appear for questions whose response rows Quest renders later', async () => {
+  // Quest's DataTables Scroller renders response rows lazily, so the first read
+  // only sees a window of them. The viewer must grow its question map as more
+  // rows arrive, otherwise later questions never get answer boxes.
+  const dom = new JSDOM('<main id="main-content"><div id="target">' +
+    '<div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF" src="/student/images/problem_pdf?instance=courseuserassignment_1"></iframe></div></div>' +
+    '<div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody>' +
+    responseRow(1) + responseRow(2) +
+    '</tbody></table></div></div></main>', {
+    url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true,
+  });
+  const doc = dom.window.document;
+  const root = doc.querySelector<HTMLElement>('#target')!;
+  const runs = pdfRunsFor(4);
+  const workspace = createPdfAssessmentWorkspace(root, { createPdfViewer: (container, options) => createInteractivePdfViewer(container, {
+    ...options,
+    openDocument: async () => ({ pageCount: 1, renderPage: async () => ({ width: 600, height: 1600, runs }), destroy() {} }),
+  }) });
+  const tick = () => new Promise(resolve => setTimeout(resolve, 20));
+  try {
+    workspace.reconcile();
+    await tick();
+    const host = doc.querySelector<HTMLElement>('[data-betterquest="interactive-pdf"]')!;
+    const boxes = (q: number) => host.shadowRoot!.querySelectorAll(`.option-hit[data-question="${q}"]`).length;
+    assert.equal(boxes(1), 5, 'Question 1 is mapped from the first read');
+    assert.equal(boxes(2), 5, 'Question 2 is mapped from the first read');
+    assert.equal(boxes(3), 0, 'Question 3 has no response row yet');
+
+    const tbody = doc.querySelector('tbody')!;
+    for (const q of [3, 4]) {
+      const row = doc.createElement('tr');
+      row.dataset.id = `cuaip_${q}`;
+      row.innerHTML = `<td>${q}.</td><td><select name="response"><option value=""></option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></td><td class="status"></td><td class="previous">0 / 5</td><td><button type="button" aria-label="Submit response">Submit</button></td>`;
+      tbody.append(row);
+    }
+    workspace.reconcile();
+    await tick();
+    assert.equal(boxes(3), 5, 'Question 3 gets its answer boxes once its row is readable');
+    assert.equal(boxes(4), 5, 'Question 4 gets its answer boxes once its row is readable');
   } finally { workspace.dispose(); dom.window.close(); }
 });
 
