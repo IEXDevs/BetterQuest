@@ -172,3 +172,77 @@ test('PDF option mapping tolerates internal formula numbers, coordinates, and ev
     [12, 1, 60], [12, 2, 80], [12, 3, 100], [12, 4, 120], [12, 5, 140],
   ]);
 });
+
+test('PDF option mapping ignores math formula numbers like (x - 2) in choice denominators', () => {
+  const actual = mapper()([
+    run('012 (part 1 of 3) 10.0 points', 20),
+    run('Let f be the function defined by', 40),
+    run('1. f\'(x) = (4x + 2) /', 60, 1, 42),
+    run('3(x -', 72, 1, 150),
+    run('2)', 75, 1, 180), // from denominator 3(x - 2)^{2/3}
+    run('2. f\'(x) = (4x - 2) /', 90, 1, 42),
+    run('3. f\'(x) = (4x + 2) /', 120, 1, 42),
+    run('4. f\'(x) = (2 - 4x) /', 150, 1, 42),
+    run('5. f\'(x) = (4x - 2) /', 180, 1, 42),
+    run('013 (part 2 of 3) 10.0 points', 210),
+  ], new Map([[12, 5]]));
+
+  assert.deepEqual(actual.map(({ questionNumber, optionValue, top }) => [questionNumber, optionValue, top]), [
+    [12, 1, 60], [12, 2, 90], [12, 3, 120], [12, 4, 150], [12, 5, 180],
+  ]);
+});
+
+test('PDF option mapping handles column breaks on the same page (e.g. left column to right column)', () => {
+  // Question 13: choices 1, 2, 3 are in the left column; choices 4, 5 wrap to top of right column
+  const actual = mapper()([
+    run('013 (part 2 of 3) 10.0 points', 200, 3, 42),
+    run('(ii) Find the second derivative of f.', 220, 3, 42),
+    run('1. f\'\'(x) = ...', 250, 3, 42),
+    run('2. f\'\'(x) = ...', 280, 3, 42),
+    run('3. f\'\'(x) = ...', 310, 3, 42),
+    // Column break to right column on page 3
+    run('4. f\'\'(x) = ...', 50, 3, 320),
+    run('5. f\'\'(x) = ...', 80, 3, 320),
+    run('014 (part 3 of 3) 10.0 points', 120, 3, 320),
+  ], new Map([[13, 5]]));
+
+  assert.deepEqual(actual.map(({ questionNumber, optionValue, top, left, page }) => [questionNumber, optionValue, page, left, top]), [
+    [13, 1, 3, 42, 250],
+    [13, 2, 3, 42, 280],
+    [13, 3, 3, 42, 310],
+    [13, 4, 3, 320, 50],
+    [13, 5, 3, 320, 80],
+  ]);
+});
+
+test('PDF option mapping handles multi-page and multi-column option flows (e.g. question 15 image choices)', () => {
+  // Question 15: starts page 3 right column (1, 2), continues page 4 left column (3-7), wraps to page 4 right column (8)
+  const actual = mapper()([
+    run('015 10.0 points', 250, 3, 320),
+    run('Which of the following is the graph...', 270, 3, 320),
+    run('1.', 300, 3, 320),
+    run('2.', 420, 3, 320),
+    // Page 4 left column
+    run('3.', 50, 4, 42),
+    run('4.', 170, 4, 42),
+    run('5.', 290, 4, 42),
+    run('6.', 410, 4, 42),
+    run('7.', 530, 4, 42),
+    // Page 4 right column
+    run('8.', 60, 4, 320),
+    run('016 10.0 points', 180, 4, 320),
+  ], new Map([[15, 8]]));
+
+  assert.deepEqual(actual.map(({ questionNumber, optionValue, page, left, top }) => [questionNumber, optionValue, page, left, top]), [
+    [15, 1, 3, 320, 300],
+    [15, 2, 3, 320, 420],
+    [15, 3, 4, 42, 50],
+    [15, 4, 4, 42, 170],
+    [15, 5, 4, 42, 290],
+    [15, 6, 4, 42, 410],
+    [15, 7, 4, 42, 530],
+    [15, 8, 4, 320, 60],
+  ]);
+});
+
+

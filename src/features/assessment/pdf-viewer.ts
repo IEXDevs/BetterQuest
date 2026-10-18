@@ -124,21 +124,34 @@ function hitArea(
   const right = columnRight;
   const top = Math.max(0, target.top - Math.min(6, target.height * 0.4));
 
-  // Target below in the SAME question
+  // Target below in the SAME question and SAME column
   const nextInSameQuestion = targets.find(item =>
     item.page === target.page &&
     item.questionNumber === target.questionNumber &&
+    (isTwoColumn ? (item.left < pageWidth * 0.5) === isLeftColumn : true) &&
     item.top > target.top + 2
   );
 
-  // Preceding option in the same question (to match height for the last option)
+  // Preceding option in the same question and SAME column (to match height for the last option)
   const prevInQuestion = targets.find(item =>
     item.page === target.page &&
     item.questionNumber === target.questionNumber &&
     item.optionValue === target.optionValue - 1 &&
+    (isTwoColumn ? (item.left < pageWidth * 0.5) === isLeftColumn : true) &&
     target.top > item.top + 2
   );
-  const prevHeight = prevInQuestion ? target.top - prevInQuestion.top : null;
+  let prevHeight = prevInQuestion ? target.top - prevInQuestion.top : null;
+  if (!prevHeight) {
+    const qTargets = targets.filter(t => t.questionNumber === target.questionNumber);
+    for (let i = 1; i < qTargets.length; i++) {
+      if (qTargets[i].page === qTargets[i - 1].page &&
+          (isTwoColumn ? (qTargets[i].left < pageWidth * 0.5) === (qTargets[i - 1].left < pageWidth * 0.5) : true) &&
+          qTargets[i].top > qTargets[i - 1].top + 2) {
+        prevHeight = qTargets[i].top - qTargets[i - 1].top;
+        break;
+      }
+    }
+  }
 
   // Next question boundary run on the page in this column
   const nextQuestionRun = pageRuns.find(r => {
@@ -302,33 +315,33 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       display:grid;
       place-items:center;
       width:24px!important;
-      height:24px!important;
-      border-radius:50%!important;
+      height:30px!important;
+      border-radius:12px!important;
       border:2px solid #6366f1;
-      background:rgba(255,255,255,.94);
+      background:#ffffff;
       color:#4338ca;
       font:800 12px/1 ui-rounded,"Avenir Next",system-ui,sans-serif;
       box-shadow:0 1px 4px rgba(79,70,229,.25);
       cursor:pointer;
       box-sizing:border-box;
-      transform:translate(-2px,-2px);
+      transform:translate(-1px,-4px);
       transition:transform .15s cubic-bezier(.16,1,.3,1),background .15s ease,border-color .15s ease,box-shadow .15s ease,color .15s ease;
     }
     .option-hit::before{
       content:'';
       position:absolute;
-      inset:-6px;
-      border-radius:50%;
+      inset:-4px -8px;
+      border-radius:999px;
       pointer-events:auto;
     }
     :host([data-dark-pages="true"]) .option-hit{
-      background:rgba(24,37,58,.94);
+      background:#18253a;
       color:#e0e7ff;
       border-color:#818cf8;
       box-shadow:0 1px 4px rgba(0,0,0,.45);
     }
     .option-hit:hover,.option-hit:focus-visible{
-      transform:translate(-2px,-2px) scale(1.15);
+      transform:translate(-1px,-4px) scale(1.08);
       border-color:#4338ca;
       background:#4f46e5;
       color:#fff;
@@ -341,7 +354,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       color:#fff;
     }
     .option-hit:active{
-      transform:translate(-2px,-2px) scale(1.05);
+      transform:translate(-1px,-4px) scale(1.02);
     }
     .option-hit[hidden]{
       display:none!important;
@@ -350,7 +363,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       border:2px solid #312e81;
       background:#4f46e5;
       color:#fff;
-      transform:translate(-2px,-2px) scale(1.12);
+      transform:translate(-1px,-4px) scale(1.06);
       box-shadow:0 0 0 3px rgba(79,70,229,.35),0 3px 8px rgba(49,46,129,.5);
     }
     :host([data-dark-pages="true"]) .option-hit[aria-pressed="true"]{
@@ -387,13 +400,14 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       pointer-events:none;
     }
     .option-hit.is-correct{
-      border:2px solid #16a34a;
-      background:rgba(22,163,74,.16);
+      border:2px solid #15803d;
+      background:#16a34a;
+      color:#fff;
+      box-shadow:0 2px 8px rgba(22,163,74,.5);
       animation:bq-rainbow 2.4s linear infinite;
     }
     .option-hit.is-correct::before{
-      background:#16a34a;
-      box-shadow:0 2px 6px rgba(22,163,74,.5);
+      display:none;
     }
     .option-hit.is-correct::after{
       content:'✓';
@@ -747,7 +761,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           if (qTargets.length > 0 && qTargets.length < max) {
             const existingValues = new Set(qTargets.map(t => t.optionValue));
             const sorted = [...qTargets].sort((a, b) => a.optionValue - b.optionValue);
-            const first = sorted[0];
             const last = sorted[sorted.length - 1];
             const pageInfo = pageElements.get(last.page);
             const pageH = pageInfo?.height || 800;
@@ -768,9 +781,11 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
             const nextQBottom = nextQRun ? nextQRun.top - 12 : pageH - 40;
 
             const missingBelow = max - last.optionValue;
-            let dy = sorted.length > 1
-              ? (last.top - first.top) / (sorted.length - 1)
+            const sameColSorted = sorted.filter(t => t.page === last.page && (t.left < pageW * 0.5) === isLeft);
+            let dy = sameColSorted.length > 1
+              ? (last.top - sameColSorted[0].top) / (sameColSorted.length - 1)
               : Math.max(35, (nextQBottom - last.top) / Math.max(1, missingBelow + 1));
+            dy = Math.max(20, dy);
 
             if (missingBelow > 0 && last.top + dy * missingBelow > nextQBottom - 8) {
               dy = Math.max(20, (nextQBottom - 8 - last.top) / missingBelow);

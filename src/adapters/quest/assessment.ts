@@ -158,17 +158,20 @@ export function mapPdfOptionLabels(runs: PdfTextRun[], optionMaximums: ReadonlyM
       let currentSeq: PdfOptionTarget[] = [];
       let expected = 1;
 
+      const hasRightCol = block.runs.some(r => r.left >= 250);
+      const isRightCol = (left: number) => hasRightCol && left >= 250;
+
       for (const run of block.runs) {
         const text = clean(run.text);
         let value: number | null = null;
 
         if (!isLetter) {
           const numMatch = text.match(/^([1-9])\.(?!\d)/) ||
-                           text.match(/^([1-9])\)(?:\s+|$)/);
+                           text.match(/^([1-9])\)\s+\S/);
           if (numMatch) value = Number(numMatch[1]);
         } else {
           const letterMatch = text.match(/^([a-iA-I])\.(?!\w)/) ||
-                              text.match(/^([a-iA-I])\)(?:\s+|$)/);
+                              text.match(/^([a-iA-I])\)\s+\S/);
           if (letterMatch) value = letterMatch[1].toUpperCase().charCodeAt(0) - 64;
         }
 
@@ -179,9 +182,27 @@ export function mapPdfOptionLabels(runs: PdfTextRun[], optionMaximums: ReadonlyM
           currentSeq = [{ ...run, questionNumber: qNum, optionValue: 1 }];
           expected = 2;
         } else if (currentSeq.length && value === expected) {
-          // In Quest, options are line-by-line (each option must be vertically below the previous)
           const prev = currentSeq[currentSeq.length - 1];
-          if (run.page > prev.page || run.top > prev.top + 3) {
+          const prevIsRight = isRightCol(prev.left);
+          const runIsRight = isRightCol(run.left);
+
+          let isValidTransition = false;
+          if (run.page > prev.page) {
+            // Option sequence wraps across a page break
+            isValidTransition = true;
+          } else if (run.page === prev.page) {
+            if (!prevIsRight && runIsRight) {
+              // Option sequence wraps from bottom of left column to top of right column
+              isValidTransition = true;
+            } else if (prevIsRight === runIsRight) {
+              // Within the same column: must be vertically below and horizontally aligned
+              const isBelow = run.top > prev.top + 3;
+              const isAligned = Math.abs(run.left - prev.left) <= 14;
+              isValidTransition = isBelow && isAligned;
+            }
+          }
+
+          if (isValidTransition) {
             currentSeq.push({ ...run, questionNumber: qNum, optionValue: value });
             expected++;
           }
