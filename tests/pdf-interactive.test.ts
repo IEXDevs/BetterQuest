@@ -1068,3 +1068,72 @@ test('interactive PDF estimated fallback options start after the prompt and dist
   }
 });
 
+test('interactive PDF viewer strips adjacent formula text from option numbers so badges display clean digits', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 3]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [
+          textRun('001', 50),
+          textRun('1. r(t) = < 3 sin t, -3, -3 sin t >', 130),
+          textRun('2. r(t) = < 3, 3 sin t, -3 cos t >', 190),
+          textRun('3. plane and sphere do not intersect', 250),
+          textRun('002', 340),
+        ],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    const buttons = [...viewer.element.shadowRoot!.querySelectorAll<HTMLButtonElement>('.option-hit')];
+    assert.equal(buttons.length, 3);
+    assert.equal(buttons[0].textContent, '1', 'Option 1 text must be strictly "1", not "1r" or formula text');
+    assert.equal(buttons[1].textContent, '2', 'Option 2 text must be strictly "2", not "2r"');
+    assert.equal(buttons[2].textContent, '3', 'Option 3 text must be strictly "3"');
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+test('interactive PDF viewer mounts 35px circular badges positioned directly on option numbers with no badge options panel', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 130), textRun('2.', 190), textRun('002', 260)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    const shadow = viewer.element.shadowRoot!;
+    assert.equal(shadow.querySelector('button[data-betterquest-badge-config="true"]'), null, 'Badges toolbar button must be removed');
+    assert.equal(shadow.querySelector('.badge-popover'), null, 'Badge options popover panel must be removed');
+
+    const css = shadow.querySelector('style')!.textContent!;
+    assert.match(css, /width:35px!important/);
+    assert.match(css, /height:35px!important/);
+    assert.match(css, /border-radius:18px!important/);
+    assert.match(css, /transform:translate\(5px,5px\)/);
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});
+
+

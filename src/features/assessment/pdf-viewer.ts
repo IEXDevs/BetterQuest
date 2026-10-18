@@ -114,7 +114,7 @@ function hitArea(
 ) {
   const isLeftColumn = target.left < pageWidth * 0.5;
   const isTwoColumn = targets.some(item => item.left >= pageWidth * 0.45) ||
-                      pageRuns.some(item => item.left >= pageWidth * 0.45 && item.top > 30);
+    pageRuns.some(item => item.left >= pageWidth * 0.45 && item.top > 30);
   const columnRight = (isLeftColumn && isTwoColumn) ? pageWidth * 0.48 : pageWidth * 0.96;
   const columnLeft = (isTwoColumn && !isLeftColumn) ? pageWidth * 0.5 : 0;
 
@@ -145,8 +145,8 @@ function hitArea(
     const qTargets = targets.filter(t => t.questionNumber === target.questionNumber);
     for (let i = 1; i < qTargets.length; i++) {
       if (qTargets[i].page === qTargets[i - 1].page &&
-          (isTwoColumn ? (qTargets[i].left < pageWidth * 0.5) === (qTargets[i - 1].left < pageWidth * 0.5) : true) &&
-          qTargets[i].top > qTargets[i - 1].top + 2) {
+        (isTwoColumn ? (qTargets[i].left < pageWidth * 0.5) === (qTargets[i - 1].left < pageWidth * 0.5) : true) &&
+        qTargets[i].top > qTargets[i - 1].top + 2) {
         prevHeight = qTargets[i].top - qTargets[i - 1].top;
         break;
       }
@@ -314,17 +314,17 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       z-index:10;
       display:grid;
       place-items:center;
-      width:24px!important;
-      height:30px!important;
-      border-radius:12px!important;
+      width:40px!important;
+      height:40px!important;
+      border-radius:18px!important;
       border:2px solid #6366f1;
       background:#ffffff;
       color:#4338ca;
-      font:800 12px/1 ui-rounded,"Avenir Next",system-ui,sans-serif;
+      font:800 15px/1 ui-rounded,"Avenir Next",system-ui,sans-serif;
       box-shadow:0 1px 4px rgba(79,70,229,.25);
       cursor:pointer;
       box-sizing:border-box;
-      transform:translate(-1px,-4px);
+      transform:translate(5px,3px);
       transition:transform .15s cubic-bezier(.16,1,.3,1),background .15s ease,border-color .15s ease,box-shadow .15s ease,color .15s ease;
     }
     .option-hit::before{
@@ -341,7 +341,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       box-shadow:0 1px 4px rgba(0,0,0,.45);
     }
     .option-hit:hover,.option-hit:focus-visible{
-      transform:translate(-1px,-4px) scale(1.08);
+      transform:translate(5px,5px) scale(1.08);
       border-color:#4338ca;
       background:#4f46e5;
       color:#fff;
@@ -354,7 +354,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       color:#fff;
     }
     .option-hit:active{
-      transform:translate(-1px,-4px) scale(1.02);
+      transform:translate(5px,5px) scale(1.02);
     }
     .option-hit[hidden]{
       display:none!important;
@@ -363,7 +363,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       border:2px solid #312e81;
       background:#4f46e5;
       color:#fff;
-      transform:translate(-1px,-4px) scale(1.06);
+      transform:translate(5px,5px) scale(1.06);
       box-shadow:0 0 0 3px rgba(79,70,229,.35),0 3px 8px rgba(49,46,129,.5);
     }
     :host([data-dark-pages="true"]) .option-hit[aria-pressed="true"]{
@@ -453,10 +453,11 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       cursor:pointer;
       white-space:nowrap;
       animation:pdf-pop-in .15s cubic-bezier(.16,1,.3,1);
-      transition:transform .15s ease,box-shadow .15s ease,background .15s ease
+      transform:translate(5px,5px);
+      transition:transform .15s ease,box-shadow .15s ease,background .15s ease;
     }
-    .pdf-submit-btn:hover{background:linear-gradient(135deg,#4f46e5,#4338ca);transform:translateY(-1px) scale(1.02);box-shadow:0 6px 18px rgba(99,102,241,.5),0 3px 6px rgba(0,0,0,.25)}
-    .pdf-submit-btn:active{transform:translateY(0) scale(.98)}
+    .pdf-submit-btn:hover{background:linear-gradient(135deg,#4f46e5,#4338ca);transform:translate(5px,5px) translateY(-1px) scale(1.02);box-shadow:0 6px 18px rgba(99,102,241,.5),0 3px 6px rgba(0,0,0,.25)}
+    .pdf-submit-btn:active{transform:translate(5px,5px) scale(.98)}
     .pdf-submit-btn[disabled]{opacity:.75;cursor:not-allowed}
     .pdf-submit-btn[data-failed="true"]{background:linear-gradient(135deg,#b45309,#92400e)}
     .pdf-submit-btn[data-failed="true"]:hover{background:linear-gradient(135deg,#92400e,#78350a)}
@@ -523,7 +524,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     const isFs = Boolean(document.fullscreenElement) || element.dataset.fullscreen === 'true';
     const root = container.closest<HTMLElement>('#target') || container;
     if (isFs) {
-      if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => {});
+      if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => { });
       element.removeAttribute('data-fullscreen');
       root.removeAttribute('data-betterquest-fullscreen');
       document.documentElement.removeAttribute('data-betterquest-fullscreen');
@@ -578,6 +579,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       : `Submit question ${pillQn}`);
   }
   submitPill.addEventListener('click', () => { if (pillQn !== null) attemptSubmit(pillQn); });
+
   zoom.append(zoomOut, zoomValue, zoomIn); toolbarActions.append(submitPill, viewSlot, darkPagesBtn, fullscreenBtn, zoom); toolbar.append(copy, toolbarActions);
   const pages = document.createElement('div'); pages.className = 'pages';
   const loading = document.createElement('div'); loading.className = 'loading'; loading.textContent = 'Loading clickable choices…'; pages.append(loading);
@@ -608,7 +610,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   // reads Quest's lazily-rendered response table, so it is kept mutable.
   let optionMaximums = new Map<number, number>(options.optionMaximums);
   let pdfRuns: PdfTextRun[] = [];
-  let paintChoices: () => void = () => {};
+  let paintChoices: () => void = () => { };
 
   function dismissConfirm() {
     for (const [qNum, btn] of submitButtons.entries()) {
@@ -916,7 +918,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           const area = hitArea(target, targets, page.runs, page.width, page.height);
           const button = document.createElement('button'); button.type = 'button'; button.className = 'option-hit';
           button.dataset.question = String(target.questionNumber); button.dataset.option = String(target.optionValue);
-          const label = clean(target.text).replace(/[^a-zA-Z0-9]/g, '') || String(target.optionValue);
+          const textClean = clean(target.text);
+          const match = textClean.match(/^([1-9]|[a-iA-I])(?:\.|\)|\s|$)/);
+          const label = match ? match[1].toUpperCase() : String(target.optionValue);
           button.textContent = label;
           button.setAttribute('aria-label', `Select option ${target.optionValue} for question ${target.questionNumber}`); button.setAttribute('aria-pressed', 'false');
           button.style.left = `${area.left}%`; button.style.top = `${area.top}%`; button.style.width = `${area.width}%`; button.style.height = `${area.height}%`;
