@@ -15,6 +15,7 @@ type PdfViewer = ReturnType<typeof createInteractivePdfViewer>;
 type PdfViewerFactory = (container: HTMLElement, options: Parameters<typeof createInteractivePdfViewer>[1]) => any;
 
 const COLLAPSED_KEY = 'betterquest_rail_collapsed';
+const WORKSPACE_HEIGHT_KEY = 'betterquest_workspace_height';
 
 /** Recent submits survive as a marker so a reload right after answering still
  * tells you how you did (and brings back a wrong mark). */
@@ -211,6 +212,11 @@ function installStyles(document: Document) {
       clear:both!important;
       box-sizing:border-box!important;
     }
+    .bq-pdf-resize{position:absolute;left:0!important;right:0!important;bottom:0!important;height:14px;z-index:60;cursor:row-resize;touch-action:none}
+    .bq-pdf-resize:focus{outline:none}
+    .bq-pdf-resize-grip{display:block;width:46px;height:5px;margin:5px auto 0;border-radius:999px;background:#94a3b8;box-shadow:0 1px 3px rgba(15,23,42,.35);transition:background .15s ease,box-shadow .15s ease}
+    .bq-pdf-resize:hover .bq-pdf-resize-grip,.bq-pdf-resize:focus-visible .bq-pdf-resize-grip{background:#64748b;box-shadow:0 1px 4px rgba(15,23,42,.5)}
+    .bq-pdf-resize:focus-visible{outline:2px solid var(--bq-accent,#6366f1);outline-offset:-2px}
     /* Mode-specific PDF display: STRICTLY show ONLY ONE type of PDF depending on view mode */
     :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="betterquest"] #presentation-pdf-frame,
     :is(html, body, #target, [data-betterquest-pdf-workspace], #pdf-frame)[data-betterquest-pdf-mode="betterquest"] iframe:not([data-betterquest]),
@@ -537,17 +543,18 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     :host([data-collapsed="true"]) .questions{display:none!important}
     .side{display:flex;flex-direction:column;gap:8px;margin-top:10px}
     :host([data-collapsed="true"]) .side{flex:1;min-height:0;margin-top:10px;overflow:hidden}
-    .qnav-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px;margin-bottom:2px}
+    .qnav-header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;row-gap:2px;column-gap:8px;padding:0 2px;margin-bottom:2px;max-width:100%}
     :host([data-collapsed="true"]) .qnav-header{display:none}
     .qnav-title{font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.04em;color:var(--bq-assessment-muted)}
-    .qnav-legend{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--bq-assessment-muted)}
+    .qnav-legend{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:10.5px;color:var(--bq-assessment-muted);min-width:0}
     .qnav{display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));gap:6px;padding:2px}
     :host([data-collapsed="true"]) .qnav{grid-template-columns:repeat(3,minmax(0,1fr));flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;padding-right:2px;align-content:start}
     .qnav-btn{aspect-ratio:1;min-height:34px;border:1.5px solid var(--bq-border,#d7e2f0);border-radius:3px;background:var(--bq-raised,#f2f5f7);color:var(--bq-assessment-muted);font:750 13px/1 inherit;cursor:pointer;transition:border-color .15s ease,background .15s ease,transform .15s ease,box-shadow .15s ease;display:grid;place-items:center}
     .qnav-btn:hover{border-color:var(--bq-accent,#6366f1);transform:translateY(-1px);box-shadow:0 2px 6px rgba(0,0,0,0.06)}
     .qnav-btn:active{transform:translateY(0)}
     .qnav-btn.q-done{border-color:#16a34a;background:color-mix(in srgb,#16a34a 18%,var(--bq-raised,#f2f5f7));color:color-mix(in srgb,#15803d 85%,var(--bq-text,#18253a))}
-    .qnav-btn.q-retry{border-color:#ea580c;background:color-mix(in srgb,#ea580c 18%,var(--bq-raised,#f2f5f7));color:color-mix(in srgb,#c2410c 85%,var(--bq-text,#18253a))}
+    .qnav-btn.q-retry{border-color:#a78bfa;background:color-mix(in srgb,#8b5cf6 16%,var(--bq-raised,#f2f5f7));color:color-mix(in srgb,#6d28d9 85%,var(--bq-text,#18253a))}
+    .qnav-btn.q-retry-wrong{border-color:#fbbf24;background:color-mix(in srgb,#f59e0b 20%,var(--bq-raised,#f2f5f7));color:color-mix(in srgb,#a16207 85%,var(--bq-text,#18253a))}
     .qnav-btn.q-wrong{border-color:#dc2626;background:color-mix(in srgb,#dc2626 16%,var(--bq-raised,#f2f5f7));color:color-mix(in srgb,#b91c1c 85%,var(--bq-text,#18253a))}
 
     .deck-footer{display:none}
@@ -560,7 +567,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     .legend-item{display:flex;align-items:center;gap:5px;white-space:nowrap}
     .legend-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
     .legend-dot.dot-done{background:#16a34a;border:1px solid #15803d}
-    .legend-dot.dot-retry{background:#ea580c;border:1px solid #c2410c}
+    .legend-dot.dot-retry{background:#c4b5fd;border:1px solid #8b5cf6}
+    .legend-dot.dot-retry-wrong{background:#fbbf24;border:1px solid #d97706}
     .legend-dot.dot-wrong{background:#dc2626;border:1px solid #b91c1c}
     .legend-dot.dot-unattempted{background:var(--bq-raised,#f2f5f7);border:1px solid var(--bq-border,#d7e2f0)}
     :host([data-collapsed="true"]) .rail{display:flex;flex-direction:column;overflow:hidden;padding:12px 10px;height:100%;max-height:100%}
@@ -571,7 +579,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
 
     .question{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--bq-border,#d7e2f0);border-radius:3px;background:var(--bq-surface,#fff);box-shadow:0 2px 8px #0f172a08;transition:border-color .18s ease,box-shadow .18s ease}
     .question[data-status="done"]{border-color:color-mix(in srgb,#16a34a 45%,var(--bq-border,#d7e2f0))}
-    .question[data-status="retry"]{border-color:color-mix(in srgb,#ea580c 45%,var(--bq-border,#d7e2f0))}
+    .question[data-status="retry"]{border-color:color-mix(in srgb,#8b5cf6 45%,var(--bq-border,#d7e2f0))}
+    .question[data-status="retry-wrong"]{border-color:color-mix(in srgb,#fbbf24 50%,var(--bq-border,#d7e2f0))}
     .question[data-status="wrong"]{border-color:color-mix(in srgb,#dc2626 45%,var(--bq-border,#d7e2f0))}
     .question:focus-within{border-color:var(--bq-accent,#227ab0)}
     .question-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -590,6 +599,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     .submitted-tag{display:inline-flex;align-items:center;padding:5px 12px;border-radius:3px;background:var(--bq-raised,#f2f5f7);color:var(--bq-assessment-muted);font:700 12px/1 inherit;border:1px solid var(--bq-border,#d7e2f0)}
     .verdict-pill{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:3px;font:700 11px/1 inherit;border:1px solid;white-space:nowrap}
     .verdict-correct{background:color-mix(in srgb,#16a34a 12%,transparent);border-color:color-mix(in srgb,#16a34a 45%,transparent);color:color-mix(in srgb,#16a34a 72%,var(--bq-text,#18253a))}
+    .verdict-retry{background:color-mix(in srgb,#f59e0b 12%,transparent);border-color:color-mix(in srgb,#f59e0b 45%,transparent);color:color-mix(in srgb,#a16207 75%,var(--bq-text,#18253a))}
     .verdict-wrong{background:color-mix(in srgb,#dc2626 10%,transparent);border-color:color-mix(in srgb,#dc2626 40%,transparent);color:color-mix(in srgb,#dc2626 72%,var(--bq-text,#18253a))}
     .verdict-done{background:var(--bq-raised,#f2f5f7);border-color:var(--bq-border,#d7e2f0);color:var(--bq-assessment-muted)}
     .points-note{margin-left:auto;font:750 12px/1 inherit;color:var(--bq-text,#18253a);font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -662,7 +672,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   const qnavLegend = document.createElement('div'); qnavLegend.className = 'qnav-legend';
   qnavLegend.innerHTML = `
     <span class="legend-item"><span class="legend-dot dot-done" aria-hidden="true"></span>Done</span>
-    <span class="legend-item"><span class="legend-dot dot-retry" aria-hidden="true"></span>Retried</span>
+    <span class="legend-item"><span class="legend-dot dot-retry" aria-hidden="true"></span>Solved on retry</span>
+    <span class="legend-item"><span class="legend-dot dot-retry-wrong" aria-hidden="true"></span>Still trying</span>
     <span class="legend-item"><span class="legend-dot dot-wrong" aria-hidden="true"></span>Incorrect</span>
   `;
   qnavHeader.append(qnavTitle, qnavLegend);
@@ -676,7 +687,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   const legend = document.createElement('div'); legend.className = 'legend'; legend.setAttribute('aria-label', 'Question status legend');
   legend.innerHTML = `
     <div class="legend-item"><span class="legend-dot dot-done" aria-hidden="true"></span><span>Done</span></div>
-    <div class="legend-item"><span class="legend-dot dot-retry" aria-hidden="true"></span><span>Retried</span></div>
+    <div class="legend-item"><span class="legend-dot dot-retry" aria-hidden="true"></span><span>Solved on retry</span></div>
+    <div class="legend-item"><span class="legend-dot dot-retry-wrong" aria-hidden="true"></span><span>Still trying</span></div>
     <div class="legend-item"><span class="legend-dot dot-wrong" aria-hidden="true"></span><span>Incorrect</span></div>
     <div class="legend-item"><span class="legend-dot dot-unattempted" aria-hidden="true"></span><span>Not started</span></div>
   `;
@@ -969,7 +981,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         submitWarn(questionNumber, !selectedOption ? 'No answer selected.' : 'Submit control unavailable.');
         return false;
       }
-      binding.submit.focus();
+      binding.submit.focus({ preventScroll: true });
       const submitRow = binding.submit.closest('tr');
       const submitRowNumber = submitRow && submitRow.parentElement?.tagName !== 'THEAD'
         ? Number((submitRow.cells[0]?.textContent || '').replace(/\.$/, '').trim())
@@ -977,7 +989,17 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       if (submitRowNumber !== questionNumber) {
         console.warn(`[BetterQuest] Submit control for question ${questionNumber} is outside its response row; trying anyway.`);
       }
+      const view = document.defaultView;
+      const pageX = view?.scrollX ?? 0;
+      const pageY = view?.scrollY ?? 0;
       binding.submit.click();
+      // The submit button lives in Quest's hidden response table, so its own
+      // handler can drag the page down to reveal it. Undo any jump it makes.
+      const restorePage = () => {
+        if (view && (view.scrollX !== pageX || view.scrollY !== pageY)) view.scrollTo(pageX, pageY);
+      };
+      restorePage();
+      view?.requestAnimationFrame(restorePage);
       clearPendingSubmit();
       const optionValue = selectedOption.value;
       const attempts = binding.attempts;
@@ -1205,11 +1227,151 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
 
   const originalWorkspaceHeight = root.style.getPropertyValue('--bq-pdf-workspace-height');
   const originalWorkspaceHeightPriority = root.style.getPropertyPriority('--bq-pdf-workspace-height');
+  const WORKSPACE_MIN_HEIGHT = 240;
+  // Once you drag the height yourself, it wins over auto-fit and is remembered
+  // across pages — the panel stays exactly as tall as you left it.
+  let userWorkspaceHeight: number | null = readSavedWorkspaceHeight();
+
+  function readSavedWorkspaceHeight(): number | null {
+    try {
+      const raw = document.defaultView?.localStorage?.getItem(WORKSPACE_HEIGHT_KEY);
+      const value = raw == null ? NaN : Number(raw);
+      return Number.isFinite(value) && value >= WORKSPACE_MIN_HEIGHT ? value : null;
+    } catch { return null; }
+  }
+
+  function clampWorkspaceHeight(height: number): number {
+    const view = document.defaultView;
+    const max = view ? Math.floor(view.innerHeight) : 2400;
+    return Math.round(Math.max(WORKSPACE_MIN_HEIGHT, Math.min(height, max)));
+  }
+
+  function persistWorkspaceHeight() {
+    if (userWorkspaceHeight == null) return;
+    try { document.defaultView?.localStorage?.setItem(WORKSPACE_HEIGHT_KEY, String(userWorkspaceHeight)); } catch { /* preference only */ }
+  }
+
+  function setUserWorkspaceHeight(height: number | null) {
+    userWorkspaceHeight = height;
+    if (height == null) {
+      try { document.defaultView?.localStorage?.removeItem(WORKSPACE_HEIGHT_KEY); } catch { /* preference only */ }
+    } else {
+      persistWorkspaceHeight();
+    }
+    scheduleFitWorkspace();
+  }
+
+  function applyWorkspaceHeight(height: number): number {
+    const clamped = clampWorkspaceHeight(height);
+    const text = `${clamped}px`;
+    if (root.style.getPropertyValue('--bq-pdf-workspace-height') !== text) {
+      root.style.setProperty('--bq-pdf-workspace-height', text);
+    }
+    return clamped;
+  }
+
+  let resizeGrip: HTMLElement | undefined;
+  const originalPdfFramePosition = root.querySelector<HTMLElement>('#pdf-frame')?.style.position ?? '';
+  const originalPdfFramePositionPriority = root.querySelector<HTMLElement>('#pdf-frame')?.style.getPropertyPriority('position') ?? '';
+  function syncResizeGrip() {
+    if (!resizeGrip) return;
+    const hidden = Boolean(document.fullscreenElement || root.dataset.betterquestFullscreen === 'true');
+    // Inline !important beats Quest's rule that hides every #pdf-frame child
+    // that is not the viewer itself.
+    resizeGrip.style.setProperty('display', hidden ? 'none' : 'block', 'important');
+  }
+
+  function removeResizeGrip() {
+    resizeGrip?.remove();
+    resizeGrip = undefined;
+    const sizingRoot = root.querySelector<HTMLElement>('#pdf-frame');
+    if (sizingRoot) {
+      if (originalPdfFramePosition) sizingRoot.style.setProperty('position', originalPdfFramePosition, originalPdfFramePositionPriority);
+      else sizingRoot.style.removeProperty('position');
+    }
+  }
+
+  function mountResizeGrip() {
+    const sizingRoot = root.querySelector<HTMLElement>('#pdf-frame');
+    if (!sizingRoot) return;
+    // Quest refreshes can wipe the frame's children wholesale; rebuild the
+    // grip whenever it is gone.
+    if (resizeGrip && !resizeGrip.isConnected) removeResizeGrip();
+    // The grip anchors to the frame's bottom edge, so the frame must be a
+    // containing block.
+    if ((getComputedStyle(sizingRoot).position === 'static') && sizingRoot.style.position !== 'relative') {
+      sizingRoot.style.setProperty('position', 'relative', 'important');
+    }
+    if (!resizeGrip) {
+      resizeGrip = document.createElement('div');
+      resizeGrip.className = 'bq-pdf-resize';
+      resizeGrip.setAttribute('role', 'separator');
+      resizeGrip.setAttribute('aria-orientation', 'horizontal');
+      resizeGrip.setAttribute('aria-label', 'Height of the PDF panel');
+      resizeGrip.tabIndex = 0;
+      resizeGrip.title = 'Drag to make the PDF panel taller or shorter. Double-click to auto-fit.';
+      const gripDot = document.createElement('span'); gripDot.className = 'bq-pdf-resize-grip';
+      resizeGrip.append(gripDot);
+      // Match the !important rules Quest applies to #pdf-frame children so the
+      // grip still shows up next to the viewer. (Values must be valid here or
+      // the declaration silently drops and Quest's hiding rule wins.)
+      for (const prop of ['visibility', 'height', 'max-height', 'margin', 'padding']) {
+        const value = prop === 'visibility' ? 'visible'
+          : prop === 'height' ? '14px'
+          : prop === 'max-height' ? 'none' : '0';
+        resizeGrip.style.setProperty(prop, value, 'important');
+      }
+      let dragPointer: number | null = null;
+      let dragStartY = 0;
+      let dragStartHeight = 0;
+      const frameHeight = () =>
+        root.querySelector<HTMLElement>('#pdf-frame')?.getBoundingClientRect().height || 0;
+      resizeGrip.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0 || dragPointer !== null) return;
+        dragPointer = event.pointerId;
+        dragStartY = event.clientY;
+        dragStartHeight = frameHeight();
+        resizeGrip!.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      });
+      resizeGrip.addEventListener('pointermove', (event) => {
+        if (dragPointer !== event.pointerId) return;
+        userWorkspaceHeight = event.clientY - dragStartY + dragStartHeight;
+        applyWorkspaceHeight(userWorkspaceHeight);
+        event.preventDefault();
+      });
+      const endDrag = (event: PointerEvent) => {
+        if (dragPointer !== event.pointerId) return;
+        dragPointer = null;
+        if (userWorkspaceHeight != null) persistWorkspaceHeight();
+      };
+      resizeGrip.addEventListener('pointerup', endDrag);
+      resizeGrip.addEventListener('pointercancel', endDrag);
+      resizeGrip.addEventListener('dblclick', () => setUserWorkspaceHeight(null));
+      resizeGrip.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown' && event.key !== 'Escape') return;
+        event.preventDefault();
+        if (event.key === 'Escape') { setUserWorkspaceHeight(null); return; }
+        const base = frameHeight() || 400;
+        setUserWorkspaceHeight(base + (event.key === 'ArrowDown' ? 24 : -24));
+      });
+      sizingRoot.append(resizeGrip);
+    }
+    syncResizeGrip();
+  }
+
   function fitWorkspace() {
     if (disposed) return;
     const view = document.defaultView;
     if (!view) return;
-    if (document.fullscreenElement || root.dataset.betterquestFullscreen === 'true') return;
+    if (document.fullscreenElement || root.dataset.betterquestFullscreen === 'true') { syncResizeGrip(); return; }
+    mountResizeGrip();
+    if (userWorkspaceHeight != null) {
+      // Your saved height stays put even when the page re-flows or zoom changes.
+      applyWorkspaceHeight(userWorkspaceHeight);
+      syncResizeGrip();
+      return;
+    }
     // Size the reading row itself, not the outer grid that also contains
     // Quest's headers. Cap to the viewport so a ResizeObserver feedback loop
     // cannot grow the page without bound.
@@ -1217,11 +1379,12 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     const viewportBottom = view.visualViewport
       ? view.visualViewport.offsetTop + view.visualViewport.height : view.innerHeight;
     const fromTop = Math.floor(viewportBottom - sizingRoot.getBoundingClientRect().top - 12);
-    const available = Math.max(240, Math.min(fromTop, Math.floor(view.innerHeight - 48)));
+    const available = Math.max(WORKSPACE_MIN_HEIGHT, Math.min(fromTop, Math.floor(view.innerHeight - 48)));
     const height = `${available}px`;
     if (root.style.getPropertyValue('--bq-pdf-workspace-height') !== height) {
       root.style.setProperty('--bq-pdf-workspace-height', height);
     }
+    syncResizeGrip();
   }
   let fitFrame: number | undefined;
   const scheduleFitWorkspace = () => {
@@ -1240,6 +1403,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
 
   function clearWorkspaceEnhancement() {
     syncPdfVisibility(false);
+    removeResizeGrip();
     host.remove();
     root.removeAttribute('data-betterquest-pdf-workspace');
     root.removeAttribute('data-betterquest-pdf-mode');
@@ -1358,11 +1522,14 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
 
       if (outcome === 'correct') {
         if (usedTries > 1 || hadWrongMarks) {
-          return { state: 'q-retry', statusLabel: 'correct after retry', titleStatus: 'Correct (retried)' };
+          return { state: 'q-retry', statusLabel: 'solved after a retry', titleStatus: 'Correct (retried)' };
         }
         return { state: 'q-done', statusLabel: 'completed correctly', titleStatus: 'Correct' };
       }
       if (outcome === 'incorrect' || outcome === 'exhausted' || usedTries > 0) {
+        if (outcome !== 'exhausted' && (hadWrongMarks || usedTries > 1)) {
+          return { state: 'q-retry-wrong', statusLabel: 'tried again, not yet correct', titleStatus: 'Incorrect (still trying)' };
+        }
         return { state: 'q-wrong', statusLabel: 'needs another try', titleStatus: 'Incorrect' };
       }
       return { state: '', statusLabel: 'not attempted', titleStatus: 'Not started' };
@@ -1411,11 +1578,13 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         submittedTag.className = 'submitted-tag';
         submittedTag.textContent = binding.select.value ? `Submitted: Answer ${binding.select.value}` : 'Submitted';
         const outcome = readOutcome(elements.table, binding);
+        const cardQn = Number(binding.number);
+        const retriedWrong = outcome === 'incorrect' && Number.isInteger(cardQn) && (wrongMarks.get(cardQn)?.size ?? 0) > 0;
         const pill = document.createElement('span');
-        pill.className = 'verdict-pill ' + (outcome === 'correct' ? 'verdict-correct' : outcome === 'incorrect' ? 'verdict-wrong' : 'verdict-done');
+        pill.className = 'verdict-pill ' + (outcome === 'correct' ? 'verdict-correct' : retriedWrong ? 'verdict-retry' : outcome === 'incorrect' ? 'verdict-wrong' : 'verdict-done');
         pill.textContent = outcome === 'correct' ? '✓ Correct' : outcome === 'incorrect' ? '✕ Incorrect' : 'Submitted';
         const earned = readEarned(elements.table, binding);
-        const qn = Number(binding.number);
+        const qn = cardQn;
         const possible = Number.isInteger(qn) ? questionPoints.get(qn) : undefined;
         cardTop.append(number, selected, pill);
         const cardBottom = document.createElement('div'); cardBottom.className = 'question-bottom';
@@ -1472,6 +1641,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   return { reconcile: render, dispose() {
     disposed = true; const elements = findPdfAssessment(document);
     clearPendingSubmit();
+    removeResizeGrip();
     document.defaultView?.removeEventListener('resize', fitWorkspace);
     document.defaultView?.visualViewport?.removeEventListener('resize', fitWorkspace);
     document.removeEventListener('fullscreenchange', scheduleFitWorkspace);
