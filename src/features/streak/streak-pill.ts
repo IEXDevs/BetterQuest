@@ -97,14 +97,15 @@ export const streakPillStyles = `
     top: calc(100% + 8px);
     right: 0;
     z-index: 1000;
-    min-width: 290px;
-    width: 310px;
-    padding: 14px;
+    min-width: 420px;
+    width: 450px;
+    max-width: calc(100vw - 32px);
+    padding: 16px;
     background: var(--bq-surface, #ffffff);
     color: var(--bq-text, #1e293b);
     border: 1px solid var(--bq-border, #e2e8f0);
     border-radius: 12px;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.18), 0 8px 16px -4px rgba(0, 0, 0, 0.08);
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -132,67 +133,70 @@ export const streakPillStyles = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
   }
   .streak-cal-title {
-    font-weight: 700;
-    font-size: 13px;
+    font-weight: 800;
+    font-size: 16px;
     color: var(--bq-text, #1e293b);
   }
   .streak-cal-nav {
     background: none;
     border: 1px solid var(--bq-border, #cbd5e1);
-    border-radius: 6px;
-    width: 24px;
-    height: 24px;
+    border-radius: 8px;
+    width: 30px;
+    height: 30px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 20px;
+    font-weight: 700;
     color: var(--bq-text, #334155);
     padding: 0;
     line-height: 1;
+    transition: background .15s ease, border-color .15s ease;
   }
   .streak-cal-nav:hover:not(:disabled) {
     background: var(--bq-raised, #f1f5f9);
+    border-color: var(--bq-accent, #3b82f6);
   }
   .streak-cal-nav:disabled {
-    opacity: 0.35;
+    opacity: 0.3;
     cursor: default;
   }
   .streak-cal-stats {
     display: flex;
-    gap: 8px;
+    gap: 12px;
     align-items: center;
     justify-content: space-between;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 6px 10px;
-    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 7px 12px;
+    border-radius: 8px;
     background: var(--bq-raised, #f8fafc);
-    margin-bottom: 10px;
+    margin-bottom: 12px;
   }
   .streak-stat-count {
     color: #15803d;
   }
   .streak-stat-freezes {
     color: #1d4ed8;
+    cursor: help;
   }
   .streak-cal-dow-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     text-align: center;
-    font-size: 10px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 700;
     color: var(--bq-muted, #64748b);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
   }
   .streak-cal-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 2px;
+    gap: 4px;
     text-align: center;
   }
   .streak-cal-cell {
@@ -200,34 +204,38 @@ export const streakPillStyles = `
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 3px 1px;
-    min-height: 32px;
-    border-radius: 6px;
-    font-size: 11px;
+    padding: 4px 2px;
+    min-height: 42px;
+    border-radius: 8px;
+    font-size: 14px;
     cursor: default;
+    transition: transform .12s ease;
+  }
+  .streak-cal-cell:hover:not(.streak-cal-empty) {
+    transform: scale(1.05);
   }
   .streak-cal-num {
-    font-size: 9px;
-    font-weight: 600;
-    color: var(--bq-muted, #94a3b8);
-    margin-bottom: 1px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--bq-muted, #64748b);
+    margin-bottom: 2px;
   }
   .streak-cal-icon {
-    font-size: 12px;
+    font-size: 16px;
     line-height: 1;
   }
   .streak-cal-day.status-active {
-    background: color-mix(in srgb, #16a34a 10%, transparent);
+    background: color-mix(in srgb, #16a34a 14%, transparent);
   }
   .streak-cal-day.status-frozen {
-    background: color-mix(in srgb, #2563eb 10%, transparent);
+    background: color-mix(in srgb, #2563eb 14%, transparent);
   }
   .streak-cal-day.status-missed {
-    background: color-mix(in srgb, #dc2626 10%, transparent);
+    background: color-mix(in srgb, #dc2626 14%, transparent);
   }
   .streak-cal-day.status-missed .streak-cal-icon {
     color: #dc2626;
-    font-weight: 700;
+    font-weight: 800;
   }
   .streak-cal-day.status-before-start .streak-cal-icon,
   .streak-cal-day.status-future .streak-cal-icon {
@@ -237,11 +245,15 @@ export const streakPillStyles = `
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 10px;
+    font-size: 12px;
+    font-weight: 600;
     color: var(--bq-muted, #64748b);
-    margin-top: 10px;
+    margin-top: 12px;
     padding-top: 8px;
     border-top: 1px solid var(--bq-border, #e2e8f0);
+  }
+  .streak-cal-legend .legend-freeze {
+    cursor: help;
   }
   .streak-cal-legend .legend-missed {
     color: #dc2626;
@@ -428,13 +440,13 @@ export function createStreakPill(
     let iconSvg = '';
     if (status === 'frozen') {
       // Ice crystal / freeze SVG
-      iconSvg = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v16M2 10h16M4.5 4.5l11 11M4.5 15.5l11-11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+      iconSvg = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none"><path d="M 10 2 v 16 M 2 10 h 16 M 4.5 4.5 l 11 11 M 4.5 15.5 l 11 -11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
     } else if (status === 'broken') {
       // Broken flame SVG
-      iconSvg = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2c-.5 2-2 3.5-3 5-1.2 1.8-1.5 3.5-.8 5.2.7 1.8 2.2 2.8 3.8 2.8 0 5-2.2 5-5 0-3-2-5.5-5-8z" opacity="0.5"/><path d="M7 13l6-6M13 13L7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+      iconSvg = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M 10 2 C 9.5 4 8 5.5 7 7 C 5.8 8.8 5.5 10.5 6.2 12.2 C 6.9 14 8.4 15 10 15 C 12.8 15 15 12.8 15 10 C 15 7 13 4.5 10 2 Z" opacity="0.45"/><path d="M 6.5 13.5 l 7 -7 M 13.5 13.5 l -7 -7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
     } else {
       // Active flame SVG
-      iconSvg = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2c-.5 2-2 3.5-3 5-1.2 1.8-1.5 3.5-.8 5.2.7 1.8 2.2 2.8 3.8 2.8 0 5-2.2 5-5 0-3-2-5.5-5-8z"/></svg>';
+      iconSvg = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M 10 2 C 9.5 4 8 5.5 7 7 C 5.8 8.8 5.5 10.5 6.2 12.2 C 6.9 14 8.4 15 10 15 C 12.8 15 15 12.8 15 10 C 15 7 13 4.5 10 2 Z"/></svg>';
     }
 
     badge.innerHTML = `${iconSvg}<span>${label}</span>`;

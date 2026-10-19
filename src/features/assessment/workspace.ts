@@ -938,7 +938,11 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     stdDev.textContent = metrics.standardDeviation;
     meterValue.style.setProperty('--progress', `${bindings.length ? submitted / bindings.length * 100 : 0}%`);
     pctValue.textContent = `${percent}%`;
-    if (submitted > 0 && submitted !== lastProgressStreakCount) {
+    if (lastProgressStreakCount === -1) {
+      // First mount of the workspace: establish the baseline of already submitted questions.
+      // Do not count questions submitted on prior days towards today's streak.
+      lastProgressStreakCount = submitted;
+    } else if (submitted > lastProgressStreakCount) {
       lastProgressStreakCount = submitted;
       recordStreakSafe();
     }
@@ -1016,10 +1020,12 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
           const table = findPdfAssessment(document)?.table;
           if (table && readOutcome(table, binding) === 'correct') {
             markedCorrect.add(qn);
-            recordStreakSafe();
-            // A submit can come back as a page reload; celebrate loudly when it does.
+            // A submit can come back as a page reload; celebrate loudly and record streak when it does.
             const fresh = consumeFreshSubmit(document, qn) !== null;
-            if (fresh) console.info(`[BetterQuest] Question ${qn}: correct — celebrating after refresh.`);
+            if (fresh) {
+              recordStreakSafe();
+              console.info(`[BetterQuest] Question ${qn}: correct — celebrating after refresh.`);
+            }
             void pdfViewer?.ready?.then(ok => {
               if (!disposed && ok) {
                 pdfViewer?.celebrate?.(qn, binding.select.value, fresh);

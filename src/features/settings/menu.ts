@@ -458,7 +458,7 @@ export function createSettingsMenu(
   const streakPanel = document.createElement('div');
   streakPanel.className = 'streak-panel';
   streakPanel.innerHTML = `
-    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2c-.5 2-2 3.5-3 5-1.2 1.8-1.5 3.5-.8 5.2.7 1.8 2.2 2.8 3.8 2.8 2.8 0 5-2.2 5-5 0-3-2-5.5-5-8z"/></svg>
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M 10 2 C 9.5 4 8 5.5 7 7 C 5.8 8.8 5.5 10.5 6.2 12.2 C 6.9 14 8.4 15 10 15 C 12.8 15 15 12.8 15 10 C 15 7 13 4.5 10 2 Z"/></svg>
     <div class="streak-panel-info">
       <span class="streak-panel-title">0-day streak</span>
       <span class="streak-panel-sub">Visit Quest daily to build momentum</span>

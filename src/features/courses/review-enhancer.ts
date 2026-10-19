@@ -267,9 +267,12 @@ export function enhanceCourseReviewTab(document: Document, options: { run?: Exec
   }
 
   const stats = extractReviewStats(reviewPane);
-  if (stats && stats.completed > 0) {
+  if (stats && stats.completed > 0 && existingDashboard?.dataset.stats) {
     try {
-      void run({ kind: 'streak:record' }).catch(() => {});
+      const prevStats = JSON.parse(existingDashboard.dataset.stats);
+      if (typeof prevStats?.completed === 'number' && stats.completed > prevStats.completed) {
+        void run({ kind: 'streak:record' }).catch(() => {});
+      }
     } catch {
       /* ignore */
     }

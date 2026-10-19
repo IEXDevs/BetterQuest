@@ -137,7 +137,7 @@ test('applyCommand bookmarks:put automatically advances streak', () => {
   assert.ok(next.streak.current >= 1);
 });
 
-test('applyCommand assignments:cache automatically advances streak when an in-progress assignment is present', () => {
+test('applyCommand assignments:cache does not advance streak for existing in-progress assignments alone', () => {
   const state = emptyState();
   const cId = courseId('c1');
   const aId = assignmentId(cId, 'a1');
@@ -160,9 +160,9 @@ test('applyCommand assignments:cache automatically advances streak when an in-pr
   };
 
   const next = applyCommand(state, { kind: 'assignments:cache', snapshot });
-  assert.ok(next.streak);
-  assert.ok(next.streak.activeDates.length >= 1);
-  assert.ok(next.streak.current >= 1);
+  assert.equal(next.streak?.current, 0, 'Streak should not advance merely because an assignment is in progress');
+  assert.equal(next.streak?.lastActiveDate, null);
+  assert.equal(next.streak?.activeDates.length, 0);
 });
 
 test('applyCommand assignments:cache advances streak when newly completed work is observed', () => {
@@ -205,12 +205,12 @@ test('applyCommand assignments:cache advances streak when newly completed work i
   assert.ok(next.streak.current >= 1);
 });
 
-test('workspace advances streak when question progress exists or question is submitted', async () => {
+test('workspace does not advance streak on initial mount of in-progress assignment, but advances when question is submitted', async () => {
   const dom = new JSDOM('<main id="main-content"><div id="target">' +
     '<p id="due">Due date 10/14/26 11:59 PM</p>' +
     '<div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF" src="/student/images/problem_pdf?instance=courseuserassignment_1"></iframe></div></div>' +
     '<div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody>' +
-    '<tr data-id="cuaip_1"><td>1.</td><td><select name="response"><option value=""></option><option value="1" selected>1</option></select></td><td class="status"></td><td class="previous">1 / 3</td><td><button type="button" aria-label="Submit response">Submit</button></td></tr>' +
+    '<tr data-id="cuaip_1"><td>1.</td><td><select name="response"><option value=""></option><option value="1" selected>1</option></select></td><td class="status"></td><td class="previous">1 / 3</td><td><button type="button" class="submit" aria-label="Submit response">Submit</button></td></tr>' +
     '</tbody></table></div></div></main>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
   const doc = dom.window.document;
   const root = doc.querySelector<HTMLElement>('#target')!;
@@ -221,7 +221,12 @@ test('workspace advances streak when question progress exists or question is sub
   };
   const workspace = createPdfAssessmentWorkspace(root, { run });
   workspace.reconcile();
-  assert.ok(streakRecorded, 'Streak should be recorded when question progress (attempt > 0) exists');
+  assert.equal(streakRecorded, false, 'Streak should NOT be recorded on initial load of an in-progress assignment');
+
+  const submitBtn = root.querySelector<HTMLButtonElement>('.submit') || root.querySelector<HTMLButtonElement>('button[aria-label="Submit response"]');
+  submitBtn?.click();
+  assert.ok(streakRecorded, 'Streak should be recorded when a question is submitted');
+
   workspace.dispose();
   dom.window.close();
 });
