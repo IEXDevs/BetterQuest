@@ -1,3 +1,5 @@
+import { execute, type Execute } from '../../shared/client';
+
 export interface ReviewStats {
   completed: number;
   total: number;
@@ -250,7 +252,8 @@ export function disposeReviewSliders(document: Document): void {
   document.querySelectorAll('[data-betterquest="slider-value"]').forEach(el => el.remove());
 }
 
-export function enhanceCourseReviewTab(document: Document): boolean {
+export function enhanceCourseReviewTab(document: Document, options: { run?: Execute } = {}): boolean {
+  const run = options.run || execute;
   const reviewPane = findReviewPane(document);
 
   if (!reviewPane) return false;
@@ -264,6 +267,13 @@ export function enhanceCourseReviewTab(document: Document): boolean {
   }
 
   const stats = extractReviewStats(reviewPane);
+  if (stats && stats.completed > 0) {
+    try {
+      void run({ kind: 'streak:record' }).catch(() => {});
+    } catch {
+      /* ignore */
+    }
+  }
   const source = reviewPane.cloneNode(true) as HTMLElement;
   source.querySelectorAll('[data-betterquest]').forEach(node => node.remove());
   if (!stats && !/Custom Reviews allow|Our research shows/i.test(source.textContent || '')) return false;

@@ -724,6 +724,13 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   let pdfViewerReady: boolean | undefined = undefined;
   const viewerFactory = options.createPdfViewer || (typeof chrome !== 'undefined' ? createInteractivePdfViewer : undefined);
   const run = options.run || execute;
+  const recordStreakSafe = () => {
+    try {
+      void run({ kind: 'streak:record' }).catch(() => {});
+    } catch {
+      /* ignore storage errors in environments without extension host */
+    }
+  };
   const bookmarkService = new BookmarkService(run);
   let bookmarkedIds = new Set<string>();
   let cachedCourse: Course | undefined;
@@ -836,6 +843,15 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   };
   document.addEventListener('fullscreenchange', syncFs);
 
+  const onNativeQuestionSubmit = (event: Event) => {
+    const target = event.target as HTMLElement | null;
+    if (event.type === 'submit' || target?.closest?.('.submit, .submit-btn, input[type="submit"], button[type="submit"]')) {
+      recordStreakSafe();
+    }
+  };
+  root.addEventListener('click', onNativeQuestionSubmit, true);
+  root.addEventListener('submit', onNativeQuestionSubmit, true);
+
   const handleKeydown = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && (root.dataset.betterquestFullscreen === 'true' || document.documentElement.dataset.betterquestFullscreen === 'true')) {
       toggleFullscreen(false);
@@ -910,8 +926,10 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     }
   }
 
+  let lastProgressStreakCount = -1;
+
   function paintSummary(bindings: ReturnType<typeof readAssessmentResponses>, tally: HTMLElement | null) {
-    const submitted = bindings.filter(binding => binding.attempts > 0).length;
+    const submitted = bindings.filter(binding => binding.attempts > 0 || binding.answered).length;
     const percent = bindings.length ? Math.round(submitted / bindings.length * 100) : 0;
     progress.textContent = `${submitted} of ${bindings.length} submitted · ${Math.max(0, bindings.length - submitted)} left · ${percent}%`;
     const metrics = readAssessmentMetrics(document, root, tally);
@@ -920,6 +938,10 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     stdDev.textContent = metrics.standardDeviation;
     meterValue.style.setProperty('--progress', `${bindings.length ? submitted / bindings.length * 100 : 0}%`);
     pctValue.textContent = `${percent}%`;
+    if (submitted > 0 && submitted !== lastProgressStreakCount) {
+      lastProgressStreakCount = submitted;
+      recordStreakSafe();
+    }
   }
 
   let pendingSubmit: { questionNumber: number; optionValue: string; attempts: number; viaBetterQuest: boolean; timer: ReturnType<typeof setTimeout> | undefined } | null = null;
@@ -994,6 +1016,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
           const table = findPdfAssessment(document)?.table;
           if (table && readOutcome(table, binding) === 'correct') {
             markedCorrect.add(qn);
+            recordStreakSafe();
             // A submit can come back as a page reload; celebrate loudly when it does.
             const fresh = consumeFreshSubmit(document, qn) !== null;
             if (fresh) console.info(`[BetterQuest] Question ${qn}: correct — celebrating after refresh.`);
@@ -1061,6 +1084,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       const pageX = view?.scrollX ?? 0;
       const pageY = view?.scrollY ?? 0;
       binding.submit.click();
+      recordStreakSafe();
       // The submit button lives in Quest's hidden response table, so its own
       // handler can drag the page down to reveal it. Undo any jump it makes.
       const restorePage = () => {
@@ -1539,6 +1563,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         const was = pendingSubmit;
         clearPendingSubmit();
         if (target) {
+          recordStreakSafe();
           const qn = Number(target.number);
           const outcome = readOutcome(elements.table, target);
           if (!target.answered && (target.attempts > was.attempts || outcome === 'incorrect')) {
@@ -1777,6 +1802,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     document.removeEventListener('fullscreenchange', syncFs);
     document.removeEventListener('keydown', handleKeydown);
     syncPdfVisibility(false);
+    root.removeEventListener('click', onNativeQuestionSubmit, true);
+    root.removeEventListener('submit', onNativeQuestionSubmit, true);
     if (originalWorkspaceHeight) root.style.setProperty('--bq-pdf-workspace-height', originalWorkspaceHeight, originalWorkspaceHeightPriority);
     else root.style.removeProperty('--bq-pdf-workspace-height');
     root.removeAttribute('data-betterquest-rail');
@@ -1824,12 +1851,29 @@ export function isSlideSubmitRevealed(button: HTMLButtonElement): boolean {
   return true;
 }
 
-export function createSlideAssessmentEnhancement(presentation: HTMLElement) {
+export function createSlideAssessmentEnhancement(presentation: HTMLElement, options: { run?: Execute } = {}) {
   const document = presentation.ownerDocument;
+  const run = options.run || execute;
+  const recordSlideStreakSafe = () => {
+    try {
+      void run({ kind: 'streak:record' }).catch(() => {});
+    } catch {
+      /* ignore storage errors in environments without extension host */
+    }
+  };
   const originalHidden = new WeakMap<HTMLButtonElement, boolean>();
   const originalSpot = new WeakMap<HTMLButtonElement, { parent: ParentNode; next: Node | null }>();
   const style = installStyles(document);
   presentation.dataset.betterquestSlide = 'enhanced';
+
+  const onSlideSubmit = (event: Event) => {
+    const target = event.target as HTMLElement | null;
+    if (event.type === 'submit' || target?.closest?.('.submit-btn, input[type="submit"], button[type="submit"]')) {
+      recordSlideStreakSafe();
+    }
+  };
+  presentation.addEventListener('click', onSlideSubmit, true);
+  presentation.addEventListener('submit', onSlideSubmit, true);
   // Quest replaces the slide HTML after every submit, so buttons must be
   // collected live on each pass — never snapshotted once at mount.
   const collect = () => [...presentation.querySelectorAll<HTMLButtonElement>('.submit-btn')].map(button => {
@@ -1963,6 +2007,7 @@ export function createSlideAssessmentEnhancement(presentation: HTMLElement) {
         if (verdictFor.get(item.group) !== key) {
           verdictFor.set(item.group, key);
           showVerdictToast(verdict);
+          recordSlideStreakSafe();
         }
         if (picked) item.group.dataset.betterquestVerdict = verdict;
         else item.group.removeAttribute('data-betterquest-verdict');
@@ -1982,6 +2027,8 @@ export function createSlideAssessmentEnhancement(presentation: HTMLElement) {
   };
   document.addEventListener('betterquest:party', handlePartyTrigger);
   return { reconcile: paint, dispose() {
+    presentation.removeEventListener('click', onSlideSubmit, true);
+    presentation.removeEventListener('submit', onSlideSubmit, true);
     presentation.removeEventListener('change', paint); presentation.removeAttribute('data-betterquest-slide');
     document.removeEventListener('betterquest:party', handlePartyTrigger);
     for (const timer of toastTimers) clearTimeout(timer);

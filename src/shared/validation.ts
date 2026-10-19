@@ -100,11 +100,14 @@ export function isLocalState(value: unknown): value is LocalState {
       Object.entries(value.preferences.courseEffects).every(([key, effect]) =>
         typeof key === 'string' && key.length > 0 && key.length <= 200 && typeof effect === 'string' && effect.length > 0 && effect.length <= 40))) &&
     (value.streak === undefined || (object(value.streak) &&
-      only(value.streak, ['current', 'longest', 'lastActiveDate', 'activeDates']) &&
+      only(value.streak, ['current', 'longest', 'lastActiveDate', 'activeDates', 'freezesAvailable', 'frozenDates', 'startDate']) &&
       typeof value.streak.current === 'number' && value.streak.current >= 0 &&
       typeof value.streak.longest === 'number' && value.streak.longest >= 0 &&
       (value.streak.lastActiveDate === null || (typeof value.streak.lastActiveDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.streak.lastActiveDate))) &&
-      array(value.streak.activeDates, (d): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d), 500)));
+      array(value.streak.activeDates, (d): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d), 500) &&
+      (value.streak.freezesAvailable === undefined || (typeof value.streak.freezesAvailable === 'number' && value.streak.freezesAvailable >= 0)) &&
+      (value.streak.frozenDates === undefined || array(value.streak.frozenDates, (d): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d), 500)) &&
+      (value.streak.startDate === undefined || value.streak.startDate === null || (typeof value.streak.startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.streak.startDate)))));
 }
 
 export function isStudyExport(value: unknown): value is StudyExport {

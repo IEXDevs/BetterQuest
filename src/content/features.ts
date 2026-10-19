@@ -126,10 +126,10 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
     attributeFilter: ['class', 'style', 'aria-selected', 'hidden'],
     observeOwnedRemovals: true,
     mount: root => {
-      enhanceCourseReviewTab(root.ownerDocument);
+      enhanceCourseReviewTab(root.ownerDocument, { run });
       return {
         refresh: () => {
-          enhanceCourseReviewTab(root.ownerDocument);
+          enhanceCourseReviewTab(root.ownerDocument, { run });
         },
         dispose: () => {
           disposeReviewSliders(root.ownerDocument);
@@ -177,7 +177,7 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
     locate: doc => new URL(doc.URL).pathname.startsWith('/student/instances/')
       ? doc.querySelector<HTMLElement>('#main-content') : null,
     attributeFilter: ['href'], mount: root => {
-      const header = createAssessmentHeader(root as HTMLElement);
+      const header = createAssessmentHeader(root as HTMLElement, { run });
       return { refresh: header.reconcile, dispose: header.dispose };
     },
   });
@@ -201,13 +201,13 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
   });
   definitions.push({ name: 'practice-slides', locate: doc => findPracticeSlides(doc),
     attributeFilter: ['class', 'aria-selected', 'hidden'], observeOwnedRemovals: true, mount: root => {
-      const practice = createPracticeSlideEnhancement(root as HTMLElement);
+      const practice = createPracticeSlideEnhancement(root as HTMLElement, { run });
       return { refresh: () => practice.reconcile(), dispose: practice.dispose };
     },
   });
   definitions.push({ name: 'slide-assessment-workspace', locate: doc => findSlideAssessment(doc),
     attributeFilter: ['class', 'checked', 'disabled', 'hidden'], mount: root => {
-      const workspace = createSlideAssessmentEnhancement(root as HTMLElement);
+      const workspace = createSlideAssessmentEnhancement(root as HTMLElement, { run });
       return { refresh: () => workspace.reconcile(), dispose: workspace.dispose };
     },
   });

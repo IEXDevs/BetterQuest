@@ -1,6 +1,17 @@
+import { execute, type Execute } from '../../shared/client';
+
 /** Keep the original download URL and native link behavior in every assessment view. */
-export function createAssessmentHeader(root: HTMLElement) {
+export function createAssessmentHeader(root: HTMLElement, options: { run?: Execute } = {}) {
   const doc = root.ownerDocument;
+  const run = options.run || execute;
+  const onAssessmentSubmit = () => {
+    try {
+      void run({ kind: 'streak:record' }).catch(() => {});
+    } catch {
+      /* ignore */
+    }
+  };
+  doc.addEventListener('submit', onAssessmentSubmit, true);
   const style = doc.createElement('style');
   style.dataset.betterquest = 'assessment-header-style';
   style.textContent = `
@@ -398,6 +409,7 @@ function placeViewToggle(controls: HTMLElement[]) {
     viewToggle = null;
     (doc.getElementById('main-content') || root).removeAttribute('data-betterquest-view-hosted');
     root.querySelectorAll('[data-betterquest-view-bar]').forEach(el => el.removeAttribute('data-betterquest-view-bar'));
+    doc.removeEventListener('submit', onAssessmentSubmit, true);
     for (const restore of restores.splice(0).reverse()) restore(); style.remove();
   } };
 }

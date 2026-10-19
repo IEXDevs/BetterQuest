@@ -1,4 +1,5 @@
 import { findPracticeSlides } from '../../adapters/quest/assessment';
+import { execute, type Execute } from '../../shared/client';
 
 /**
  * Quest's Slides view for practice and informational items ships as bare MDB:
@@ -148,10 +149,24 @@ function dropSeparatorPeriod(bar: HTMLElement | null) {
   if (next && next.nodeType === 3 && (next.textContent || '').trim() === '.') next.remove();
 }
 
-export function createPracticeSlideEnhancement(root: HTMLElement) {
+export function createPracticeSlideEnhancement(root: HTMLElement, options: { run?: Execute } = {}) {
   const doc = root.ownerDocument;
+  const run = options.run || execute;
   let progress: HTMLElement | null = null;
   let owned = false;
+  let practiceStreakRecorded = false;
+
+  function recordPracticeActivity() {
+    if (!practiceStreakRecorded) {
+      practiceStreakRecorded = true;
+      try {
+        void run({ kind: 'streak:record' }).catch(() => {});
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  root.addEventListener('click', recordPracticeActivity, true);
 
   // Quest swaps the slide body in place, so advancing leaves the reader staring
   // at the middle of the old question. This shell exists only on practice and
@@ -178,6 +193,10 @@ export function createPracticeSlideEnhancement(root: HTMLElement) {
     root.dataset.betterquestPractice = 'true';
     dropSeparatorPeriod(root.querySelector('#question-bar-div .questionBar'));
     syncEmptyPoints();
+
+    const { current, total } = readProgress(root);
+    if (current > 0) recordPracticeActivity();
+
     const bar = root.querySelector('#upper-paging-div .h5');
     if (bar && !progress?.isConnected) {
       progress = doc.createElement('span');
@@ -193,7 +212,6 @@ export function createPracticeSlideEnhancement(root: HTMLElement) {
     }
     if (progress?.isConnected) {
       const fill = progress.firstElementChild as HTMLElement | null;
-      const { current, total } = readProgress(root);
       if (fill) fill.style.width = `${total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0}%`;
     }
   }
@@ -218,6 +236,7 @@ export function createPracticeSlideEnhancement(root: HTMLElement) {
     reconcile: render,
     dispose() {
       clear();
+      root.removeEventListener('click', recordPracticeActivity, true);
       root.removeEventListener('click', scrollToTopOnPagerClick, true);
       style.remove();
     },

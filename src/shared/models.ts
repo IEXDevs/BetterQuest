@@ -110,6 +110,9 @@ export interface StreakData {
   longest: number;
   lastActiveDate: string | null;
   activeDates: string[];
+  freezesAvailable?: number;
+  frozenDates?: string[];
+  startDate?: string | null;
 }
 
 export interface LocalState {
@@ -142,6 +145,6 @@ export function emptyState(): LocalState {
     schemaVersion: 1,
     cache: { courses: [], assignments: [], pages: [], refreshRequestedAt: null },
     completionOverrides: {}, bookmarks: [], study: [], preferences: { theme: 'system' },
-    streak: { current: 0, longest: 0, lastActiveDate: null, activeDates: [] },
+    streak: { current: 0, longest: 0, lastActiveDate: null, activeDates: [], freezesAvailable: 0, frozenDates: [], startDate: null },
   };
 }

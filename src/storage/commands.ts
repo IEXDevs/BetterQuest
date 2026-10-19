@@ -72,6 +72,16 @@ export function applyCommand(state: LocalState, command: Command): LocalState {
         courseIds: snapshot.courses.map(c => c.id), assignmentIds: snapshot.assignments.map(a => a.id),
         ...(snapshot.scannedCourseIds === undefined ? {} : { scannedCourseIds: snapshot.scannedCourseIds }),
       }];
+      const hasActiveProgress = snapshot.assignments.some(a => {
+        if (a.completion === 'in-progress') return true;
+        const prev = state.cache.assignments.find(p => p.id === a.id);
+        if (a.completion === 'completed' && prev?.completion !== 'completed') return true;
+        if (a.grade?.percent !== null && a.grade?.percent !== undefined && a.grade.percent > 0 && (prev?.grade?.percent ?? 0) < a.grade.percent) return true;
+        return false;
+      });
+      if (hasActiveProgress) {
+        next.streak = updateStreakData(next.streak);
+      }
       break;
     }
     case 'assignments:refresh': next.cache.refreshRequestedAt = command.requestedAt; break;

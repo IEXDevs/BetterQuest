@@ -4,6 +4,7 @@ import { execute, commandErrorMessage, isContextInvalidated, type Execute } from
 import type { Subscribe } from './section';
 import { syncCoursesSequentially, syncTargetsFromCourses, type CourseSyncTarget } from './course-sync';
 import { assignmentIsCompleted, completionText, displayDeadline, type CompletionOverrides } from './view-model';
+import { createStreakPill, streakPillStyles } from '../streak/streak-pill';
 
 function canonical(value: string) { const url = new URL(value); url.hash = ''; url.searchParams.sort(); return url.href; }
 
@@ -73,13 +74,12 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
     .meta{display:block;font-size:12px;color:var(--bq-muted,#748491);margin-top:3px}.due{text-align:right;font-size:12px;white-space:nowrap}.due small{display:block;color:var(--bq-muted,#748491)}.overdue{color:var(--bq-warning,#a96645)}
     .course-title{font-weight:500}.course-meter{height:4px;margin-top:6px;border-radius:2px;overflow:hidden;background:var(--bq-raised,#eef3f6);position:relative}.course-meter span{display:block;height:100%;border-radius:inherit;background:var(--bq-good,#26a69a);transition:width .25s ease}.unscanned{color:var(--bq-warning,#a96645);cursor:pointer;text-decoration:underline}.unscanned:hover{color:var(--bq-accent,#227ab0)}button{font:inherit;font-size:12px;cursor:pointer;border:0;color:var(--bq-accent,#227ab0);background:transparent;padding:6px 0}.reload-btn{padding:0;font-weight:600;text-decoration:underline;white-space:nowrap}.empty{color:var(--bq-muted,#748491);font-size:13px}.error{color:var(--bq-warning,#a3453c)}
     @media(max-width:750px){section{padding:16px}.grid{grid-template-columns:1fr;gap:18px}header{align-items:flex-start;flex-direction:column;gap:5px}.progress-label{flex-wrap:wrap}.assignment{gap:10px}}
-  `;
+  ` + streakPillStyles;
   const section = document.createElement('section'); section.setAttribute('aria-labelledby', 'bq-home-title');
   const header = document.createElement('header');
   const heading = document.createElement('h2'); heading.id = 'bq-home-title'; heading.tabIndex = -1; heading.textContent = 'Your assignments';
-  const streakBadge = document.createElement('div'); streakBadge.className = 'streak-badge';
-  streakBadge.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2c-.5 2-2 3.5-3 5-1.2 1.8-1.5 3.5-.8 5.2.7 1.8 2.2 2.8 3.8 2.8 2.8 0 5-2.2 5-5 0-3-2-5.5-5-8z"/></svg><span>0-day streak</span>';
-  header.append(heading, streakBadge);
+  const streakPill = createStreakPill(undefined, undefined, document);
+  header.append(heading, streakPill.element);
   const content = document.createElement('div'); content.setAttribute('aria-live', 'polite');
   section.append(header, content); shadow.append(style, section);
   let disposed = false, generation = 0, fingerprint = '', lastRender = '', limit = 5, showCompletedManual = false;
@@ -144,12 +144,7 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
 
   function render() {
     if (!cache || disposed) return;
-    const streakCount = streak?.current || 0;
-    const streakText = streakCount === 1 ? '1 day streak' : `${streakCount} day streak`;
-    const streakSpan = streakBadge.querySelector('span');
-    if (streakSpan) streakSpan.textContent = streakText;
-    streakBadge.className = 'streak-badge' + (streakCount > 0 ? ' active' : '');
-    streakBadge.title = streak?.longest ? `Current streak: ${streakCount} days · Best: ${streak.longest} days` : 'Visit Quest or study daily to keep your streak alive!';
+    streakPill.update(streak);
     const data = homepageOverview(courses, cache, overrides); content.className = ''; content.replaceChildren();
     const coverage = document.createElement('p'); coverage.className = 'coverage';
     coverage.textContent = `${data.observed} of ${courses.length} courses synced`;
@@ -317,7 +312,6 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
       const renderKey = JSON.stringify({ courses, cache, overrides, streak, syncLabel, syncing });
       if (renderKey !== lastRender) { render(); lastRender = renderKey; }
       void autoSyncPending();
-      void run({ kind: 'streak:record' });
     } catch (error) {
       if (!disposed && current === generation) {
         lastRender = ''; content.className = 'error'; content.replaceChildren();
@@ -350,6 +344,7 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
       generation++;
       syncAbort?.abort();
       stop?.();
+      streakPill.dispose?.();
       host.remove();
     },
   };
