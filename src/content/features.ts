@@ -189,7 +189,7 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
       return found.root;
     },
     attributeFilter: ['class', 'value', 'disabled', 'hidden'], observeOwnedRemovals: true, mount: root => {
-      const workspace = createPdfAssessmentWorkspace(root as HTMLElement);
+      const workspace = createPdfAssessmentWorkspace(root as HTMLElement, { run });
       return { refresh: () => workspace.reconcile(), dispose: workspace.dispose };
     },
   });

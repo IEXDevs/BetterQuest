@@ -276,3 +276,51 @@ test('all mounted controls clean up on disposal without altering source table ce
   assert.equal(dom.window.document.querySelector('.dataTables_scrollBody')!.outerHTML, original);
   assert.equal(f.listeners.size, 0); dom.window.close();
 });
+
+test('workspace response desk question cards render bookmark button that saves question and updates streak', async () => {
+  const { createPdfAssessmentWorkspace } = await import('../src/features/assessment/workspace');
+  const dom = new JSDOM('<main id="main-content"><div id="target">' +
+    '<p id="due">Due date 10/14/26 11:59 PM</p><br>' +
+    '<p id="download"><a href="/student/images/problem_pdf?instance=courseuserassignment_1">PDF w/o expl</a></p>' +
+    '<div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF" src="/student/images/problem_pdf?instance=courseuserassignment_1"></iframe></div></div>' +
+    '<div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody>' +
+    '<tr data-id="cuaip_1"><td>1.</td><td><select name="response"><option value=""></option><option value="1">1</option></select></td><td class="status"></td><td class="previous">0 / 3</td><td><button type="button" aria-label="Submit response">Submit</button></td></tr>' +
+    '</tbody></table></div></div></main>',
+    { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
+  const f = store();
+  const root = dom.window.document.querySelector<HTMLElement>('#target')!;
+  const workspace = createPdfAssessmentWorkspace(root, {
+    run: f.run,
+    createPdfViewer: container => {
+      const el = dom.window.document.createElement('div');
+      container.append(el);
+      return { element: el, ready: Promise.resolve(true), setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {}, markWrong() {}, celebrate() {}, announce() {}, dispose() {} };
+    },
+  });
+  workspace.reconcile();
+  try {
+    const rail = dom.window.document.querySelector('[data-betterquest="assessment-rail"]')!.shadowRoot!;
+    const btn = rail.querySelector<HTMLButtonElement>('.card-bookmark-btn')!;
+    assert.ok(btn, 'Bookmark button must be rendered on question card');
+    assert.equal(btn.getAttribute('aria-pressed'), 'false');
+
+    btn.click();
+    await pause();
+
+    assert.equal(btn.getAttribute('aria-pressed'), 'true');
+    const state = await f.run({ kind: 'state:read' });
+    assert.equal(state.bookmarks.length, 1);
+    assert.equal(state.bookmarks[0].question.number, '1');
+    assert.ok(state.streak);
+    assert.ok(state.streak.current >= 1);
+
+    btn.click();
+    await pause();
+    assert.equal(btn.getAttribute('aria-pressed'), 'false');
+    const stateAfter = await f.run({ kind: 'state:read' });
+    assert.equal(stateAfter.bookmarks.length, 0);
+  } finally {
+    workspace.dispose();
+    dom.window.close();
+  }
+});

@@ -165,3 +165,33 @@ test('homepage recognizes course scan when page URL differs from homepage link a
     dom.window.close();
   }
 });
+
+test('homepage displays daily streak badge with live count', async () => {
+  const dom = new JSDOM('<div id="courses-table-div"><div id="courses-table_wrapper">' +
+    '<table id="courses-table"><thead><tr><th>Name</th><th>Unique</th></tr></thead><tbody>' +
+    '<tr><td><a href="/student/courses/show?course=123">Physics</a></td><td>12345</td></tr>' +
+    '</tbody></table></div></div><div id="enroll-div"></div>', { url, pretendToBeVisual: true });
+  const doc = dom.window.document;
+  const current: LocalState = {
+    ...emptyState(),
+    cache: { courses: [], assignments: [], pages: [], refreshRequestedAt: null },
+    streak: { current: 5, longest: 10, lastActiveDate: '2026-10-19', activeDates: ['2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18', '2026-10-19'] },
+  };
+  const overview = createHomepageOverview(
+    doc.querySelector('#courses-table-div')!,
+    (async () => current) as never,
+  );
+  try {
+    await overview.refresh();
+    const host = doc.querySelector('[data-betterquest="homepage-overview"]')!;
+    const shadow = host.shadowRoot!;
+    const streakBadge = shadow.querySelector('.streak-badge')!;
+    assert.ok(streakBadge, 'Streak badge should be rendered');
+    assert.ok(streakBadge.classList.contains('active'), 'Active streak should have active class');
+    assert.equal(streakBadge.querySelector('span')?.textContent, '5 day streak');
+    assert.match(streakBadge.getAttribute('title') || '', /Current streak: 5 days/);
+  } finally {
+    overview.dispose();
+    dom.window.close();
+  }
+});

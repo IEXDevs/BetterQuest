@@ -1103,7 +1103,7 @@ test('interactive PDF viewer strips adjacent formula text from option numbers so
   }
 });
 
-test('interactive PDF viewer mounts 35px circular badges positioned directly on option numbers with no badge options panel', async () => {
+test('interactive PDF viewer mounts circular badges positioned directly on option numbers with no badge options panel', async () => {
   const module = await import('../src/features/assessment/pdf-viewer');
   const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
   const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
@@ -1126,10 +1126,10 @@ test('interactive PDF viewer mounts 35px circular badges positioned directly on 
     assert.equal(shadow.querySelector('.badge-popover'), null, 'Badge options popover panel must be removed');
 
     const css = shadow.querySelector('style')!.textContent!;
-    assert.match(css, /width:35px!important/);
-    assert.match(css, /height:35px!important/);
+    assert.match(css, /width:40px!important/);
+    assert.match(css, /height:40px!important/);
     assert.match(css, /border-radius:18px!important/);
-    assert.match(css, /transform:translate\(5px,5px\)/);
+    assert.match(css, /transform:translate\(5px,3px\)/);
   } finally {
     viewer.dispose();
     dom.window.close();

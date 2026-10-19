@@ -1,4 +1,5 @@
 import {
+  clean,
   findPdfAssessment,
   isEmptyResponseTable,
   isNativeControlAvailable,
@@ -10,6 +11,10 @@ import {
 import { createInteractivePdfViewer } from './pdf-viewer';
 import { celebrateScreen, flashScreen } from './celebration';
 import { isBetterQuestDebug } from '../../shared/debug';
+import { execute, type Execute } from '../../shared/client';
+import { BookmarkService } from '../bookmarks/service';
+import type { Assignment, Course, Question } from '../../shared/models';
+import { assignmentId, courseId, questionId, sourceUrl } from '../../shared/identity';
 
 type PdfViewer = ReturnType<typeof createInteractivePdfViewer>;
 type PdfViewerFactory = (container: HTMLElement, options: Parameters<typeof createInteractivePdfViewer>[1]) => any;
@@ -497,7 +502,7 @@ function withSlideEnhancementDisabled<T>(presentation: HTMLElement, read: () => 
   finally { if (enhanced) presentation.dataset.betterquestSlide = 'enhanced'; }
 }
 
-export function createPdfAssessmentWorkspace(root: HTMLElement, options: { createPdfViewer?: PdfViewerFactory } = {}) {
+export function createPdfAssessmentWorkspace(root: HTMLElement, options: { createPdfViewer?: PdfViewerFactory; run?: Execute } = {}) {
   const document = root.ownerDocument;
   const style = installStyles(document);
   const host = document.createElement('aside'); host.dataset.betterquest = 'assessment-rail';
@@ -584,6 +589,13 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     .question[data-status="wrong"]{border-color:color-mix(in srgb,#dc2626 45%,var(--bq-border,#d7e2f0))}
     .question:focus-within{border-color:var(--bq-accent,#227ab0)}
     .question-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .question-meta{display:inline-flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+    .question-top-actions{display:inline-flex;align-items:center;gap:6px;margin-left:auto}
+    .card-bookmark-btn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:1px solid var(--bq-border,#d7e2f0);border-radius:4px;background:var(--bq-surface,#fff);color:var(--bq-assessment-muted);cursor:pointer;transition:all .15s ease}
+    .card-bookmark-btn:hover{color:var(--bq-accent,#6366f1);border-color:var(--bq-accent,#6366f1);background:var(--bq-raised,#f2f5f7);transform:translateY(-1px)}
+    .card-bookmark-btn[aria-pressed="true"]{color:#6366f1;border-color:#818cf8;background:color-mix(in srgb,#6366f1 12%,var(--bq-surface,#fff))}
+    .card-bookmark-btn[aria-pressed="true"] svg{fill:currentColor}
+    .card-bookmark-btn svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round}
     .number{font-weight:800;font-size:13px;color:var(--bq-text,#18253a);border:0;background:transparent;padding:2px 4px;margin:-2px -4px;border-radius:2px;cursor:pointer;font-family:inherit;text-align:left}
     .number:hover{color:var(--bq-assessment-accent);text-decoration:underline;text-underline-offset:2px}
     .number:focus-visible{outline:2px solid var(--bq-accent,#6366f1);outline-offset:2px}
@@ -711,6 +723,62 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   let pdfViewerStarted = false;
   let pdfViewerReady: boolean | undefined = undefined;
   const viewerFactory = options.createPdfViewer || (typeof chrome !== 'undefined' ? createInteractivePdfViewer : undefined);
+  const run = options.run || execute;
+  const bookmarkService = new BookmarkService(run);
+  let bookmarkedIds = new Set<string>();
+  let cachedCourse: Course | undefined;
+  let cachedAssignment: Assignment | undefined;
+
+  async function loadBookmarks() {
+    try {
+      const state = await run({ kind: 'state:read' });
+      bookmarkedIds = new Set(state.bookmarks.map(b => b.id));
+      const table = root.querySelector<HTMLTableElement>('table[id^="instance-table-courseuserassignment_"]') ||
+        document.querySelector<HTMLTableElement>('table[id^="instance-table-courseuserassignment_"]');
+      const sourceId = table?.id.match(/^instance-table-(courseuserassignment_\d+)$/)?.[1];
+      if (sourceId && state.cache) {
+        cachedAssignment = state.cache.assignments.find(a => a.sourceId === sourceId);
+        cachedCourse = cachedAssignment ? state.cache.courses.find(c => c.id === cachedAssignment!.courseId) : undefined;
+      }
+    } catch {
+      /* ignore read errors */
+    }
+  }
+  void loadBookmarks();
+
+  function getCourseAndAssignment(sourceId: string): { course: Course; assignment: Assignment } {
+    if (cachedCourse && cachedAssignment) {
+      return { course: cachedCourse, assignment: cachedAssignment };
+    }
+    let urlStr = document.URL;
+    try { urlStr = sourceUrl(document.URL); } catch { /* keep document.URL */ }
+    const url = new URL(urlStr);
+    const courseParam = url.searchParams.get('course') || url.pathname.split('/')[2] || 'course';
+    const cSourceId = `unique:${courseParam}`;
+    const cId = courseId(cSourceId);
+    const courseTitle = clean(document.querySelector('.breadcrumb a, #nav-course-title, header a[href*="/course/"]')?.textContent) || 'Course';
+    const course: Course = {
+      id: cId,
+      sourceId: cSourceId,
+      title: courseTitle,
+      url: urlStr,
+    };
+    const aId = assignmentId(course.id, sourceId);
+    const aTitle = clean(document.querySelector('h1, h2, .page-header, #main-content h3')?.textContent) || 'Assignment';
+    const assignment: Assignment = {
+      id: aId,
+      sourceId,
+      courseId: course.id,
+      title: aTitle,
+      url: urlStr,
+      deadline: { iso: null, label: null, timeZone: null },
+      completion: 'unknown',
+      completionLabel: null,
+      kind: 'homework',
+      historical: null,
+    };
+    return { course, assignment };
+  }
 
   function toggleFullscreen(enable?: boolean) {
     const isFs = Boolean(document.fullscreenElement) || root.dataset.betterquestFullscreen === 'true';
@@ -1298,8 +1366,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     // grip whenever it is gone.
     if (resizeGrip && !resizeGrip.isConnected) removeResizeGrip();
     // The grip anchors to the frame's bottom edge, so the frame must be a
-    // containing block.
-    if ((getComputedStyle(sizingRoot).position === 'static') && sizingRoot.style.position !== 'relative') {
+    const compPos = document.defaultView?.getComputedStyle?.(sizingRoot)?.position;
+    if ((compPos === 'static') && sizingRoot.style.position !== 'relative') {
       sizingRoot.style.setProperty('position', 'relative', 'important');
     }
     if (!resizeGrip) {
@@ -1550,6 +1618,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       });
       qnav.append(jump);
     }
+    const tableSourceId = elements.table.id.match(/^instance-table-(courseuserassignment_\d+)$/)?.[1] || 'current';
+    const { course, assignment } = getCourseAndAssignment(tableSourceId);
+
     for (const binding of bindings) {
       const { state } = getQuestionStatus(binding);
       const cardStatus = state ? state.replace(/^q-/, '') : 'unattempted';
@@ -1565,6 +1636,60 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         scrollToQuestion(Number(binding.number));
       });
       const selected = document.createElement('span'); selected.className = 'selected';
+
+      const qId = questionId(assignment.id, binding.id);
+      const isBookmarked = bookmarkedIds.has(qId) || bookmarkedIds.has(binding.id);
+      const bookmarkBtn = document.createElement('button');
+      bookmarkBtn.type = 'button';
+      bookmarkBtn.className = 'card-bookmark-btn';
+      bookmarkBtn.innerHTML = '<svg aria-hidden="true" viewBox="0 0 16 16"><path d="M4 2h8v12l-4-2.5L4 14V2Z"/></svg>';
+      bookmarkBtn.setAttribute('aria-pressed', String(isBookmarked));
+      bookmarkBtn.title = isBookmarked ? `Remove saved question ${binding.number}` : `Save question ${binding.number}`;
+      bookmarkBtn.setAttribute('aria-label', bookmarkBtn.title);
+      bookmarkBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (bookmarkBtn.disabled) return;
+        bookmarkBtn.disabled = true;
+        const currentlySaved = bookmarkBtn.getAttribute('aria-pressed') === 'true';
+        try {
+          if (currentlySaved) {
+            await bookmarkService.remove(qId);
+            bookmarkedIds.delete(qId);
+            bookmarkedIds.delete(binding.id);
+            bookmarkBtn.setAttribute('aria-pressed', 'false');
+            bookmarkBtn.title = `Save question ${binding.number}`;
+            bookmarkBtn.setAttribute('aria-label', bookmarkBtn.title);
+          } else {
+            const q: Question = {
+              id: qId,
+              sourceId: binding.id,
+              courseId: course.id,
+              assignmentId: assignment.id,
+              number: String(binding.number),
+              url: assignment.url,
+              anchor: null,
+              prompt: { status: 'not-extracted', text: null, format: 'plain-text', reason: 'Saved from response desk' },
+              answer: { availability: 'unknown', url: null },
+              solution: { availability: 'unknown', url: null },
+            };
+            await bookmarkService.add(course, assignment, q);
+            bookmarkedIds.add(qId);
+            bookmarkBtn.setAttribute('aria-pressed', 'true');
+            bookmarkBtn.title = `Remove saved question ${binding.number}`;
+            bookmarkBtn.setAttribute('aria-label', bookmarkBtn.title);
+          }
+        } catch (err) {
+          bookmarkBtn.title = err instanceof Error ? err.message : 'Could not save question.';
+          bookmarkBtn.setAttribute('aria-label', bookmarkBtn.title);
+        } finally {
+          bookmarkBtn.disabled = false;
+        }
+      });
+
+      const meta = document.createElement('div'); meta.className = 'question-meta';
+      meta.append(number, selected);
+      const topActions = document.createElement('div'); topActions.className = 'question-top-actions';
 
       if (binding.answered) {
         const tries = readTries(elements.table, binding);
@@ -1586,7 +1711,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         const earned = readEarned(elements.table, binding);
         const qn = cardQn;
         const possible = Number.isInteger(qn) ? questionPoints.get(qn) : undefined;
-        cardTop.append(number, selected, pill);
+        topActions.append(pill, bookmarkBtn);
+        cardTop.append(meta, topActions);
         const cardBottom = document.createElement('div'); cardBottom.className = 'question-bottom';
         cardBottom.append(submittedTag);
         if (earned !== null) {
@@ -1623,7 +1749,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       submit.addEventListener('click', () => {
         submitNative(Number(binding.number));
       });
-      cardTop.append(number, selected);
+      topActions.append(bookmarkBtn);
+      cardTop.append(meta, topActions);
       const cardBottom = document.createElement('div'); cardBottom.className = 'question-bottom';
       cardBottom.append(choices, submit);
       card.append(cardTop, cardBottom);

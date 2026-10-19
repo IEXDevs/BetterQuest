@@ -11,7 +11,8 @@ site/index.html
 site/privacy/
 site/privacy.html
 site/theme-boot.js
-site/scene.js
 site/theme.js
 site/_headers
+site/brand/
+site/*.svg
 

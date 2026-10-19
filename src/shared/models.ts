@@ -105,6 +105,13 @@ export interface StudyRecord {
   collectedAt: string;
 }
 
+export interface StreakData {
+  current: number;
+  longest: number;
+  lastActiveDate: string | null;
+  activeDates: string[];
+}
+
 export interface LocalState {
   schemaVersion: 1;
   cache: { courses: Course[]; assignments: Assignment[]; pages: CachedPage[]; refreshRequestedAt: string | null };
@@ -113,6 +120,7 @@ export interface LocalState {
   bookmarks: Bookmark[];
   study: StudyRecord[];
   preferences: Preferences;
+  streak?: StreakData;
 }
 
 export interface StudyExport {
@@ -134,5 +142,6 @@ export function emptyState(): LocalState {
     schemaVersion: 1,
     cache: { courses: [], assignments: [], pages: [], refreshRequestedAt: null },
     completionOverrides: {}, bookmarks: [], study: [], preferences: { theme: 'system' },
+    streak: { current: 0, longest: 0, lastActiveDate: null, activeDates: [] },
   };
 }

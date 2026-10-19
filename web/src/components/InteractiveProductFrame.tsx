@@ -409,7 +409,7 @@ export function InteractiveProductFrame() {
         {/* Clean, Non-Gaudy Sidebar */}
         <aside className="frame-sidebar">
           <div className="sidebar-brand-pill">
-            <img src="/logo.png" alt="" className="sidebar-brand-glyph" width="28" height="28" />
+            <img src="/brand/BetterQuestFavicon.svg" alt="" className="sidebar-brand-glyph" width="28" height="28" />
             <span className="sidebar-brand-name">BetterQuest</span>
           </div>
 

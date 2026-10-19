@@ -8,7 +8,7 @@ import { assignmentIsCompleted, completionText, displayDeadline, type Completion
 function canonical(value: string) { const url = new URL(value); url.hash = ''; url.searchParams.sort(); return url.href; }
 
 /** Only assignment IDs observed on the exact current course URL count as coverage. */
-export function homepageOverview(courses: Course[], cache: LocalState['cache'], overrides: CompletionOverrides = {}) {
+export function homepageOverview(courses: Course[], cache: LocalState['cache'], overrides: CompletionOverrides = {}, streak?: LocalState['streak']) {
   const summaries = courses.map(course => {
     const courseAssignments = cache.assignments.filter(a => a.courseId === course.id);
     const page = cache.pages
@@ -32,7 +32,8 @@ export function homepageOverview(courses: Course[], cache: LocalState['cache'], 
   const pending = assignments.filter(a => !assignmentIsCompleted(a, overrides) && a.completion !== 'unknown')
     .sort((a, b) => ((a.deadline.iso ? Date.parse(a.deadline.iso) : Infinity) - (b.deadline.iso ? Date.parse(b.deadline.iso) : Infinity)) || a.title.localeCompare(b.title));
   return { summaries, completed, total: assignments.length, unknown: assignments.filter(a => a.completion === 'unknown').length,
-    observed: summaries.filter(s => s.scanned).length, pending };
+    observed: summaries.filter(s => s.scanned).length, pending,
+    streak: streak || { current: 0, longest: 0, lastActiveDate: null, activeDates: [] } };
 }
 
 export function createHomepageOverview(root: Element, run: Execute = execute, subscribe?: Subscribe) {
@@ -45,7 +46,10 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
   style.textContent = `
     :host{display:block;margin:22px 0;scroll-margin-top:80px;font-family:inherit}
     *{box-sizing:border-box}section{padding:22px;background:var(--bq-surface,#fff);color:var(--bq-text,#26384a);border:1px solid var(--bq-border,#e1e7ed);border-radius:8px;font-size:14px;line-height:1.5}
-    header{display:flex;align-items:center;justify-content:space-between;gap:18px}h2{font:inherit;font-weight:600;font-size:20px;margin:0}h2:focus-visible{outline:2px solid var(--bq-accent,#227ab0);outline-offset:4px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}h2{font:inherit;font-weight:600;font-size:20px;margin:0}h2:focus-visible{outline:2px solid var(--bq-accent,#227ab0);outline-offset:4px}
+    .streak-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;background:color-mix(in srgb,#ea580c 10%,transparent);border:1px solid color-mix(in srgb,#ea580c 28%,transparent);color:#ea580c;font:700 12px/1 inherit;letter-spacing:.02em;transition:all .18s ease;white-space:nowrap}
+    .streak-badge:hover{background:color-mix(in srgb,#ea580c 16%,transparent);border-color:#ea580c}
+    .streak-badge svg{width:14px;height:14px;fill:currentColor;flex-shrink:0}
     .coverage,.caption{color:var(--bq-muted,#748491);font-size:12px;margin:8px 0}.progress-label{display:flex;justify-content:space-between;gap:12px;margin-top:16px;font-size:13px}
     .meter{height:8px;margin:8px 0;border-radius:5px;overflow:hidden;background:var(--bq-raised,#eef3f6);position:relative}
     .meter span{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,var(--bq-good,#26a69a),#5eead4,var(--bq-good,#26a69a));background-size:200% 100%;animation:bq-flow 3s linear infinite;transition:width .25s ease}
@@ -71,11 +75,15 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
     @media(max-width:750px){section{padding:16px}.grid{grid-template-columns:1fr;gap:18px}header{align-items:flex-start;flex-direction:column;gap:5px}.progress-label{flex-wrap:wrap}.assignment{gap:10px}}
   `;
   const section = document.createElement('section'); section.setAttribute('aria-labelledby', 'bq-home-title');
+  const header = document.createElement('header');
   const heading = document.createElement('h2'); heading.id = 'bq-home-title'; heading.tabIndex = -1; heading.textContent = 'Your assignments';
+  const streakBadge = document.createElement('div'); streakBadge.className = 'streak-badge';
+  streakBadge.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2c-.5 2-2 3.5-3 5-1.2 1.8-1.5 3.5-.8 5.2.7 1.8 2.2 2.8 3.8 2.8 2.8 0 5-2.2 5-5 0-3-2-5.5-5-8z"/></svg><span>0-day streak</span>';
+  header.append(heading, streakBadge);
   const content = document.createElement('div'); content.setAttribute('aria-live', 'polite');
-  section.append(heading, content); shadow.append(style, section);
+  section.append(header, content); shadow.append(style, section);
   let disposed = false, generation = 0, fingerprint = '', lastRender = '', limit = 5, showCompletedManual = false;
-  let courses: Course[] = [], cache: LocalState['cache'] | undefined, overrides: CompletionOverrides = {};
+  let courses: Course[] = [], cache: LocalState['cache'] | undefined, overrides: CompletionOverrides = {}, streak: LocalState['streak'] | undefined;
   let stop: (() => void) | undefined;
   let syncing = false;
   let syncAbort: AbortController | null = null;
@@ -136,6 +144,12 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
 
   function render() {
     if (!cache || disposed) return;
+    const streakCount = streak?.current || 0;
+    const streakText = streakCount === 1 ? '1 day streak' : `${streakCount} day streak`;
+    const streakSpan = streakBadge.querySelector('span');
+    if (streakSpan) streakSpan.textContent = streakText;
+    streakBadge.className = 'streak-badge' + (streakCount > 0 ? ' active' : '');
+    streakBadge.title = streak?.longest ? `Current streak: ${streakCount} days · Best: ${streak.longest} days` : 'Visit Quest or study daily to keep your streak alive!';
     const data = homepageOverview(courses, cache, overrides); content.className = ''; content.replaceChildren();
     const coverage = document.createElement('p'); coverage.className = 'coverage';
     coverage.textContent = `${data.observed} of ${courses.length} courses synced`;
@@ -299,10 +313,11 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
       }
       const state = await run({ kind: 'state:read' });
       if (disposed || current !== generation) return;
-      courses = discovered; cache = state.cache; overrides = state.completionOverrides || {};
-      const renderKey = JSON.stringify({ courses, cache, overrides, syncLabel, syncing });
+      courses = discovered; cache = state.cache; overrides = state.completionOverrides || {}; streak = state.streak;
+      const renderKey = JSON.stringify({ courses, cache, overrides, streak, syncLabel, syncing });
       if (renderKey !== lastRender) { render(); lastRender = renderKey; }
       void autoSyncPending();
+      void run({ kind: 'streak:record' });
     } catch (error) {
       if (!disposed && current === generation) {
         lastRender = ''; content.className = 'error'; content.replaceChildren();

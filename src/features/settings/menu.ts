@@ -196,6 +196,46 @@ export function createSettingsMenu(
     .quick button:active {
       transform: translateY(0) scale(0.97);
     }
+    .streak-panel {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      margin: 4px 0 12px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.14), rgba(234, 88, 12, 0.05));
+      border: 1px solid rgba(249, 115, 22, 0.28);
+      color: var(--bq-text, #f8fafc);
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .streak-panel:hover {
+      border-color: rgba(249, 115, 22, 0.45);
+      transform: translateY(-1px);
+    }
+    .streak-panel svg {
+      width: 20px;
+      height: 20px;
+      flex: none;
+      fill: #f97316;
+      filter: drop-shadow(0 2px 6px rgba(249, 115, 22, 0.45));
+    }
+    .streak-panel-info {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+    }
+    .streak-panel-title {
+      font-weight: 800;
+      font-size: 13px;
+      line-height: 1.2;
+      color: #fb923c;
+    }
+    .streak-panel-sub {
+      font-size: 11px;
+      color: var(--bq-muted, #94a3b8);
+      line-height: 1.3;
+    }
     /* Quest links & flyouts */
     .quest-links {
       display: grid;
@@ -414,7 +454,17 @@ export function createSettingsMenu(
   const eyebrow = document.createElement('p');
   eyebrow.className = 'eyebrow';
   eyebrow.textContent = 'A calmer workspace for Quest.';
-  bqMenu.append(title, eyebrow);
+
+  const streakPanel = document.createElement('div');
+  streakPanel.className = 'streak-panel';
+  streakPanel.innerHTML = `
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2c-.5 2-2 3.5-3 5-1.2 1.8-1.5 3.5-.8 5.2.7 1.8 2.2 2.8 3.8 2.8 2.8 0 5-2.2 5-5 0-3-2-5.5-5-8z"/></svg>
+    <div class="streak-panel-info">
+      <span class="streak-panel-title">0-day streak</span>
+      <span class="streak-panel-sub">Visit Quest daily to build momentum</span>
+    </div>
+  `;
+  bqMenu.append(title, eyebrow, streakPanel);
 
   const inputs = new Map<FeatureName, HTMLInputElement>();
   for (const [feature, name, description] of [
@@ -697,6 +747,18 @@ export function createSettingsMenu(
       if (disposed || menuHost.hidden || current !== generation) return;
       preference = state.preferences;
       paint();
+      if (state.streak) {
+        const count = state.streak.current || 0;
+        const best = state.streak.longest || 0;
+        const sTitle = streakPanel.querySelector('.streak-panel-title');
+        const sSub = streakPanel.querySelector('.streak-panel-sub');
+        if (sTitle) sTitle.textContent = count === 1 ? '1 day streak' : `${count} day streak`;
+        if (sSub) {
+          sSub.textContent = best > count
+            ? `Best streak: ${best} days · Keep it going tomorrow!`
+            : count > 0 ? 'Active today · Keep up the momentum!' : 'Visit Quest or solve questions daily!';
+        }
+      }
       status.className = 'status';
       status.textContent = 'Saved to this device';
     } catch (error) {

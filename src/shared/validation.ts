@@ -79,7 +79,7 @@ export function isLocalState(value: unknown): value is LocalState {
   if (!object(value) || value.schemaVersion !== 1 || !object(value.cache) || !object(value.preferences)) return false;
   const cache = value.cache;
   const overrides = value.completionOverrides;
-  return only(value, ['schemaVersion', 'cache', 'completionOverrides', 'bookmarks', 'study', 'preferences']) && only(cache, ['courses', 'assignments', 'pages', 'refreshRequestedAt']) && only(value.preferences, ['theme', 'features', 'courseEffects']) &&
+  return only(value, ['schemaVersion', 'cache', 'completionOverrides', 'bookmarks', 'study', 'preferences', 'streak']) && only(cache, ['courses', 'assignments', 'pages', 'refreshRequestedAt']) && only(value.preferences, ['theme', 'features', 'courseEffects']) &&
     array(cache.courses, isCourse, 2000) && array(cache.assignments, isAssignment, 10000) && array(cache.pages, isCachedPage, 2000) &&
     unique(cache.courses) && unique(cache.assignments) &&
     cache.assignments.every(a => (cache.courses as Course[]).some(c => c.id === a.courseId)) &&
@@ -98,7 +98,13 @@ export function isLocalState(value: unknown): value is LocalState {
     (value.preferences.courseEffects === undefined || (object(value.preferences.courseEffects) &&
       Object.keys(value.preferences.courseEffects).length <= 200 &&
       Object.entries(value.preferences.courseEffects).every(([key, effect]) =>
-        typeof key === 'string' && key.length > 0 && key.length <= 200 && typeof effect === 'string' && effect.length > 0 && effect.length <= 40)));
+        typeof key === 'string' && key.length > 0 && key.length <= 200 && typeof effect === 'string' && effect.length > 0 && effect.length <= 40))) &&
+    (value.streak === undefined || (object(value.streak) &&
+      only(value.streak, ['current', 'longest', 'lastActiveDate', 'activeDates']) &&
+      typeof value.streak.current === 'number' && value.streak.current >= 0 &&
+      typeof value.streak.longest === 'number' && value.streak.longest >= 0 &&
+      (value.streak.lastActiveDate === null || (typeof value.streak.lastActiveDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.streak.lastActiveDate))) &&
+      array(value.streak.activeDates, (d): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d), 500)));
 }
 
 export function isStudyExport(value: unknown): value is StudyExport {

@@ -540,7 +540,7 @@ test('answer cards show right or wrong status with points earned', () => {
     assert.equal(card2.querySelector('.selected')!.textContent, '2/4');
     const nav = rail.querySelectorAll('.qnav-btn');
     assert.ok(nav[0].classList.contains('q-done'), 'Correct answers show green');
-    assert.ok(nav[1].classList.contains('q-wrong'), 'Wrong answers show red');
+    assert.ok(nav[1].classList.contains('q-wrong') || nav[1].classList.contains('q-retry-wrong'), 'Wrong answers show red or amber retry');
   } finally { workspace.dispose(); dom.window.close(); }
 });
 
@@ -679,7 +679,7 @@ test('sidebar provides go to question on expanded view with green, orange, red, 
     const legend = r.querySelector('.legend');
     assert.ok(legend, 'Legend exists in the rail');
     const legendDots = legend?.querySelectorAll('.legend-dot');
-    assert.equal(legendDots?.length, 4, 'Legend has 4 status dots');
+    assert.equal(legendDots?.length, 5, 'Legend has 5 status dots');
 
     const pctValue = r.querySelector('.pct-value');
     assert.ok(pctValue, 'Percentage readout exists at the bottom');
