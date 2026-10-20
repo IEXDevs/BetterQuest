@@ -646,6 +646,10 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   };
   document.addEventListener('betterquest:party', handlePartyTrigger);
 
+  const ZOOM_MIN = 0.1;
+  const ZOOM_MAX = 2.5;
+  let zoomWriteTimer: ReturnType<typeof setTimeout> | undefined;
+
   function paintZoom() {
     zoomValue.textContent = `${Math.round(zoomLevel * 100)}%`;
     pages.classList.toggle('is-zoomed', zoomLevel > 1.001);
@@ -654,6 +658,48 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       root.style.setProperty('--bq-pdf-page-width', `${targetWidth}px`);
       root.style.width = `var(--bq-pdf-page-width, ${targetWidth}px)`;
     }
+  }
+
+  /** Keep the point under the cursor (or the center of the PDF) fixed while the scale changes. */
+  function setZoom(next: number, origin?: { x: number; y: number }) {
+    const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next));
+    const rect = pages.getBoundingClientRect();
+    const originX = origin ? origin.x - rect.left : rect.width / 2;
+    const originY = origin ? origin.y - rect.top : rect.height / 2;
+    const ratio = zoomLevel > 0 ? clamped / zoomLevel : 1;
+    const contentX = pages.scrollLeft + originX;
+    const contentY = pages.scrollTop + originY;
+    zoomLevel = clamped;
+    paintZoom();
+    // The page list scrolls smoothly for question jumps. Zoom has to move instantly
+    // or a pinch fights that animation.
+    pages.style.setProperty('scroll-behavior', 'auto', 'important');
+    pages.scrollLeft = contentX * ratio - originX;
+    pages.scrollTop = contentY * ratio - originY;
+    pages.style.removeProperty('scroll-behavior');
+  }
+
+  function rememberZoom() {
+    if (zoomWriteTimer !== undefined) clearTimeout(zoomWriteTimer);
+    zoomWriteTimer = setTimeout(() => {
+      zoomWriteTimer = undefined;
+      writeZoom(zoomLevel);
+    }, 120);
+  }
+
+  function commitZoom(next: number) {
+    if (zoomWriteTimer !== undefined) {
+      clearTimeout(zoomWriteTimer);
+      zoomWriteTimer = undefined;
+    }
+    setZoom(next);
+    writeZoom(zoomLevel);
+  }
+
+  // + / − land on a 10% step: round to the nearest 10, then move 10% that way.
+  function stepZoom(direction: 1 | -1) {
+    const nearest = Math.round((zoomLevel * 100) / 10) * 10;
+    commitZoom((nearest + direction * 10) / 100);
   }
 
   function fitPagesToViewer() {
@@ -665,8 +711,21 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     paintZoom();
   }
 
-  zoomOut.addEventListener('click', () => { zoomLevel = Math.max(.1, zoomLevel - .1); writeZoom(zoomLevel); paintZoom(); });
-  zoomIn.addEventListener('click', () => { zoomLevel = Math.min(2.5, zoomLevel + .1); writeZoom(zoomLevel); paintZoom(); });
+  zoomOut.addEventListener('click', () => stepZoom(-1));
+  zoomIn.addEventListener('click', () => stepZoom(1));
+  // Chrome sends both trackpad pinch and ctrl+wheel as a ctrl-wheel on the element under the pointer.
+  const handleZoomWheel = (event: WheelEvent) => {
+    if (!event.ctrlKey || disposed) return;
+    event.preventDefault();
+    event.stopPropagation();
+    let delta = event.deltaY;
+    if (event.deltaMode === 1) delta *= 16;
+    else if (event.deltaMode === 2) delta *= pages.clientHeight || 800;
+    if (!delta) return;
+    setZoom(zoomLevel * Math.exp(-delta * 0.0015), { x: event.clientX, y: event.clientY });
+    rememberZoom();
+  };
+  pages.addEventListener('wheel', handleZoomWheel, { passive: false });
   document.defaultView?.addEventListener('resize', fitPagesToViewer);
   const ResizeObserverCtor = document.defaultView?.ResizeObserver;
   const resizeObserver = ResizeObserverCtor ? new ResizeObserverCtor(() => fitPagesToViewer()) : undefined;
@@ -1197,6 +1256,11 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       document.removeEventListener('keydown', handleKey);
       document.removeEventListener('betterquest:party', handlePartyTrigger);
       document.defaultView?.removeEventListener('resize', fitPagesToViewer);
+      pages.removeEventListener('wheel', handleZoomWheel);
+      if (zoomWriteTimer !== undefined) {
+        clearTimeout(zoomWriteTimer);
+        writeZoom(zoomLevel);
+      }
       resizeObserver?.disconnect();
       abort.abort();
       source?.destroy();

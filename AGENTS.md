@@ -24,6 +24,9 @@ Every user-facing string, label, caption, and status message exists **to communi
 - Prefer Quest-native behaviors when available (for example, collapsing assignment categories by default on load).
 - Product messaging should highlight streak/tracker value and Google Calendar sync for due dates when relevant.
 - On homework pages, keep only the BetterQuest purple Slides/Classic control; do not leave Quest's native blue Slides button visible beside it (duplicate controls flicker).
+- Dark mode applies on main Quest pages and the PDF viewer only. Slides view and extra homework pages keep Quest's normal appearance.
+- Grades, assignments, review, and the home page open at the top. The PDF view keeps its own place on the page.
+- In the PDF viewer, pinch and Ctrl+scroll zoom smoothly while the pointer is over the PDF. The + and − buttons snap to the nearest 10% and then move in 10% steps.
 
 ## Learned Workspace Facts
 - BetterQuest is a Chrome extension that enhances UT Austin Quest (quest.cns.utexas.edu).

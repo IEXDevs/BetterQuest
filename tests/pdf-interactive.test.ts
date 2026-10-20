@@ -742,6 +742,67 @@ test('interactive PDF zoom persists across viewer sessions', async () => {
   }
 });
 
+test('pinch and ctrl+wheel zoom continuously, and +/- return to 10% steps', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const openDocument = async () => ({
+    pageCount: 1,
+    renderPage: async () => ({
+      width: 600, height: 800,
+      runs: [textRun('001', 50), textRun('1.', 100), textRun('2.', 160)],
+    }),
+    destroy: () => {},
+  });
+  const dom = new JSDOM('<body><div id="mount"></div><div id="mount2"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  dom.window.localStorage.setItem('betterquest_pdf_zoom', '1');
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument,
+  });
+  dom.window.localStorage.setItem('betterquest_pdf_zoom', '1.73');
+  const snapped = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount2')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument,
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    const root = viewer.element.shadowRoot!;
+    const pages = root.querySelector<HTMLElement>('.pages')!;
+    const readout = () => root.querySelector('output')!.textContent || '';
+    const wheel = (deltaY: number, ctrlKey: boolean) => {
+      const event = new dom.window.WheelEvent('wheel', { deltaY, ctrlKey, bubbles: true, cancelable: true, clientX: 40, clientY: 40 });
+      pages.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    assert.equal(wheel(-40, false), false);
+    assert.equal(readout(), '100%');
+    assert.equal(wheel(-100, true), true);
+    const pinched = Number.parseInt(readout(), 10);
+    assert.ok(pinched > 100 && pinched < 130, `Ctrl+wheel should zoom in smoothly, got ${readout()}`);
+    assert.equal(wheel(100, true), true);
+    const backed = Number.parseInt(readout(), 10);
+    assert.ok(backed < pinched, 'Ctrl+wheel the other way zooms back out');
+
+    assert.equal(await snapped.ready, true);
+    const snapRoot = snapped.element.shadowRoot!;
+    assert.equal(snapRoot.querySelector('output')!.textContent, '173%');
+    snapRoot.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
+    assert.equal(snapRoot.querySelector('output')!.textContent, '180%');
+    assert.equal(dom.window.localStorage.getItem('betterquest_pdf_zoom'), '1.8');
+    snapRoot.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
+    assert.equal(snapRoot.querySelector('output')!.textContent, '170%');
+    snapRoot.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
+    assert.equal(snapRoot.querySelector('output')!.textContent, '160%');
+  } finally {
+    viewer.dispose();
+    snapped.dispose();
+    dom.window.close();
+  }
+});
+
 test('PDF points extraction reads per-question points possible', async () => {
   const { extractQuestionPoints } = await import('../src/adapters/quest/assessment');
   const runs = [
