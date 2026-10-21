@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import { createHomepageOverview } from '../src/features/assignments/homepage';
 import { emptyState, type Assignment, type LocalState } from '../src/shared/models';
 import { assignmentId, courseId } from '../src/shared/identity';
+import { localDateString } from '../src/features/streak/streak-service';
 
 const url = 'https://quest.cns.utexas.edu/student/courses';
 const courseUrl = 'https://quest.cns.utexas.edu/student/courses/show?course=3491354';
@@ -172,10 +173,17 @@ test('homepage displays daily streak badge with live count', async () => {
     '<tr><td><a href="/student/courses/show?course=123">Physics</a></td><td>12345</td></tr>' +
     '</tbody></table></div></div><div id="enroll-div"></div>', { url, pretendToBeVisual: true });
   const doc = dom.window.document;
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const activeDates = [4, 3, 2, 1, 0].map(daysAgo => {
+    const date = new Date(yesterday);
+    date.setDate(yesterday.getDate() - daysAgo);
+    return localDateString(date);
+  });
   const current: LocalState = {
     ...emptyState(),
     cache: { courses: [], assignments: [], pages: [], refreshRequestedAt: null },
-    streak: { current: 5, longest: 10, lastActiveDate: '2026-10-19', activeDates: ['2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18', '2026-10-19'] },
+    streak: { current: 5, longest: 10, lastActiveDate: activeDates[4], activeDates },
   };
   const overview = createHomepageOverview(
     doc.querySelector('#courses-table-div')!,
