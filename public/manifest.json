@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BetterQuest",
-  "version": "1.2.502",
+  "version": "1.2.503",
   "description": "A polished Quest workspace with assignment tracking, response tools, dark mode, and local bookmarks.",
   "minimum_chrome_version": "120",
   "permissions": [
