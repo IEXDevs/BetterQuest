@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - public/manifest.json
 
 permissions:
   contents: read
@@ -19,18 +17,17 @@ jobs:
     name: Test and package extension
     runs-on: ubuntu-latest
     outputs:
-      should_release: ${{ steps.version.outputs.should_release }}
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - name: Detect version increase
+      - name: Read and validate extension version
         id: version
         shell: bash
         run: |
@@ -40,42 +37,18 @@ jobs:
             echo "::error::Invalid extension version: $CURRENT"
             exit 1
           fi
-          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
-          BEFORE="${{ github.event.before }}"
-          if [[ -z "$BEFORE" || "$BEFORE" =~ ^0+$ ]]; then
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          PREVIOUS="$(git show "$BEFORE:public/manifest.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version" 2>/dev/null || true)"
-          if [[ -z "$PREVIOUS" ]]; then
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          node - "$PREVIOUS" "$CURRENT" "$GITHUB_OUTPUT" <<'NODE'
-          const fs = require('fs');
-          const [oldVersion, newVersion, output] = process.argv.slice(2);
-          const valid = v => /^\d+(\.\d+){0,3}$/.test(v) && v.split('.').every(n => Number(n) <= 65535);
-          if (!valid(oldVersion) || !valid(newVersion)) throw new Error('Invalid manifest version');
-          const a = oldVersion.split('.').map(Number), b = newVersion.split('.').map(Number);
-          let comparison = 0;
-          for (let i = 0; i < 4; i++) {
-            const x = a[i] || 0, y = b[i] || 0;
-            if (x !== y) { comparison = y > x ? 1 : -1; break; }
-          }
-          if (comparison < 0) throw new Error(`Version must increase: ${oldVersion} -> ${newVersion}`);
-          fs.appendFileSync(output, `should_release=${comparison === 1}\n`);
+          node - "$CURRENT" <<'NODE'
+          const v = process.argv[2];
+          if (!v.split('.').every(n => Number(n) <= 65535)) throw new Error('Manifest version component exceeds 65535');
           NODE
+          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
       - name: Install dependencies
-        if: steps.version.outputs.should_release == 'true'
         run: npm ci
       - name: Run tests
-        if: steps.version.outputs.should_release == 'true'
         run: npm test
       - name: Build extension
-        if: steps.version.outputs.should_release == 'true'
         run: npm run build:extn
       - name: Validate and zip production output
-        if: steps.version.outputs.should_release == 'true'
         env:
           EXPECTED_VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -92,7 +65,6 @@ jobs:
           (cd dist && zip -qr "../release/betterquest-${EXPECTED_VERSION}.zip" .)
           unzip -p "release/betterquest-${EXPECTED_VERSION}.zip" manifest.json | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{if(JSON.parse(s).version!==process.env.EXPECTED_VERSION)process.exit(1)})'
       - name: Upload immutable package
-        if: steps.version.outputs.should_release == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: betterquest-extension-${{ steps.version.outputs.version }}
@@ -103,7 +75,7 @@ jobs:
   publish:
     name: Publish to Chrome Web Store
     needs: build
-    if: needs.build.outputs.should_release == 'true'
+    # A failed test, build, package validation, or artifact upload prevents this job from starting.
     runs-on: ubuntu-latest
     environment:
       name: chrome-web-store
@@ -114,7 +86,7 @@ jobs:
         with:
           name: betterquest-extension-${{ needs.build.outputs.version }}
           path: release
-      - name: Upload and submit using Chrome Web Store API v2
+      - name: Check store status, upload if needed, and submit
         env:
           CWS_CLIENT_ID: ${{ secrets.CHROME_WEBSTORE_CLIENT_ID }}
           CWS_CLIENT_SECRET: ${{ secrets.CHROME_WEBSTORE_CLIENT_SECRET }}
@@ -131,8 +103,10 @@ jobs:
               exit 1
             fi
           done
+
           ZIP="release/betterquest-${EXTENSION_VERSION}.zip"
           test -s "$ZIP"
+
           TOKEN_JSON="$(curl --fail-with-body --silent --show-error -X POST 'https://oauth2.googleapis.com/token' \
             -H 'Content-Type: application/x-www-form-urlencoded' \
             --data-urlencode "client_id=$CWS_CLIENT_ID" \
@@ -143,51 +117,127 @@ jobs:
           unset TOKEN_JSON
           echo "::add-mask::$ACCESS_TOKEN"
           ITEM="publishers/$CWS_PUBLISHER_ID/items/$CWS_EXTENSION_ID"
+          STATUS_URL="https://chromewebstore.googleapis.com/v2/$ITEM:fetchStatus"
 
-          echo "Current store item status:"
+          STATUS_FILE="$(mktemp)"
+          trap 'rm -f "$STATUS_FILE" "$UPLOAD_RESPONSE" "$PUBLISH_RESPONSE"' EXIT
+          echo "Checking the currently published and submitted Chrome Web Store versions..."
           curl --fail-with-body --silent --show-error \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
-            "https://chromewebstore.googleapis.com/v2/$ITEM:fetchStatus" || echo "Status check unavailable."
-          echo
+            "$STATUS_URL" -o "$STATUS_FILE"
 
-          echo "Uploading release/betterquest-${EXTENSION_VERSION}.zip"
-          curl --fail-with-body --silent --show-error -X POST \
+          DECISION="$(node - "$EXTENSION_VERSION" "$STATUS_FILE" <<'NODE'
+          const fs = require('fs');
+          const target = process.argv[2];
+          const status = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          const parse = value => {
+            if (typeof value !== 'string' || !/^\d+(\.\d+){0,3}$/.test(value) ||
+                !value.split('.').every(n => Number(n) <= 65535)) {
+              throw new Error('Invalid version encountered while comparing Chrome Web Store status');
+            }
+            return value.split('.').map(Number);
+          };
+          const compare = (left, right) => {
+            const a = parse(left), b = parse(right);
+            for (let i = 0; i < 4; i++) {
+              const x = a[i] || 0, y = b[i] || 0;
+              if (x !== y) return x > y ? 1 : -1;
+            }
+            return 0;
+          };
+          const revisionVersion = revision =>
+            revision?.distributionChannels?.map(channel => channel.crxVersion).find(Boolean);
+          const published = revisionVersion(status.publishedItemRevisionStatus);
+          const submittedRevision = status.submittedItemRevisionStatus;
+          const submitted = revisionVersion(submittedRevision);
+          if (published) {
+            const cmp = compare(target, published);
+            if (cmp === 0) {
+              console.log('SKIP: The manifest version is already published.');
+              process.exit(0);
+            }
+            if (cmp < 0) throw new Error(`Manifest version ${target} is older than published version ${published}; increase the manifest version.`);
+          }
+          if (submitted) {
+            const cmp = compare(target, submitted);
+            if (cmp === 0) {
+              console.log(`SKIP: Version ${target} is already submitted/drafted (state: ${submittedRevision.state || 'unknown'}); no duplicate upload is needed.`);
+              process.exit(0);
+            }
+            if (cmp < 0) throw new Error(`Manifest version ${target} is older than submitted version ${submitted}; increase the manifest version.`);
+            if (['PENDING_REVIEW', 'STAGED'].includes(submittedRevision.state)) {
+              throw new Error(`Version ${submitted} is already ${submittedRevision.state}; Chrome Web Store will not accept another upload while that submission is active.`);
+            }
+          }
+          console.log('RELEASE: Store status allows an upload/submission attempt.');
+          NODE
+          )"
+          echo "$DECISION"
+          if [[ "$DECISION" == SKIP:* ]]; then
+            exit 0
+          fi
+
+          UPLOAD_RESPONSE="$(mktemp)"
+          echo "Uploading release package for version $EXTENSION_VERSION..."
+          UPLOAD_CODE="$(curl --silent --show-error -X POST \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             --upload-file "$ZIP" \
-            "https://chromewebstore.googleapis.com/upload/v2/$ITEM:upload"
-          echo
+            -o "$UPLOAD_RESPONSE" -w '%{http_code}' \
+            "https://chromewebstore.googleapis.com/upload/v2/$ITEM:upload")"
 
-          echo "Submitting the uploaded version for review"
-          RESPONSE_FILE="$(mktemp)"
-          if ! curl --fail-with-body --silent --show-error -X POST \
+          if [[ ! "$UPLOAD_CODE" =~ ^2[0-9][0-9]$ ]]; then
+            if grep -Eiq 'version.{0,100}(greater|higher|increase|same|already)|already.{0,100}version' "$UPLOAD_RESPONSE"; then
+              echo "::warning::Chrome Web Store reports that this version is already uploaded. Continuing to submit the existing draft."
+            else
+              cat "$UPLOAD_RESPONSE"
+              echo "::error::Chrome Web Store upload failed with HTTP $UPLOAD_CODE."
+              exit 1
+            fi
+          else
+            cat "$UPLOAD_RESPONSE"
+            echo
+            UPLOAD_STATE="$(node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>process.stdout.write(JSON.parse(s).uploadState || ""))' < "$UPLOAD_RESPONSE")"
+            if [[ "$UPLOAD_STATE" == *IN_PROGRESS* ]]; then
+              echo "Upload is processing; polling Chrome Web Store status..."
+              COMPLETE=false
+              for attempt in $(seq 1 18); do
+                sleep 5
+                curl --fail-with-body --silent --show-error \
+                  -H "Authorization: Bearer $ACCESS_TOKEN" \
+                  "$STATUS_URL" -o "$STATUS_FILE"
+                STATE="$(node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>process.stdout.write(JSON.parse(s).lastAsyncUploadState || ""))' < "$STATUS_FILE")"
+                if [[ "$STATE" == *IN_PROGRESS* ]]; then
+                  continue
+                elif [[ "$STATE" == *FAILURE* ]]; then
+                  echo "::error::Chrome Web Store reported that the asynchronous upload failed."
+                  cat "$STATUS_FILE"
+                  exit 1
+                else
+                  COMPLETE=true
+                  break
+                fi
+              done
+              if [[ "$COMPLETE" != true ]]; then
+                echo "::error::Upload is still processing after 90 seconds. Re-run the workflow; it will re-check store status and avoid a duplicate version."
+                exit 1
+              fi
+            fi
+          fi
+
+          echo "Submitting the version for review..."
+          PUBLISH_RESPONSE="$(mktemp)"
+          PUBLISH_CODE="$(curl --silent --show-error -X POST \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H 'Content-Type: application/json' \
             --data '{"blockOnWarnings":true}' \
-            "https://chromewebstore.googleapis.com/v2/$ITEM:publish" > "$RESPONSE_FILE"; then
-            node -e '
-              const fs = require("fs");
-              let raw = "";
-              try { raw = fs.readFileSync(process.argv[1], "utf8"); } catch {}
-              const out = [];
-              try {
-                const e = JSON.parse(raw).error;
-                if (e) {
-                  out.push(`Chrome Web Store rejected the submission (${e.code} ${e.status}): ${e.message}`);
-                  for (const d of e.details || []) {
-                    if (d.reason) out.push(`Reason: ${d.reason}`);
-                    if (d.message) out.push(d.message);
-                    if (d.url) out.push(d.url);
-                    for (const link of d.links || []) out.push(`${link.description || "Link"}: ${link.url}`);
-                    for (const w of d.warnings || []) out.push(`Warning ${w.reason}: ${w.description}`);
-                  }
-                }
-              } catch { if (raw.trim()) out.push("Chrome Web Store returned a response that could not be read."); }
-              if (!raw.trim()) out.push("Chrome Web Store returned an empty response.");
-              process.stdout.write([...new Set(out)].map(line => `::error::${line}`).join("\n") + "\n");
-            ' "$RESPONSE_FILE" || echo "::error::Could not read the Chrome Web Store response."
-            echo "::error::Resolve the required steps in the developer dashboard, then re-run this job: https://chrome.google.com/webstore/devconsole/$CWS_PUBLISHER_ID/$CWS_EXTENSION_ID/edit"
+            -o "$PUBLISH_RESPONSE" -w '%{http_code}' \
+            "https://chromewebstore.googleapis.com/v2/$ITEM:publish")"
+
+          if [[ ! "$PUBLISH_CODE" =~ ^2[0-9][0-9]$ ]]; then
+            cat "$PUBLISH_RESPONSE"
+            echo "::error::Chrome Web Store submission failed with HTTP $PUBLISH_CODE. A new push or manual workflow run can retry after the underlying issue is fixed."
             exit 1
           fi
-          cat "$RESPONSE_FILE"
+          cat "$PUBLISH_RESPONSE"
           echo
           echo "Submitted to Chrome Web Store; Google review/processing may still be required."
