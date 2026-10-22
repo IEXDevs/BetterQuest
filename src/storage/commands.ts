@@ -9,7 +9,7 @@ const COURSE_EFFECT_NAMES = new Set([
   'floating-lines', 'grid-scan', 'gradient-blinds', 'iridescence', 'letter-glitch', 'strands',
 ]);
 
-import { updateStreakData } from '../features/streak/streak-service';
+import { localDateString, reconcileStreak, updateStreakData, type StreakContext } from '../features/streak/streak-service';
 
 export type Command =
   | { kind: 'state:read' }
@@ -50,13 +50,17 @@ function merge<T extends { id: string }>(existing: T[], incoming: T[]): T[] {
   return [...result.values()];
 }
 
+function streakContext(state: LocalState): StreakContext {
+  return { assignments: state.cache.assignments, completionOverrides: state.completionOverrides };
+}
+
 export function applyCommand(state: LocalState, command: Command): LocalState {
   if (!isCommand(command)) throw new Error('Invalid BetterQuest command.');
   const next = structuredClone(state);
   switch (command.kind) {
     case 'state:read': break;
     case 'streak:record': {
-      next.streak = updateStreakData(next.streak, command.date);
+      next.streak = updateStreakData(next.streak, command.date, streakContext(next));
       break;
     }
     case 'assignments:cache': {
@@ -80,27 +84,24 @@ export function applyCommand(state: LocalState, command: Command): LocalState {
         return false;
       });
       if (hasActiveProgress) {
-        next.streak = updateStreakData(next.streak);
+        next.streak = updateStreakData(next.streak, localDateString(), streakContext(next));
       }
+      next.streak = reconcileStreak(next.streak, localDateString(), streakContext(next));
       break;
     }
     case 'assignments:refresh': next.cache.refreshRequestedAt = command.requestedAt; break;
     case 'assignment:completion:set': {
       if (!next.cache.assignments.some(assignment => assignment.id === command.assignmentId)) throw new Error('Unknown assignment completion target.');
       const overrides = { ...(next.completionOverrides || {}) };
-      if (command.completed) {
-        overrides[command.assignmentId] = true;
-        next.streak = updateStreakData(next.streak);
-      } else {
-        delete overrides[command.assignmentId];
-      }
+      if (command.completed) overrides[command.assignmentId] = true;
+      else delete overrides[command.assignmentId];
       next.completionOverrides = overrides;
+      next.streak = reconcileStreak(next.streak, localDateString(), streakContext(next));
       break;
     }
     case 'bookmarks:put': {
       const old = next.bookmarks.find(bookmark => bookmark.id === command.bookmark.id);
       next.bookmarks = merge(next.bookmarks, [{ ...command.bookmark, createdAt: old?.createdAt || command.bookmark.createdAt }]);
-      next.streak = updateStreakData(next.streak);
       break;
     }
     case 'bookmarks:remove': next.bookmarks = next.bookmarks.filter(bookmark => bookmark.id !== command.questionId); break;

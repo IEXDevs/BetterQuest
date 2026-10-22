@@ -9,10 +9,11 @@ import {
   getStreakBadgeStatus,
   getStreakCalendar,
   getCalendarDayIcon,
+  type StreakContext,
 } from '../src/features/streak/streak-service';
 import { createStreakPill } from '../src/features/streak/streak-pill';
 import { applyCommand } from '../src/storage/commands';
-import { emptyState, type StreakData } from '../src/shared/models';
+import { emptyState, type Assignment, type StreakData } from '../src/shared/models';
 import { assignmentId, courseId, questionId } from '../src/shared/identity';
 import { createPdfAssessmentWorkspace, createSlideAssessmentEnhancement } from '../src/features/assessment/workspace';
 
@@ -45,12 +46,57 @@ test('calculateStreak counts multi-day consecutive streak ending today', () => {
   assert.equal(result.longest, 5);
 });
 
-test('calculateStreak resets current to 0 if inactive yesterday and today, but preserves longest', () => {
+function homework(partial: Partial<Assignment> = {}): Assignment {
+  return {
+    id: 'asg_open',
+    sourceId: 'a1',
+    courseId: 'course_1',
+    title: 'Homework 1',
+    url: 'https://quest.cns.utexas.edu/student/asg_open',
+    completion: 'not-completed',
+    kind: 'homework',
+    historical: null,
+    deadline: { iso: null, label: null, timeZone: null },
+    ...partial,
+  };
+}
+
+test('calculateStreak keeps a streak across days with nothing due', () => {
   const today = '2026-10-19';
-  const pastDates = ['2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13']; // 4-day streak in past
+  const pastDates = ['2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13'];
   const result = calculateStreak(pastDates, today);
+  assert.equal(result.current, 4);
+  assert.equal(result.longest, 4);
+});
+
+test('calculateStreak breaks when homework was open and no question was answered', () => {
+  const today = '2026-10-19';
+  const pastDates = ['2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13'];
+  const context: StreakContext = {
+    now: Date.parse('2026-10-19T18:00:00.000Z'),
+    assignments: [homework({
+      start: { iso: '2026-10-10T05:00:00.000Z', label: 'Oct 10', timeZone: 'America/Chicago' },
+      deadline: { iso: '2026-10-26T04:59:00.000Z', label: 'Oct 25, 11:59 PM CDT', timeZone: 'America/Chicago' },
+    })],
+  };
+  const result = calculateStreak(pastDates, today, [], context);
   assert.equal(result.current, 0);
   assert.equal(result.longest, 4);
+});
+
+test('calculateStreak breaks when an assignment is unfinished after its due date', () => {
+  const today = '2026-10-19';
+  const context: StreakContext = {
+    now: Date.parse('2026-10-19T18:00:00.000Z'),
+    assignments: [homework({
+      start: { iso: '2026-10-17T05:00:00.000Z', label: 'Oct 17', timeZone: 'America/Chicago' },
+      deadline: { iso: '2026-10-19T04:59:00.000Z', label: 'Oct 18, 11:59 PM CDT', timeZone: 'America/Chicago' },
+    })],
+  };
+  const answeredOnTheDueDay = calculateStreak(['2026-10-17', '2026-10-18'], today, [], context);
+  assert.equal(answeredOnTheDueDay.current, 0);
+  const continuedAfter = calculateStreak(['2026-10-17', '2026-10-18', '2026-10-19'], today, [], context);
+  assert.equal(continuedAfter.current, 1);
 });
 
 test('recordActiveDate adds date uniquely and keeps sorted', () => {
@@ -71,7 +117,7 @@ test('applyCommand streak:record updates state.streak', () => {
   assert.ok(next.streak.current >= 1);
 });
 
-test('applyCommand assignment:completion:set automatically advances streak', () => {
+test('applyCommand assignment:completion:set does not invent a question day, and clears an overdue break', () => {
   const state = emptyState();
   state.cache.courses = [{ id: 'course_1', sourceId: 'c1', title: 'Calculus', url: 'https://quest.cns.utexas.edu/student/course_1' }];
   state.cache.assignments = [{
@@ -80,19 +126,31 @@ test('applyCommand assignment:completion:set automatically advances streak', () 
     courseId: 'course_1',
     title: 'Homework 1',
     url: 'https://quest.cns.utexas.edu/student/asg_1',
-    completion: 'in-progress',
+    completion: 'not-completed',
     kind: 'homework',
     historical: null,
-    deadline: { iso: '2026-10-25T00:00:00Z', label: 'Oct 25', timeZone: 'America/Chicago' },
+    start: { iso: '2026-10-17T05:00:00.000Z', label: 'Oct 17', timeZone: 'America/Chicago' },
+    deadline: { iso: new Date(Date.now() - 60_000).toISOString(), label: 'Due', timeZone: 'America/Chicago' },
   }];
+  state.streak = {
+    current: 2,
+    longest: 2,
+    lastActiveDate: '2026-10-18',
+    activeDates: ['2026-10-17', '2026-10-18'],
+    freezesAvailable: 0,
+    frozenDates: [],
+    startDate: '2026-10-17',
+  };
 
-  const next = applyCommand(state, { kind: 'assignment:completion:set', assignmentId: 'asg_1', completed: true });
-  assert.ok(next.streak);
-  assert.ok(next.streak.activeDates.length >= 1);
-  assert.ok(next.streak.current >= 1);
+  const marked = applyCommand(state, { kind: 'assignment:completion:set', assignmentId: 'asg_1', completed: true });
+  assert.deepEqual(marked.streak?.activeDates, ['2026-10-17', '2026-10-18']);
+  assert.equal(marked.streak?.current, 2);
+
+  const unmarked = applyCommand(marked, { kind: 'assignment:completion:set', assignmentId: 'asg_1', completed: false });
+  assert.equal(unmarked.streak?.current, 0);
 });
 
-test('applyCommand bookmarks:put automatically advances streak', () => {
+test('applyCommand bookmarks:put does not advance the streak', () => {
   const state = emptyState();
   const cId = courseId('c1');
   const course = { id: cId, sourceId: 'c1', title: 'Physics', url: 'https://quest.cns.utexas.edu/student/course_1' };
@@ -132,9 +190,9 @@ test('applyCommand bookmarks:put automatically advances streak', () => {
   };
 
   const next = applyCommand(state, { kind: 'bookmarks:put', bookmark });
-  assert.ok(next.streak);
-  assert.ok(next.streak.activeDates.length >= 1);
-  assert.ok(next.streak.current >= 1);
+  assert.equal(next.streak?.current, 0);
+  assert.equal(next.streak?.activeDates.length, 0);
+  assert.equal(next.bookmarks.length, 1);
 });
 
 test('applyCommand assignments:cache does not advance streak for existing in-progress assignments alone', () => {
@@ -203,6 +261,39 @@ test('applyCommand assignments:cache advances streak when newly completed work i
   assert.ok(next.streak);
   assert.ok(next.streak.activeDates.length >= 1);
   assert.ok(next.streak.current >= 1);
+});
+
+test('applyCommand assignments:cache breaks the streak when unfinished work is overdue', () => {
+  const state = emptyState();
+  const cId = courseId('c1');
+  const aId = assignmentId(cId, 'a1');
+  state.streak = {
+    current: 2,
+    longest: 2,
+    lastActiveDate: '2026-10-18',
+    activeDates: ['2026-10-17', '2026-10-18'],
+    freezesAvailable: 0,
+    frozenDates: [],
+    startDate: '2026-10-17',
+  };
+  const snapshot = {
+    sourceUrl: 'https://quest.cns.utexas.edu/student/courses/1',
+    observedAt: '2026-10-21T12:00:00.000Z',
+    courses: [{ id: cId, sourceId: 'c1', title: 'Calculus', url: 'https://quest.cns.utexas.edu/student/courses/1' }],
+    assignments: [homework({
+      id: aId,
+      sourceId: 'a1',
+      courseId: cId,
+      url: 'https://quest.cns.utexas.edu/student/instances/show',
+      start: { iso: '2026-10-17T05:00:00.000Z', label: 'Oct 17', timeZone: 'America/Chicago' },
+      deadline: { iso: new Date(Date.now() - 60_000).toISOString(), label: 'Due', timeZone: 'America/Chicago' },
+    })],
+    scannedCourseIds: [cId],
+  };
+
+  const next = applyCommand(state, { kind: 'assignments:cache', snapshot });
+  assert.equal(next.streak?.current, 0);
+  assert.deepEqual(next.streak?.activeDates, ['2026-10-17', '2026-10-18']);
 });
 
 test('workspace does not advance streak on initial mount of in-progress assignment, but advances when question is submitted', async () => {
@@ -289,8 +380,15 @@ test('updateStreakData awards 2 freezes on 5-day streak milestone', () => {
   assert.equal(streak.freezesAvailable, 4);
 });
 
-test('updateStreakData consumes freezes to bridge missed days', () => {
-  // Start with 5-day streak and 2 freezes
+const openHomework: StreakContext = {
+  now: Date.parse('2026-10-07T18:00:00.000Z'),
+  assignments: [homework({
+    start: { iso: '2026-10-01T05:00:00.000Z', label: 'Oct 1', timeZone: 'America/Chicago' },
+    deadline: { iso: '2026-10-11T04:59:00.000Z', label: 'Oct 10, 11:59 PM CDT', timeZone: 'America/Chicago' },
+  })],
+};
+
+test('updateStreakData does not spend a freeze when nothing is due', () => {
   let streak: StreakData = {
     current: 5,
     longest: 5,
@@ -301,15 +399,32 @@ test('updateStreakData consumes freezes to bridge missed days', () => {
     startDate: '2026-10-01',
   };
 
-  // User misses 2026-10-06, returns on 2026-10-07
   streak = updateStreakData(streak, '2026-10-07');
-  assert.equal(streak.current, 7); // 5 previous + 1 frozen + 1 new = 7
-  assert.equal(streak.freezesAvailable, 1); // 1 freeze used
+  assert.equal(streak.current, 6);
+  assert.equal(streak.freezesAvailable, 2);
+  assert.deepEqual(streak.frozenDates, []);
+  assert.ok(streak.activeDates.includes('2026-10-07'));
+});
+
+test('updateStreakData consumes a freeze when homework was skipped', () => {
+  let streak: StreakData = {
+    current: 5,
+    longest: 5,
+    lastActiveDate: '2026-10-05',
+    activeDates: ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05'],
+    freezesAvailable: 2,
+    frozenDates: [],
+    startDate: '2026-10-01',
+  };
+
+  streak = updateStreakData(streak, '2026-10-07', openHomework);
+  assert.equal(streak.current, 7);
+  assert.equal(streak.freezesAvailable, 1);
   assert.deepEqual(streak.frozenDates, ['2026-10-06']);
   assert.ok(streak.activeDates.includes('2026-10-07'));
 });
 
-test('reconcileStreak protects missed days on page visit before answering questions', () => {
+test('reconcileStreak leaves a rest day alone and protects a skipped homework day', () => {
   const streak = {
     current: 5,
     longest: 5,
@@ -320,11 +435,15 @@ test('reconcileStreak protects missed days on page visit before answering questi
     startDate: '2026-10-01',
   };
 
-  // User visits on 2026-10-07 having missed 2026-10-06
-  const reconciled = reconcileStreak(streak, '2026-10-07');
-  assert.equal(reconciled.current, 6);
-  assert.equal(reconciled.freezesAvailable, 1);
-  assert.deepEqual(reconciled.frozenDates, ['2026-10-06']);
+  const rested = reconcileStreak(streak, '2026-10-07');
+  assert.equal(rested.current, 5);
+  assert.equal(rested.freezesAvailable, 2);
+  assert.deepEqual(rested.frozenDates, []);
+
+  const protectedDay = reconcileStreak(streak, '2026-10-07', openHomework);
+  assert.equal(protectedDay.current, 6);
+  assert.equal(protectedDay.freezesAvailable, 1);
+  assert.deepEqual(protectedDay.frozenDates, ['2026-10-06']);
 });
 
 test('getStreakBadgeStatus reflects active, frozen, and broken states with proper colors', () => {
@@ -355,8 +474,7 @@ test('getStreakBadgeStatus reflects active, frozen, and broken states with prope
   const statusFrozen = getStreakBadgeStatus(freezeActive, '2026-10-19');
   assert.equal(statusFrozen.status, 'frozen');
 
-  // Broken streak (0 or gap without freeze) -> red (broken)
-  const brokenStreak = {
+  const restedStreak = {
     current: 0,
     longest: 5,
     lastActiveDate: '2026-10-10',
@@ -365,8 +483,20 @@ test('getStreakBadgeStatus reflects active, frozen, and broken states with prope
     frozenDates: [],
     startDate: '2026-10-06',
   };
-  const statusBroken = getStreakBadgeStatus(brokenStreak, '2026-10-19');
+  const statusRested = getStreakBadgeStatus(restedStreak, '2026-10-19');
+  assert.equal(statusRested.status, 'active');
+  assert.equal(statusRested.count, 5);
+
+  const overdue = homework({
+    start: { iso: '2026-10-06T05:00:00.000Z', label: 'Oct 6', timeZone: 'America/Chicago' },
+    deadline: { iso: '2026-10-11T04:59:00.000Z', label: 'Oct 10, 11:59 PM CDT', timeZone: 'America/Chicago' },
+  });
+  const statusBroken = getStreakBadgeStatus(restedStreak, '2026-10-19', {
+    now: Date.parse('2026-10-19T18:00:00.000Z'),
+    assignments: [overdue],
+  });
   assert.equal(statusBroken.status, 'broken');
+  assert.equal(statusBroken.count, 0);
 });
 
 test('getStreakCalendar generates months starting from start date up to current month', () => {
@@ -405,15 +535,26 @@ test('getStreakCalendar generates months starting from start date up to current 
   assert.equal(sep2.status, 'frozen');
   assert.equal(getCalendarDayIcon(sep2.status), '🧊');
 
-  // In September: Sep 3 was missed -> red X ❌
+  // Sep 3 had nothing due, so it is a rest day
   const sep3 = calendar[1].days.find(d => d.day === 3)!;
-  assert.equal(sep3.status, 'missed');
-  assert.equal(getCalendarDayIcon(sep3.status), '❌');
+  assert.equal(sep3.status, 'rest');
+  assert.equal(getCalendarDayIcon(sep3.status), '—');
 
   // In October: Oct 25 is future -> grey hyphen
   const oct25 = calendar[2].days.find(d => d.day === 25)!;
   assert.equal(oct25.status, 'future');
   assert.equal(getCalendarDayIcon(oct25.status), '—');
+
+  const withHomework = getStreakCalendar(streak, '2026-10-19', {
+    now: Date.parse('2026-10-19T18:00:00.000Z'),
+    assignments: [homework({
+      start: { iso: '2026-10-16T05:00:00.000Z', label: 'Oct 16', timeZone: 'America/Chicago' },
+      deadline: { iso: '2026-10-26T04:59:00.000Z', label: 'Oct 25, 11:59 PM CDT', timeZone: 'America/Chicago' },
+    })],
+  });
+  const oct16 = withHomework[2].days.find(d => d.day === 16)!;
+  assert.equal(oct16.status, 'missed');
+  assert.equal(getCalendarDayIcon(oct16.status), '❌');
 });
 
 test('createStreakPill renders active green badge with fire icon, freezes, and interactive calendar popover', () => {
@@ -437,14 +578,14 @@ test('createStreakPill renders active green badge with fire icon, freezes, and i
   assert.ok(badge);
   assert.ok(badge.classList.contains('active'), 'Badge should have active class');
   assert.equal(badge.getAttribute('data-state'), 'active');
-  assert.equal(badge.querySelector('span')?.textContent, '5 day streak');
+  assert.equal(badge.querySelector('span')?.textContent, '8 day streak');
   assert.equal(badge.querySelector('.streak-freeze-tag')?.textContent, '🧊2');
   assert.equal(badge.querySelector('.streak-freeze-tag')?.getAttribute('title'), 'Get a 5 day streak for 2 freezes');
 
   const popover = pill.element.querySelector('.streak-calendar-popover')!;
   assert.ok(popover);
   assert.match(popover.querySelector('.streak-cal-title')?.textContent || '', /October 2026/);
-  assert.match(popover.querySelector('.streak-stat-count')?.textContent || '', /5 day streak/);
+  assert.match(popover.querySelector('.streak-stat-count')?.textContent || '', /8 day streak/);
   assert.match(popover.querySelector('.streak-stat-freezes')?.textContent || '', /2 freezes left/);
   assert.equal(popover.querySelector('.streak-stat-freezes')?.getAttribute('title'), 'Get a 5 day streak for 2 freezes');
 

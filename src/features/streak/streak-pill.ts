@@ -6,13 +6,14 @@ import {
   localDateString,
   reconcileStreak,
   type CalendarMonth,
+  type StreakContext,
 } from './streak-service';
 
 export interface StreakPillController {
   /** The root DOM element representing the streak pill with hover popover. */
   element: HTMLElement;
   /** Re-renders the streak pill and popover with new streak data. */
-  update(streak?: StreakData | null, todayStr?: string): void;
+  update(streak?: StreakData | null, todayStr?: string, context?: StreakContext): void;
   /** Cleans up timers or listeners. */
   dispose?: () => void;
 }
@@ -238,6 +239,7 @@ export const streakPillStyles = `
     font-weight: 800;
   }
   .streak-cal-day.status-before-start .streak-cal-icon,
+  .streak-cal-day.status-rest .streak-cal-icon,
   .streak-cal-day.status-future .streak-cal-icon {
     color: var(--bq-muted, #94a3b8);
   }
@@ -423,11 +425,11 @@ export function createStreakPill(
     popover.append(header, statsRow, dowGrid, daysGrid, legend);
   }
 
-  function update(streak?: StreakData | null, todayStr?: string) {
+  function update(streak?: StreakData | null, todayStr?: string, context?: StreakContext) {
     currentTodayStr = todayStr || localDateString();
-    currentStreak = reconcileStreak(streak, currentTodayStr);
+    currentStreak = reconcileStreak(streak, currentTodayStr, context);
 
-    const { status, label, count } = getStreakBadgeStatus(currentStreak, currentTodayStr);
+    const { status, label, count } = getStreakBadgeStatus(currentStreak, currentTodayStr, context);
 
     // Update badge classes and data attributes
     badge.className = 'streak-badge';
@@ -452,7 +454,7 @@ export function createStreakPill(
     badge.innerHTML = `${iconSvg}<span>${label}</span>`;
     badge.title = status === 'frozen'
       ? (currentStreak?.longest ? `Current streak: ${count} days · Best: ${currentStreak.longest} days · Get a 5 day streak for 2 freezes` : 'Get a 5 day streak for 2 freezes')
-      : (currentStreak?.longest ? `Current streak: ${count} days · Best: ${currentStreak.longest} days` : 'Visit Quest or study daily to keep your streak alive!');
+      : (currentStreak?.longest ? `Current streak: ${count} days · Best: ${currentStreak.longest} days` : 'Your streak stays alive on days with nothing due. Answer a question when you have homework.');
 
     if (currentStreak?.freezesAvailable) {
       const freezeTag = create('span');
@@ -463,7 +465,7 @@ export function createStreakPill(
     }
 
     // Refresh Calendar Data
-    calendarMonths = getStreakCalendar(currentStreak, currentTodayStr);
+    calendarMonths = getStreakCalendar(currentStreak, currentTodayStr, context);
     // Default to the current month (last month in array)
     viewingMonthIndex = Math.max(0, calendarMonths.length - 1);
     renderMonth();

@@ -144,7 +144,7 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
 
   function render() {
     if (!cache || disposed) return;
-    streakPill.update(streak);
+    streakPill.update(streak, undefined, { assignments: cache.assignments, completionOverrides: overrides });
     const data = homepageOverview(courses, cache, overrides); content.className = ''; content.replaceChildren();
     const coverage = document.createElement('p'); coverage.className = 'coverage';
     coverage.textContent = `${data.observed} of ${courses.length} courses synced`;

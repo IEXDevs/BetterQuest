@@ -1,4 +1,16 @@
-import type { StreakData } from '../../shared/models';
+import type { Assignment, StreakData } from '../../shared/models';
+
+/** One answered question, or newly completed work, satisfies a day that has homework. */
+const QUESTION_MINIMUM_DATES = 1;
+
+const KNOWN_INCOMPLETE = new Set<Assignment['completion']>(['not-completed', 'in-progress', 'not-started']);
+
+export interface StreakContext {
+  assignments?: Assignment[];
+  completionOverrides?: Partial<Record<string, true>>;
+  /** Evaluation clock. Defaults to the current time so overdue checks stay live. */
+  now?: number;
+}
 
 /** Returns local date in YYYY-MM-DD format (respects student local timezone). */
 export function localDateString(date: Date = new Date()): string {
@@ -15,63 +27,153 @@ export function formatDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-/** Calculates current streak and all-time longest streak from a list of active dates and frozen dates (YYYY-MM-DD). */
+function validDate(value: string | null | undefined): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function shiftDay(dateStr: string, days: number): string {
+  const date = new Date(`${dateStr}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return formatDate(date);
+}
+
+function zonedDay(iso: string, timeZone: string | null | undefined): string | null {
+  const instant = Date.parse(iso);
+  if (!Number.isFinite(instant)) return null;
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timeZone || 'America/Chicago',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date(instant));
+    const year = parts.find(part => part.type === 'year')?.value;
+    const month = parts.find(part => part.type === 'month')?.value;
+    const day = parts.find(part => part.type === 'day')?.value;
+    return year && month && day ? `${year}-${month}-${day}` : null;
+  } catch {
+    return null;
+  }
+}
+
+function finished(assignment: Assignment, overrides?: StreakContext['completionOverrides']): boolean {
+  return assignment.completion === 'completed' || overrides?.[assignment.id] === true;
+}
+
+function knownIncomplete(assignment: Assignment, overrides?: StreakContext['completionOverrides']): boolean {
+  return !finished(assignment, overrides) && KNOWN_INCOMPLETE.has(assignment.completion);
+}
+
+interface StreakFacts {
+  hardBreaks: Set<string>;
+  obligations: Set<string>;
+}
+
+function addRange(days: Set<string>, start: string, end: string) {
+  let day = end;
+  for (let step = 0; step < 500 && day >= start; step++) {
+    days.add(day);
+    if (day === start) break;
+    day = shiftDay(day, -1);
+  }
+}
+
+/**
+ * Homework that is actually open creates a question obligation.
+ * An unfinished assignment past its deadline is a hard break on the due day.
+ * Unknown dates are not backfilled across history.
+ */
+function buildFacts(today: string, context?: StreakContext): StreakFacts {
+  const hardBreaks = new Set<string>();
+  const obligations = new Set<string>();
+  const now = context?.now ?? Date.now();
+  const overrides = context?.completionOverrides;
+  const yesterday = shiftDay(today, -1);
+
+  for (const assignment of context?.assignments ?? []) {
+    if (!knownIncomplete(assignment, overrides)) continue;
+    const startDay = assignment.start?.iso ? zonedDay(assignment.start.iso, assignment.start.timeZone) : null;
+    const dueDay = assignment.deadline?.iso ? zonedDay(assignment.deadline.iso, assignment.deadline.timeZone) : null;
+    const dueInstant = assignment.deadline?.iso ? Date.parse(assignment.deadline.iso) : NaN;
+    const overdue = Number.isFinite(dueInstant) && dueInstant < now;
+
+    if (overdue) hardBreaks.add(dueDay && dueDay <= today ? dueDay : today);
+    if (startDay && startDay > today) continue;
+
+    if (startDay) {
+      const windowEnd = dueDay && dueDay < yesterday ? dueDay : yesterday;
+      if (windowEnd >= startDay) addRange(obligations, startDay, windowEnd);
+      if (!overdue && today >= startDay && (!dueDay || today <= dueDay)) obligations.add(today);
+    } else if (dueDay) {
+      if (dueDay < today) obligations.add(dueDay);
+      if (!overdue && today <= dueDay) obligations.add(today);
+    } else {
+      obligations.add(today);
+    }
+  }
+
+  for (const day of hardBreaks) obligations.delete(day);
+  return { hardBreaks, obligations };
+}
+
+type DayRole = 'credit' | 'frozen' | 'rest' | 'pending' | 'miss' | 'break';
+
+function dayRole(day: string, today: string, active: Set<string>, frozen: Set<string>, facts: StreakFacts): DayRole {
+  if (facts.hardBreaks.has(day)) return 'break';
+  if (active.has(day)) return 'credit';
+  if (frozen.has(day)) return 'frozen';
+  if (facts.obligations.has(day)) return day === today ? 'pending' : 'miss';
+  if (day === today) return 'pending';
+  return 'rest';
+}
+
+function earliestMark(dates: string[], today: string): string {
+  let earliest = today;
+  for (const day of dates) {
+    if (validDate(day) && day < earliest) earliest = day;
+  }
+  return earliest;
+}
+
+/**
+ * Current streak counts question days and freezes.
+ * Days with nothing due are rest days: they do not add a day and do not break the streak.
+ * A missed question day, or an unfinished assignment past its due date, ends the streak.
+ */
 export function calculateStreak(
   activeDates: string[],
   todayStr: string = localDateString(),
-  frozenDates: string[] = []
+  frozenDates: string[] = [],
+  context?: StreakContext,
 ): { current: number; longest: number } {
-  const validDates = activeDates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
-  const validFreezes = frozenDates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
-  const allSet = new Set([...validDates, ...validFreezes]);
-  if (allSet.size === 0) return { current: 0, longest: 0 };
-
-  const today = new Date(todayStr + 'T12:00:00');
-  const todayFormatted = formatDate(today);
-
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayFormatted = formatDate(yesterday);
+  const active = new Set(activeDates.filter(validDate));
+  const frozen = new Set(frozenDates.filter(validDate));
+  const facts = buildFacts(todayStr, context);
+  const limit = earliestMark([...active, ...frozen], todayStr);
 
   let current = 0;
-  let startAnchor: string | null = null;
-
-  if (allSet.has(todayFormatted)) {
-    startAnchor = todayFormatted;
-  } else if (allSet.has(yesterdayFormatted)) {
-    // Yesterday had activity or freeze; streak is still alive today waiting for activity.
-    startAnchor = yesterdayFormatted;
+  let day = todayStr;
+  for (let step = 0; step < 500; step++) {
+    const role = dayRole(day, todayStr, active, frozen, facts);
+    if (role === 'break' || role === 'miss') break;
+    if (role === 'credit' || role === 'frozen') current += QUESTION_MINIMUM_DATES;
+    if (day === limit) break;
+    day = shiftDay(day, -1);
   }
 
-  if (startAnchor) {
-    const cursor = new Date(startAnchor + 'T12:00:00');
-    while (allSet.has(formatDate(cursor))) {
-      current++;
-      cursor.setDate(cursor.getDate() - 1);
-    }
-  }
-
-  // 2. Longest streak calculation across all time:
-  const sorted = [...allSet].sort();
   let longest = 0;
-  let running = 0;
-  let prevDate: Date | null = null;
-
-  for (const dStr of sorted) {
-    const d = new Date(dStr + 'T12:00:00');
-    if (prevDate) {
-      const diffMs = d.getTime() - prevDate.getTime();
-      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-      if (diffDays === 1) {
-        running++;
-      } else if (diffDays > 1) {
-        running = 1;
-      }
-    } else {
-      running = 1;
+  let run = 0;
+  day = limit;
+  for (let step = 0; step < 500; step++) {
+    const role = dayRole(day, todayStr, active, frozen, facts);
+    if (role === 'credit' || role === 'frozen') {
+      run += 1;
+      if (run > longest) longest = run;
+    } else if (role === 'break' || role === 'miss') {
+      run = 0;
     }
-    prevDate = d;
-    if (running > longest) longest = running;
+    if (day === todayStr) break;
+    day = shiftDay(day, 1);
   }
 
   return { current, longest: Math.max(longest, current) };
@@ -82,50 +184,73 @@ export function recordActiveDate(
   activeDates: string[] = [],
   dateStr: string = localDateString()
 ): string[] {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return activeDates;
-  const set = new Set(activeDates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)));
+  if (!validDate(dateStr)) return activeDates;
+  const set = new Set(activeDates.filter(validDate));
   set.add(dateStr);
   const sorted = [...set].sort();
   return sorted.slice(-180);
 }
 
+function protectObligationGaps(
+  lastActive: string | null | undefined,
+  target: string,
+  activeDates: string[],
+  frozenDates: string[],
+  freezesAvailable: number,
+  context?: StreakContext,
+): { frozenDates: string[]; freezesAvailable: number } {
+  if (!validDate(lastActive) || !validDate(target) || lastActive >= target || freezesAvailable <= 0) {
+    return { frozenDates, freezesAvailable };
+  }
+  const facts = buildFacts(target, context);
+  let latestBreak: string | null = null;
+  for (const day of facts.hardBreaks) {
+    if (day > lastActive && day < target && (!latestBreak || day > latestBreak)) latestBreak = day;
+  }
+  const active = new Set(activeDates);
+  const frozen = new Set(frozenDates);
+  const nextFrozen = [...frozenDates];
+  let available = freezesAvailable;
+  let day = shiftDay(latestBreak ?? lastActive, 1);
+  while (day < target && available > 0) {
+    if (facts.hardBreaks.has(day)) break;
+    if (!active.has(day) && !frozen.has(day) && facts.obligations.has(day)) {
+      nextFrozen.push(day);
+      frozen.add(day);
+      available -= 1;
+    }
+    day = shiftDay(day, 1);
+  }
+  return { frozenDates: nextFrozen, freezesAvailable: available };
+}
+
 /**
- * Reconciles streak data, auto-applying freezes to missed days if available,
- * and awarding 2 freezes every 5 consecutive days.
+ * Records a question day. Freezes cover skipped homework days only.
+ * A day with nothing available does not spend a freeze.
  */
 export function updateStreakData(
   currentStreak?: StreakData | null,
-  newDate: string = localDateString()
+  newDate: string = localDateString(),
+  context?: StreakContext,
 ): StreakData {
   const existingDates = currentStreak?.activeDates || [];
   const existingFrozen = currentStreak?.frozenDates || [];
   let freezesAvailable = currentStreak?.freezesAvailable ?? 0;
   const startDate = currentStreak?.startDate || (existingDates[0] ? [...existingDates].sort()[0] : newDate);
-
-  const frozenDates = [...existingFrozen];
-
-  // Auto-protect any missed gap days between last active date and newDate if freezes are available
-  if (currentStreak?.lastActiveDate && freezesAvailable > 0) {
-    const lastD = new Date(currentStreak.lastActiveDate + 'T12:00:00');
-    const newD = new Date(newDate + 'T12:00:00');
-    const diffDays = Math.round((newD.getTime() - lastD.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays > 1) {
-      const cursor = new Date(lastD);
-      cursor.setDate(cursor.getDate() + 1);
-      while (cursor < newD && freezesAvailable > 0) {
-        const gapDate = formatDate(cursor);
-        if (!existingDates.includes(gapDate) && !frozenDates.includes(gapDate)) {
-          frozenDates.push(gapDate);
-          freezesAvailable--;
-        }
-        cursor.setDate(cursor.getDate() + 1);
-      }
-    }
-  }
+  const protectedGap = protectObligationGaps(
+    currentStreak?.lastActiveDate,
+    newDate,
+    existingDates,
+    existingFrozen,
+    freezesAvailable,
+    context,
+  );
+  freezesAvailable = protectedGap.freezesAvailable;
+  const frozenDates = protectedGap.frozenDates;
 
   const activeDates = recordActiveDate(existingDates, newDate);
   const prevCurrent = currentStreak?.current || 0;
-  const { current, longest } = calculateStreak(activeDates, newDate, frozenDates);
+  const { current, longest } = calculateStreak(activeDates, newDate, frozenDates, context);
   const prevLongest = currentStreak?.longest || 0;
 
   // Award 2 streak freezes when reaching 5 days straight (and for every 5-day cycle: 5, 10, 15, ...)
@@ -149,48 +274,37 @@ export function updateStreakData(
 
 /**
  * Reconciles current streak state for display (e.g. on page load without an active submit today).
- * Consumes freezes if past days were missed to protect the streak.
+ * Spends a freeze only when a past day had homework and no question.
+ * An unfinished assignment past its due date breaks the streak and cannot be frozen.
  */
 export function reconcileStreak(
   currentStreak?: StreakData | null,
-  todayStr: string = localDateString()
+  todayStr: string = localDateString(),
+  context?: StreakContext,
 ): StreakData {
   if (!currentStreak) {
     return { current: 0, longest: 0, lastActiveDate: null, activeDates: [], freezesAvailable: 0, frozenDates: [], startDate: null };
   }
   const existingDates = currentStreak.activeDates || [];
   const existingFrozen = currentStreak.frozenDates || [];
-  let freezesAvailable = currentStreak.freezesAvailable ?? 0;
   const startDate = currentStreak.startDate || (existingDates[0] ? [...existingDates].sort()[0] : null);
-  const frozenDates = [...existingFrozen];
-
-  // Auto-protect gap days between lastActiveDate and todayStr if freezes are available
-  if (currentStreak.lastActiveDate && currentStreak.current > 0 && freezesAvailable > 0) {
-    const lastD = new Date(currentStreak.lastActiveDate + 'T12:00:00');
-    const todayD = new Date(todayStr + 'T12:00:00');
-    const diffDays = Math.round((todayD.getTime() - lastD.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays > 1) {
-      const cursor = new Date(lastD);
-      cursor.setDate(cursor.getDate() + 1);
-      while (cursor < todayD && freezesAvailable > 0) {
-        const gapDate = formatDate(cursor);
-        if (!existingDates.includes(gapDate) && !frozenDates.includes(gapDate)) {
-          frozenDates.push(gapDate);
-          freezesAvailable--;
-        }
-        cursor.setDate(cursor.getDate() + 1);
-      }
-    }
-  }
-
-  const { current, longest } = calculateStreak(existingDates, todayStr, frozenDates);
+  const protectedGap = protectObligationGaps(
+    currentStreak.lastActiveDate,
+    todayStr,
+    existingDates,
+    existingFrozen,
+    currentStreak.freezesAvailable ?? 0,
+    context,
+  );
+  const frozenDates = [...new Set(protectedGap.frozenDates)].sort();
+  const { current, longest } = calculateStreak(existingDates, todayStr, frozenDates, context);
   return {
     current,
     longest: Math.max(longest, currentStreak.longest || 0),
     lastActiveDate: currentStreak.lastActiveDate,
     activeDates: existingDates,
-    freezesAvailable,
-    frozenDates: [...new Set(frozenDates)].sort(),
+    freezesAvailable: protectedGap.freezesAvailable,
+    frozenDates,
     startDate,
   };
 }
@@ -200,37 +314,26 @@ export type StreakBadgeStatus = 'active' | 'frozen' | 'broken';
 /** Returns the display status for the badge/pill. */
 export function getStreakBadgeStatus(
   streak?: StreakData | null,
-  todayStr: string = localDateString()
+  todayStr: string = localDateString(),
+  context?: StreakContext,
 ): {
   status: StreakBadgeStatus;
   label: string;
   count: number;
   freezesAvailable: number;
 } {
-  const current = streak?.current || 0;
   const activeDates = streak?.activeDates || [];
   const frozenDates = streak?.frozenDates || [];
   const freezesAvailable = streak?.freezesAvailable || 0;
-
+  const { current } = calculateStreak(activeDates, todayStr, frozenDates, context);
   const todayDone = activeDates.includes(todayStr);
+  const yesterdayFrozen = frozenDates.includes(shiftDay(todayStr, -1));
   const todayFrozen = frozenDates.includes(todayStr);
 
-  const today = new Date(todayStr + 'T12:00:00');
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = formatDate(yesterday);
-  const yesterdayActiveOrFrozen = activeDates.includes(yesterdayStr) || frozenDates.includes(yesterdayStr);
-
   let status: StreakBadgeStatus = 'broken';
-  if (todayDone) {
-    status = 'active'; // Green: active and done today
-  } else if (todayFrozen) {
-    status = 'frozen'; // Blue: protected today by freeze
-  } else if (current > 0 && yesterdayActiveOrFrozen) {
-    status = frozenDates.includes(yesterdayStr) ? 'frozen' : 'active';
-  } else {
-    status = 'broken'; // Red: broken streak
-  }
+  if (current > 0 && todayDone) status = 'active';
+  else if (current > 0 && (todayFrozen || yesterdayFrozen)) status = 'frozen';
+  else if (current > 0) status = 'active';
 
   const label = current === 1 ? '1 day streak' : `${current} day streak`;
   return { status, label, count: current, freezesAvailable };
@@ -239,7 +342,7 @@ export function getStreakBadgeStatus(
 export interface CalendarDay {
   day: number;
   dateStr: string;
-  status: 'before-start' | 'active' | 'frozen' | 'missed' | 'future';
+  status: 'before-start' | 'active' | 'frozen' | 'missed' | 'rest' | 'future';
 }
 
 export interface CalendarMonth {
@@ -253,15 +356,17 @@ export interface CalendarMonth {
 
 /**
  * Generates monthly calendar grids from the start month up to the current month.
- * Days before startDate show grey hyphens '-', completed days show fire,
- * frozen days show ice, missed days show red X, and future days show grey hyphens '-'.
+ * Rest days (nothing due) stay neutral. Missed homework and overdue unfinished
+ * assignments show as missed.
  */
 export function getStreakCalendar(
   streak?: StreakData | null,
-  todayStr: string = localDateString()
+  todayStr: string = localDateString(),
+  context?: StreakContext,
 ): CalendarMonth[] {
   const activeSet = new Set(streak?.activeDates || []);
   const freezeSet = new Set(streak?.frozenDates || []);
+  const facts = buildFacts(todayStr, context);
 
   const earliest = streak?.startDate ||
     (streak?.activeDates && streak.activeDates.length > 0 ? [...streak.activeDates].sort()[0] : todayStr);
@@ -291,15 +396,18 @@ export function getStreakCalendar(
         dayStatus = 'before-start';
       } else if (dateStr > todayStr) {
         dayStatus = 'future';
+      } else if (facts.hardBreaks.has(dateStr)) {
+        dayStatus = 'missed';
       } else if (activeSet.has(dateStr)) {
         dayStatus = 'active';
       } else if (freezeSet.has(dateStr)) {
         dayStatus = 'frozen';
       } else if (dateStr === todayStr) {
-        // Today is still ongoing; show pending hyphen if streak is alive
-        dayStatus = (streak?.current || 0) > 0 ? 'future' : 'missed';
-      } else {
+        dayStatus = 'future';
+      } else if (facts.obligations.has(dateStr)) {
         dayStatus = 'missed';
+      } else {
+        dayStatus = 'rest';
       }
       days.push({ day: d, dateStr, status: dayStatus });
     }
@@ -324,6 +432,7 @@ export function getCalendarDayIcon(status: CalendarDay['status']): string {
       return '🧊';
     case 'missed':
       return '❌';
+    case 'rest':
     case 'before-start':
     case 'future':
     default:
