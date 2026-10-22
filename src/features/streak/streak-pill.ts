@@ -201,6 +201,7 @@ export const streakPillStyles = `
     text-align: center;
   }
   .streak-cal-cell {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -213,7 +214,44 @@ export const streakPillStyles = `
     transition: transform .12s ease;
   }
   .streak-cal-cell:hover:not(.streak-cal-empty) {
+    z-index: 3;
     transform: scale(1.05);
+  }
+  .streak-day-tip {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    z-index: 4;
+    width: max-content;
+    max-width: 168px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: var(--bq-text, #18253a);
+    color: var(--bq-surface, #fff);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: center;
+    white-space: normal;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(-50%);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+  }
+  .streak-day-tip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--bq-text, #18253a);
+  }
+  .streak-cal-cell:hover .streak-day-tip,
+  .streak-cal-cell:focus-visible .streak-day-tip {
+    opacity: 1;
+    visibility: visible;
   }
   .streak-cal-num {
     font-size: 11px;
@@ -392,13 +430,8 @@ export function createStreakPill(
       cell.dataset.status = d.status;
       cell.dataset.date = d.dateStr;
 
-      let labelText = `${d.dateStr}: `;
-      if (d.status === 'active') labelText += 'Completed';
-      else if (d.status === 'frozen') labelText += 'Streak freeze used';
-      else if (d.status === 'missed') labelText += 'Missed';
-      else labelText += 'No activity';
-      cell.setAttribute('title', labelText);
-      cell.setAttribute('aria-label', labelText);
+      const note = dayNote(d.status, d.dateStr === currentTodayStr);
+      cell.setAttribute('aria-label', `${d.dateStr}: ${note}`);
 
       const num = create('span');
       num.className = 'streak-cal-num';
@@ -408,7 +441,11 @@ export function createStreakPill(
       icon.className = 'streak-cal-icon';
       icon.textContent = getCalendarDayIcon(d.status);
 
-      cell.append(num, icon);
+      const tip = create('span');
+      tip.className = 'streak-day-tip';
+      tip.textContent = note;
+
+      cell.append(num, icon, tip);
       daysGrid.append(cell);
     }
 
@@ -471,49 +508,36 @@ export function createStreakPill(
     renderMonth();
   }
 
-  // Hover and focus delay: keep the calendar open for 500ms when cursor leaves
-  let closeTimer: ReturnType<typeof setTimeout> | null = null;
-
   function showPopover() {
-    if (closeTimer) {
-      clearTimeout(closeTimer);
-      closeTimer = null;
-    }
     container.classList.add('is-open');
     badge.setAttribute('aria-expanded', 'true');
     popover.setAttribute('aria-hidden', 'false');
   }
 
-  function hidePopoverWithDelay() {
-    if (closeTimer) clearTimeout(closeTimer);
-    closeTimer = setTimeout(() => {
-      container.classList.remove('is-open');
-      badge.setAttribute('aria-expanded', 'false');
-      popover.setAttribute('aria-hidden', 'true');
-      closeTimer = null;
-    }, 500);
+  function hidePopover() {
+    container.classList.remove('is-open');
+    badge.setAttribute('aria-expanded', 'false');
+    popover.setAttribute('aria-hidden', 'true');
   }
 
   container.addEventListener('mouseenter', showPopover);
-  container.addEventListener('mouseleave', hidePopoverWithDelay);
+  container.addEventListener('mouseleave', hidePopover);
   container.addEventListener('focusin', showPopover);
   container.addEventListener('focusout', (e) => {
-    if (!container.contains(e.relatedTarget as Node)) {
-      hidePopoverWithDelay();
-    }
+    if (!container.contains(e.relatedTarget as Node)) hidePopover();
   });
 
   // Initial render
   update(initialStreak, initialTodayStr);
 
-  return {
-    element: container,
-    update,
-    dispose: () => {
-      if (closeTimer) {
-        clearTimeout(closeTimer);
-        closeTimer = null;
-      }
-    },
-  };
+  return { element: container, update };
+}
+
+function dayNote(status: CalendarMonth['days'][number]['status'], isToday: boolean): string {
+  if (status === 'active') return 'You answered a question';
+  if (status === 'frozen') return 'A freeze kept your streak going';
+  if (status === 'missed') return 'This day broke your streak';
+  if (status === 'rest') return 'No homework due, so your streak stays protected';
+  if (status === 'before-start') return 'Before your streak';
+  return isToday ? 'Today is still open' : 'Coming up';
 }

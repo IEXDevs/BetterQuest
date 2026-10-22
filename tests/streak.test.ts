@@ -607,6 +607,10 @@ test('createStreakPill renders active green badge with fire icon, freezes, and i
   assert.equal(sep2Cell.dataset.status, 'frozen');
   assert.equal(sep2Cell.querySelector('.streak-cal-icon')?.textContent, '🧊');
 
+  const sep3Cell = popover.querySelector<HTMLElement>('.streak-cal-cell[data-date="2026-09-03"]')!;
+  assert.equal(sep3Cell.dataset.status, 'rest');
+  assert.equal(sep3Cell.querySelector('.streak-day-tip')?.textContent, 'No homework due, so your streak stays protected');
+
   // Clicking prev again moves to August 2026 (the start month)
   const prevBtn2 = popover.querySelector<HTMLButtonElement>('.streak-cal-prev')!;
   prevBtn2.click();
@@ -661,33 +665,23 @@ test('createStreakPill updates to blue frozen state and red broken state', () =>
   dom.window.close();
 });
 
-test('createStreakPill keeps calendar popover open for 500ms when mouse leaves', async () => {
+test('createStreakPill opens and closes the calendar immediately on hover', () => {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
   const doc = dom.window.document;
 
   const pill = createStreakPill(null, '2026-10-19', doc);
   doc.body.append(pill.element);
 
-  // Initially closed
   assert.ok(!pill.element.classList.contains('is-open'));
 
-  // Mouse enters pill container -> opens
   pill.element.dispatchEvent(new dom.window.MouseEvent('mouseenter', { bubbles: true }));
-  assert.ok(pill.element.classList.contains('is-open'), 'Popover should open on mouseenter');
+  assert.ok(pill.element.classList.contains('is-open'), 'Calendar should open as soon as the pointer enters');
+  assert.equal(pill.element.querySelector('.streak-badge')?.getAttribute('aria-expanded'), 'true');
 
-  // Mouse leaves pill container -> stays open immediately during 500ms grace period
   pill.element.dispatchEvent(new dom.window.MouseEvent('mouseleave', { bubbles: true }));
-  assert.ok(pill.element.classList.contains('is-open'), 'Popover should stay open immediately after mouse leaves');
+  assert.ok(!pill.element.classList.contains('is-open'), 'Calendar should close as soon as the pointer leaves');
+  assert.equal(pill.element.querySelector('.streak-badge')?.getAttribute('aria-expanded'), 'false');
 
-  // After 200ms, still open
-  await new Promise(resolve => setTimeout(resolve, 200));
-  assert.ok(pill.element.classList.contains('is-open'), 'Popover should still be open at 200ms');
-
-  // After 350ms more (550ms total), closes
-  await new Promise(resolve => setTimeout(resolve, 350));
-  assert.ok(!pill.element.classList.contains('is-open'), 'Popover should close after 500ms grace period');
-
-  pill.dispose?.();
   dom.window.close();
 });
 
