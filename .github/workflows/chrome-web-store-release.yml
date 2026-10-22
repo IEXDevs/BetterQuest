@@ -120,6 +120,8 @@ jobs:
           STATUS_URL="https://chromewebstore.googleapis.com/v2/$ITEM:fetchStatus"
 
           STATUS_FILE="$(mktemp)"
+          UPLOAD_RESPONSE=""
+          PUBLISH_RESPONSE=""
           trap 'rm -f "$STATUS_FILE" "$UPLOAD_RESPONSE" "$PUBLISH_RESPONSE"' EXIT
           echo "Checking the currently published and submitted Chrome Web Store versions..."
           curl --fail-with-body --silent --show-error \
