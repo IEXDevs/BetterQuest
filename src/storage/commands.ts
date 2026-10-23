@@ -91,7 +91,6 @@ export function applyCommand(state: LocalState, command: Command): LocalState {
     }
     case 'assignments:refresh': next.cache.refreshRequestedAt = command.requestedAt; break;
     case 'assignment:completion:set': {
-      if (!next.cache.assignments.some(assignment => assignment.id === command.assignmentId)) throw new Error('Unknown assignment completion target.');
       const overrides = { ...(next.completionOverrides || {}) };
       if (command.completed) overrides[command.assignmentId] = true;
       else delete overrides[command.assignmentId];

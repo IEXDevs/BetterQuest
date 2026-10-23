@@ -83,19 +83,29 @@ function addRange(days: Set<string>, start: string, end: string) {
  * An unfinished assignment past its deadline is a hard break on the due day.
  * Unknown dates are not backfilled across history.
  */
-function buildFacts(today: string, context?: StreakContext): StreakFacts {
-  const hardBreaks = new Set<string>();
+function buildFacts(today: string, context?: StreakContext, brokenDates?: string[]): StreakFacts {
+  const hardBreaks = new Set<string>(brokenDates?.filter(validDate) ?? []);
   const obligations = new Set<string>();
   const now = context?.now ?? Date.now();
   const overrides = context?.completionOverrides;
   const yesterday = shiftDay(today, -1);
 
   for (const assignment of context?.assignments ?? []) {
-    if (!knownIncomplete(assignment, overrides)) continue;
     const startDay = assignment.start?.iso ? zonedDay(assignment.start.iso, assignment.start.timeZone) : null;
     const dueDay = assignment.deadline?.iso ? zonedDay(assignment.deadline.iso, assignment.deadline.timeZone) : null;
     const dueInstant = assignment.deadline?.iso ? Date.parse(assignment.deadline.iso) : NaN;
     const overdue = Number.isFinite(dueInstant) && dueInstant < now;
+
+    // Data cannot be changed from the past:
+    // If an assignment was overdue and its deadline was in the past (dueDay < today),
+    // and Quest observed it as incomplete (assignment.completion !== 'completed'),
+    // an overdue break occurred on that past day. Marking it done later cannot erase that past break.
+    const isPastDue = dueDay !== null && dueDay < today && overdue;
+    if (isPastDue && assignment.completion !== 'completed') {
+      hardBreaks.add(dueDay);
+    }
+
+    if (!knownIncomplete(assignment, overrides)) continue;
 
     if (overdue) hardBreaks.add(dueDay && dueDay <= today ? dueDay : today);
     if (startDay && startDay > today) continue;
@@ -145,10 +155,11 @@ export function calculateStreak(
   todayStr: string = localDateString(),
   frozenDates: string[] = [],
   context?: StreakContext,
+  brokenDates?: string[],
 ): { current: number; longest: number } {
   const active = new Set(activeDates.filter(validDate));
   const frozen = new Set(frozenDates.filter(validDate));
-  const facts = buildFacts(todayStr, context);
+  const facts = buildFacts(todayStr, context, brokenDates);
   const limit = earliestMark([...active, ...frozen], todayStr);
 
   let current = 0;
@@ -198,11 +209,12 @@ function protectObligationGaps(
   frozenDates: string[],
   freezesAvailable: number,
   context?: StreakContext,
+  brokenDates?: string[],
 ): { frozenDates: string[]; freezesAvailable: number } {
   if (!validDate(lastActive) || !validDate(target) || lastActive >= target || freezesAvailable <= 0) {
     return { frozenDates, freezesAvailable };
   }
-  const facts = buildFacts(target, context);
+  const facts = buildFacts(target, context, brokenDates);
   let latestBreak: string | null = null;
   for (const day of facts.hardBreaks) {
     if (day > lastActive && day < target && (!latestBreak || day > latestBreak)) latestBreak = day;
@@ -235,6 +247,7 @@ export function updateStreakData(
 ): StreakData {
   const existingDates = currentStreak?.activeDates || [];
   const existingFrozen = currentStreak?.frozenDates || [];
+  const existingBroken = currentStreak?.brokenDates || [];
   let freezesAvailable = currentStreak?.freezesAvailable ?? 0;
   const startDate = currentStreak?.startDate || (existingDates[0] ? [...existingDates].sort()[0] : newDate);
   const protectedGap = protectObligationGaps(
@@ -244,13 +257,14 @@ export function updateStreakData(
     existingFrozen,
     freezesAvailable,
     context,
+    existingBroken,
   );
   freezesAvailable = protectedGap.freezesAvailable;
   const frozenDates = protectedGap.frozenDates;
 
   const activeDates = recordActiveDate(existingDates, newDate);
   const prevCurrent = currentStreak?.current || 0;
-  const { current, longest } = calculateStreak(activeDates, newDate, frozenDates, context);
+  const { current, longest } = calculateStreak(activeDates, newDate, frozenDates, context, existingBroken);
   const prevLongest = currentStreak?.longest || 0;
 
   // Award 2 streak freezes when reaching 5 days straight (and for every 5-day cycle: 5, 10, 15, ...)
@@ -261,6 +275,9 @@ export function updateStreakData(
     freezesAvailable += earnedFreezes;
   }
 
+  const facts = buildFacts(newDate, context, existingBroken);
+  const brokenDates = [...new Set([...existingBroken, ...facts.hardBreaks])].sort().slice(-180);
+
   return {
     current,
     longest: Math.max(longest, prevLongest),
@@ -269,6 +286,7 @@ export function updateStreakData(
     freezesAvailable,
     frozenDates: [...new Set(frozenDates)].sort().slice(-180),
     startDate,
+    brokenDates,
   };
 }
 
@@ -283,10 +301,11 @@ export function reconcileStreak(
   context?: StreakContext,
 ): StreakData {
   if (!currentStreak) {
-    return { current: 0, longest: 0, lastActiveDate: null, activeDates: [], freezesAvailable: 0, frozenDates: [], startDate: null };
+    return { current: 0, longest: 0, lastActiveDate: null, activeDates: [], freezesAvailable: 0, frozenDates: [], startDate: null, brokenDates: [] };
   }
   const existingDates = currentStreak.activeDates || [];
   const existingFrozen = currentStreak.frozenDates || [];
+  const existingBroken = currentStreak.brokenDates || [];
   const startDate = currentStreak.startDate || (existingDates[0] ? [...existingDates].sort()[0] : null);
   const protectedGap = protectObligationGaps(
     currentStreak.lastActiveDate,
@@ -295,9 +314,13 @@ export function reconcileStreak(
     existingFrozen,
     currentStreak.freezesAvailable ?? 0,
     context,
+    existingBroken,
   );
   const frozenDates = [...new Set(protectedGap.frozenDates)].sort();
-  const { current, longest } = calculateStreak(existingDates, todayStr, frozenDates, context);
+  const { current, longest } = calculateStreak(existingDates, todayStr, frozenDates, context, existingBroken);
+  const facts = buildFacts(todayStr, context, existingBroken);
+  const brokenDates = [...new Set([...existingBroken, ...facts.hardBreaks])].sort().slice(-180);
+
   return {
     current,
     longest: Math.max(longest, currentStreak.longest || 0),
@@ -306,6 +329,7 @@ export function reconcileStreak(
     freezesAvailable: protectedGap.freezesAvailable,
     frozenDates,
     startDate,
+    brokenDates,
   };
 }
 
@@ -324,8 +348,9 @@ export function getStreakBadgeStatus(
 } {
   const activeDates = streak?.activeDates || [];
   const frozenDates = streak?.frozenDates || [];
+  const brokenDates = streak?.brokenDates || [];
   const freezesAvailable = streak?.freezesAvailable || 0;
-  const { current } = calculateStreak(activeDates, todayStr, frozenDates, context);
+  const { current } = calculateStreak(activeDates, todayStr, frozenDates, context, brokenDates);
   const todayDone = activeDates.includes(todayStr);
   const yesterdayFrozen = frozenDates.includes(shiftDay(todayStr, -1));
   const todayFrozen = frozenDates.includes(todayStr);
@@ -368,7 +393,7 @@ export function getStreakCalendar(
 ): CalendarMonth[] {
   const activeSet = new Set(streak?.activeDates || []);
   const freezeSet = new Set(streak?.frozenDates || []);
-  const facts = buildFacts(todayStr, context);
+  const facts = buildFacts(todayStr, context, streak?.brokenDates);
 
   const earliest = streak?.startDate ||
     (streak?.activeDates && streak.activeDates.length > 0 ? [...streak.activeDates].sort()[0] : todayStr);

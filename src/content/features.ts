@@ -5,6 +5,7 @@ import { findHomepageSlot } from '../adapters/quest/homepage';
 import { createHomepageOverview } from '../features/assignments/homepage';
 import { createCourseArtwork } from '../features/courses/artwork';
 import { createMeetingTimesEnhancer } from '../features/courses/meeting-times';
+import { createCoursesTableCleaner } from '../features/courses/table-cleaner';
 import { isCourseEffect, setCourseEffectOverrides, type CourseEffect } from '../features/courses/effects';
 import { featurePreferences, type FeaturePreferences } from '../shared/models';
 import { createQuestTheme } from '../features/theme/quest';
@@ -104,6 +105,12 @@ export function startPageFeatures(document: Document, window: Window, run: Execu
     mount: root => {
       const enhancer = createMeetingTimesEnhancer(root as HTMLTableElement);
       return { refresh: () => enhancer.reconcile(), dispose: enhancer.dispose };
+    },
+  });
+  definitions.push({ name: 'courses-table-cleaner', locate: doc => findHomepageSlot(doc)?.table || doc.querySelector<HTMLTableElement>('#courses-table') || null,
+    attributeFilter: ['class', 'aria-label', 'aria-sort'], mount: root => {
+      const cleaner = createCoursesTableCleaner(root as HTMLTableElement);
+      return { refresh: () => cleaner.reconcile(), dispose: cleaner.dispose };
     },
   });
   definitions.push({

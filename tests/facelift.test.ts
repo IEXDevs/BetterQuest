@@ -6,9 +6,10 @@ import { createPdfAssessmentWorkspace, isSlideSubmitRevealed } from '../src/feat
 import { createSettingsMenu } from '../src/features/settings/menu';
 import { LocalRepository } from '../src/storage/repository';
 import { createQuestTheme } from '../src/features/theme/quest';
-import { detectPageCategory } from '../src/adapters/quest/theme';
+import { detectPageCategory, QUEST_DARK_STYLES } from '../src/adapters/quest/theme';
 import { isEmptyResponseTable, readAssessmentMetrics, readAssessmentResponses } from '../src/adapters/quest/assessment';
 import { formatMeetingTime, createMeetingTimesEnhancer } from '../src/features/courses/meeting-times';
+import { createCoursesTableCleaner } from '../src/features/courses/table-cleaner';
 import { enhanceCourseInfoCard, collapseCourseCategoriesByDefault, createCourseDetailsFacelift, isCourseShowPage } from '../src/features/courses/details-enhancer';
 import { createAssessmentHeader } from '../src/features/assessment/header';
 import type { Execute } from '../src/shared/client';
@@ -1271,6 +1272,85 @@ test('createMeetingTimesEnhancer formats meeting time cell in courses table and 
 
   enhancer.dispose();
   assert.equal(cell.textContent?.trim(), 'TTH 330-500');
+});
+
+test('createCoursesTableCleaner strips DataTables sorting and filter indicators from courses table headers', () => {
+  const dom = new JSDOM(`<html><body>
+    <div id="courses-table_wrapper" class="dataTables_wrapper">
+      <div class="row">
+        <div class="col-sm-12 col-md-6"><div class="dataTables_length"><select></select></div></div>
+        <div class="col-sm-12 col-md-6"><div class="dataTables_filter"><input type="search"></div></div>
+      </div>
+      <div class="row">
+        <div class="col-sm-12">
+          <table id="courses-table" class="dataTable">
+            <thead>
+              <tr role="row">
+                <th class="sorting_asc" tabindex="0" aria-sort="ascending" aria-label="Course: activate to sort column descending">Course</th>
+                <th class="sorting" tabindex="0" aria-label="Name: activate to sort column ascending">Name</th>
+                <th class="sorting" tabindex="0" aria-label="Unique: activate to sort column ascending">Unique</th>
+                <th class="sorting" tabindex="0" aria-label="Instructor: activate to sort column ascending">Instructor</th>
+                <th class="sorting" tabindex="0" aria-label="Meeting Time: activate to sort column ascending">Meeting Time</th>
+                <th class="sorting" tabindex="0" aria-label="Next Quest Assignment Due: activate to sort column ascending">Next Quest Assignment Due</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>M 408C</td>
+                <td>CALCULUS</td>
+                <td>58360</td>
+                <td>Reyes</td>
+                <td>TTH 330-500</td>
+                <td>10/14/2026</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </body></html>`);
+
+  const table = dom.window.document.querySelector<HTMLTableElement>('#courses-table')!;
+  const cleaner = createCoursesTableCleaner(table);
+
+  const headers = [...table.querySelectorAll<HTMLTableCellElement>('thead th')];
+  assert.equal(headers.length, 6);
+
+  for (const th of headers) {
+    assert.equal(th.classList.contains('sorting'), false);
+    assert.equal(th.classList.contains('sorting_asc'), false);
+    assert.equal(th.classList.contains('sorting_desc'), false);
+    assert.equal(th.classList.contains('sorting_disabled'), true);
+    assert.equal(th.hasAttribute('tabindex'), false);
+    assert.equal(th.hasAttribute('aria-sort'), false);
+    assert.doesNotMatch(th.getAttribute('aria-label') || '', /activate to sort/i);
+    assert.equal(th.style.cursor, 'default');
+    assert.equal(th.style.pointerEvents, 'none');
+  }
+
+  // Check wrapper controls are hidden
+  const wrapper = dom.window.document.querySelector<HTMLElement>('#courses-table_wrapper')!;
+  const filter = wrapper.querySelector<HTMLElement>('.dataTables_filter')!;
+  const length = wrapper.querySelector<HTMLElement>('.dataTables_length')!;
+  assert.equal(filter.style.display, 'none');
+  assert.equal(length.style.display, 'none');
+
+  // Verify sort clicks are intercepted
+  let clicked = false;
+  headers[0].addEventListener('click', () => { clicked = true; });
+  const event = new dom.window.MouseEvent('click', { bubbles: true, cancelable: true });
+  headers[0].dispatchEvent(event);
+  assert.equal(event.defaultPrevented, true);
+  assert.equal(clicked, false);
+
+  cleaner.dispose();
+});
+
+test('theme CSS suppresses DataTables sort arrows and filter controls on courses table', () => {
+  assert.match(QUEST_DARK_STYLES, /#courses-table thead th[\s\S]*cursor:\s*default !important/);
+  assert.match(QUEST_DARK_STYLES, /#courses-table thead th[\s\S]*pointer-events:\s*none !important/);
+  assert.match(QUEST_DARK_STYLES, /#courses-table thead th::before[\s\S]*display:\s*none !important/);
+  assert.match(QUEST_DARK_STYLES, /#courses-table_wrapper :is\(\.dataTables_filter/);
 });
 
 test('enhanceCourseInfoCard formats instructor contact, meeting schedule, and location without deleting columns', () => {

@@ -74,6 +74,17 @@ export function detectPageCategory(document: Document): 'grades' | 'review' | nu
 
 /** Verified shared Quest shell, tables, forms, native component families, and grades/review styling. */
 export const QUEST_DARK_STYLES = `
+  #main-content { scroll-margin-top: 70px; }
+  #selector-div { scroll-margin-top: 80px; margin: 12px 0 16px; }
+  #selector-div .row { display: flex; align-items: center; }
+  #selector-div .col { display: flex; align-items: center; gap: 12px; }
+  #selector-div .qlabel { margin: 0; white-space: nowrap; font-weight: 650; font-size: 0.95rem; flex-shrink: 0; color: var(--bq-text, inherit); }
+  #selector-div select.custom-select,
+  #selector-div select.browser-default { flex: 1; min-width: 0; max-width: 100%; margin: 0; }
+  body[data-betterquest-saved-questions-open="true"] > br,
+  body[data-betterquest-saved-questions-open="true"] #quest-nav-header-div ~ br:not(main br),
+  #quest-nav-header-div:has([data-betterquest="saved-questions"]:not([hidden])) ~ br:not(main br) { display: none !important; }
+  :is(#course-info-header-div, #element-info-header-div, #user-bulletins-div):empty { display: none !important; }
   #main-content[data-betterquest-theme="dark"] .assessment-integrity-banner {
     margin:0 0 .65rem!important;
     padding:.45rem .7rem!important;
@@ -513,6 +524,60 @@ export const QUEST_DARK_STYLES = `
   #main-content[data-betterquest-theme="dark"] :where(.table-hover, table, .table) tbody tr:hover .bq-meeting-time :where(.bq-meeting-days, .bq-meeting-hours) {
     background: none !important;
     box-shadow: none !important;
+  }
+
+  /* =========================================================================
+     COURSES TABLE — CLEAN HEADERS & SUPPRESS DATATABLES SORT/FILTER CONTROLS
+     ========================================================================= */
+  #courses-table thead th,
+  #courses-table_wrapper thead th,
+  #courses-table thead th.sorting,
+  #courses-table thead th.sorting_asc,
+  #courses-table thead th.sorting_desc,
+  #courses-table thead th.sorting_disabled,
+  #courses-table_wrapper thead th.sorting,
+  #courses-table_wrapper thead th.sorting_asc,
+  #courses-table_wrapper thead th.sorting_desc,
+  #courses-table_wrapper thead th.sorting_disabled {
+    cursor: default !important;
+    pointer-events: none !important;
+    background-image: none !important;
+    padding-right: 0.75rem !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+  }
+  #courses-table thead th::before,
+  #courses-table thead th::after,
+  #courses-table thead th.sorting::before,
+  #courses-table thead th.sorting::after,
+  #courses-table thead th.sorting_asc::before,
+  #courses-table thead th.sorting_asc::after,
+  #courses-table thead th.sorting_desc::before,
+  #courses-table thead th.sorting_desc::after,
+  #courses-table_wrapper thead th::before,
+  #courses-table_wrapper thead th::after,
+  #courses-table_wrapper thead th.sorting::before,
+  #courses-table_wrapper thead th.sorting::after,
+  #courses-table_wrapper thead th.sorting_asc::before,
+  #courses-table_wrapper thead th.sorting_asc::after,
+  #courses-table_wrapper thead th.sorting_desc::before,
+  #courses-table_wrapper thead th.sorting_desc::after {
+    display: none !important;
+    content: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  #courses-table thead :is(input, select, .column-filter, tr.filters, tr.filter-row, .sort-icon, .sorting-icon, svg, .material-icons, .fa, .fas),
+  #courses-table_wrapper thead :is(input, select, .column-filter, tr.filters, tr.filter-row, .sort-icon, .sorting-icon, svg, .material-icons, .fa, .fas) {
+    display: none !important;
+  }
+  #courses-table_wrapper :is(.dataTables_filter, .dataTables_length, .dataTables_info, .dataTables_paginate) {
+    display: none !important;
+  }
+  #courses-table_wrapper > .row:first-child:not(:has(table)) {
+    display: none !important;
   }
 
   /* =========================================================================

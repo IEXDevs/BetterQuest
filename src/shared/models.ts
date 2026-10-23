@@ -113,6 +113,7 @@ export interface StreakData {
   freezesAvailable?: number;
   frozenDates?: string[];
   startDate?: string | null;
+  brokenDates?: string[];
 }
 
 export interface LocalState {

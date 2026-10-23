@@ -222,7 +222,7 @@ test('DataTables clearing only the injected final cell restores one icon without
   } finally { features.dispose(); dom.window.close(); }
 });
 
-test('saved view groups real bookmark records by course/assignment and links to assignment only', async () => {
+test('saved view groups real bookmark records by course/assignment and links to targeted question', async () => {
   const dom = page(); const f = store(); await seed(f); const service = new BookmarkService(f.run);
   const rows = await bindings(dom, f); await service.add(rows[0].course, rows[0].assignment, rows[0].question);
   await service.add(rows[1].course, rows[1].assignment, rows[1].question);
@@ -235,14 +235,18 @@ test('saved view groups real bookmark records by course/assignment and links to 
     view.open(dom.window.document.querySelector('.qh-navbar') as HTMLElement, false); await pause();
     const host = dom.window.document.querySelector<HTMLElement>('[data-betterquest="saved-questions"]')!;
     assert.equal(host.previousElementSibling, dom.window.document.querySelector('.qh-navbar'));
+    assert.equal(host.shadowRoot!.querySelector('.caption'), null, 'Caption text is removed');
+    assert.equal(dom.window.document.body.dataset.betterquestSavedQuestionsOpen, 'true');
     assert.equal(host.shadowRoot!.querySelectorAll('details').length, 2);
     assert.equal(host.shadowRoot!.querySelectorAll('h3').length, 2);
     assert.equal(host.shadowRoot!.querySelector('li a')?.textContent, 'Question 1 ↗');
-    assert.equal(host.shadowRoot!.querySelector('li a')?.getAttribute('href'), url);
-    assert.equal(new URL(host.shadowRoot!.querySelector('li a')!.getAttribute('href')!).hash, '');
+    assert.equal(host.shadowRoot!.querySelector('li a')?.getAttribute('href'), `${url}#question-1`);
+    assert.equal(new URL(host.shadowRoot!.querySelector('li a')!.getAttribute('href')!).hash, '#question-1');
     host.shadowRoot!.querySelector<HTMLButtonElement>('.remove')!.click(); await pause();
     assert.equal((await service.list()).length, 2);
-    view.close(); assert.equal(host.hidden, true); assert.equal(f.listeners.size, 0);
+    view.close(); assert.equal(host.hidden, true);
+    assert.equal(dom.window.document.body.dataset.betterquestSavedQuestionsOpen, undefined);
+    assert.equal(f.listeners.size, 0);
   } finally { view.dispose(); dom.window.close(); }
 });
 

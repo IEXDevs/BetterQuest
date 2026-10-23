@@ -13,7 +13,7 @@ import { celebrateScreen, flashScreen } from './celebration';
 import { isBetterQuestDebug } from '../../shared/debug';
 import { execute, type Execute } from '../../shared/client';
 import { BookmarkService } from '../bookmarks/service';
-import type { Assignment, Course, Question } from '../../shared/models';
+import type { Assignment, Bookmark, Course, LocalState, Question } from '../../shared/models';
 import { assignmentId, courseId, questionId, sourceUrl } from '../../shared/identity';
 import { rememberStreakCredit } from '../streak/pending-credit';
 
@@ -503,7 +503,7 @@ function withSlideEnhancementDisabled<T>(presentation: HTMLElement, read: () => 
   finally { if (enhanced) presentation.dataset.betterquestSlide = 'enhanced'; }
 }
 
-export function createPdfAssessmentWorkspace(root: HTMLElement, options: { createPdfViewer?: PdfViewerFactory; run?: Execute } = {}) {
+export function createPdfAssessmentWorkspace(root: HTMLElement, options: { createPdfViewer?: PdfViewerFactory; run?: Execute | ((command: any) => Promise<any>) } = {}) {
   const document = root.ownerDocument;
   const style = installStyles(document);
   const host = document.createElement('aside'); host.dataset.betterquest = 'assessment-rail';
@@ -727,7 +727,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   let pdfViewerStarted = false;
   let pdfViewerReady: boolean | undefined = undefined;
   const viewerFactory = options.createPdfViewer || (typeof chrome !== 'undefined' ? createInteractivePdfViewer : undefined);
-  const run = options.run || execute;
+  const run: Execute = (options.run || (typeof chrome !== 'undefined' ? execute : (() => Promise.resolve({} as any)))) as Execute;
   const recordStreakSafe = () => {
     rememberStreakCredit(document, run);
   };
@@ -735,17 +735,32 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   let bookmarkedIds = new Set<string>();
   let cachedCourse: Course | undefined;
   let cachedAssignment: Assignment | undefined;
+  let autoCompletionDispatched = false;
+  const win = document.defaultView;
+
+  function parseQuestionTarget(hashOrSearch: string): number | null {
+    if (!hashOrSearch) return null;
+    const match = hashOrSearch.match(/(?:question|q)[-_]?(\d+)|^#(\d+)$/i);
+    if (match) {
+      const num = parseInt(match[1] || match[2], 10);
+      if (Number.isInteger(num) && num > 0) return num;
+    }
+    return null;
+  }
 
   async function loadBookmarks() {
     try {
-      const state = await run({ kind: 'state:read' });
-      bookmarkedIds = new Set(state.bookmarks.map(b => b.id));
+      const state = (await run({ kind: 'state:read' })) as LocalState;
+      bookmarkedIds = new Set(state.bookmarks?.map((b: Bookmark) => b.id) || []);
       const table = root.querySelector<HTMLTableElement>('table[id^="instance-table-courseuserassignment_"]') ||
         document.querySelector<HTMLTableElement>('table[id^="instance-table-courseuserassignment_"]');
       const sourceId = table?.id.match(/^instance-table-(courseuserassignment_\d+)$/)?.[1];
       if (sourceId && state.cache) {
-        cachedAssignment = state.cache.assignments.find(a => a.sourceId === sourceId);
-        cachedCourse = cachedAssignment ? state.cache.courses.find(c => c.id === cachedAssignment!.courseId) : undefined;
+        cachedAssignment = state.cache.assignments.find((a: Assignment) => a.sourceId === sourceId);
+        cachedCourse = cachedAssignment ? state.cache.courses.find((c: Course) => c.id === cachedAssignment!.courseId) : undefined;
+        if (cachedAssignment && (cachedAssignment.completion === 'completed' || state.completionOverrides?.[cachedAssignment.id] === true)) {
+          autoCompletionDispatched = true;
+        }
       }
     } catch {
       /* ignore read errors */
@@ -1220,6 +1235,12 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       if (lastBindings.length) pdfViewer.setOptionMaximums?.(computeOptionMaximums(lastBindings));
       pdfViewer.setAnsweredQuestions?.(new Set(knownAnswered));
       applyMarks(lastBindings);
+
+      // Once load is complete, scroll to the targeted question if requested
+      const targetQ = parseQuestionTarget(win?.location?.hash || '') ?? parseQuestionTarget(win?.location?.search || '');
+      if (targetQ !== null) {
+        scrollToQuestion(targetQ);
+      }
     });
   }
 
@@ -1255,9 +1276,13 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       // PDF viewer unavailable
     } else if (pdfViewer?.scrollToQuestion || pdfViewer?.element.shadowRoot?.querySelector('.question-anchor, .option-hit')) {
       doScrollPdf();
+      win?.requestAnimationFrame?.(() => doScrollPdf());
     } else if (pdfViewer?.ready) {
       void pdfViewer.ready.then(ok => {
-        if (!disposed && ok) doScrollPdf();
+        if (!disposed && ok) {
+          doScrollPdf();
+          win?.requestAnimationFrame?.(() => doScrollPdf());
+        }
       });
     }
 
@@ -1562,6 +1587,19 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     if (pdfViewerStarted) pdfViewer?.setOptionMaximums?.(computeOptionMaximums(bindings));
     // Use the accumulated set — Scroller may only expose a window of rows now.
     pdfViewer?.setAnsweredQuestions?.(new Set(knownAnswered));
+
+    // When all questions of the homework are completed, mark the assignment completed in storage:
+    const totalQuestions = Math.max(bindings.length, knownByNumber.size);
+    const answeredCount = knownAnswered.size;
+    const allQuestionsDone = totalQuestions > 0 && (answeredCount >= totalQuestions || (bindings.length > 0 && bindings.every(b => b.answered)));
+    if (allQuestionsDone && !autoCompletionDispatched) {
+      autoCompletionDispatched = true;
+      const tableSourceId = elements.table.id.match(/^instance-table-(courseuserassignment_\d+)$/)?.[1] || 'current';
+      const { assignment } = getCourseAndAssignment(tableSourceId);
+      if (assignment?.id) {
+        void run({ kind: 'assignment:completion:set', assignmentId: assignment.id, completed: true });
+      }
+    }
     if (pendingSubmit) {
       const target = bindings.find(item => Number(item.number) === pendingSubmit!.questionNumber);
       if (!target || target.answered || target.attempts !== pendingSubmit.attempts) {
@@ -1656,6 +1694,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       const { state } = getQuestionStatus(binding);
       const cardStatus = state ? state.replace(/^q-/, '') : 'unattempted';
       const card = document.createElement('article'); card.className = 'question'; card.dataset.questionId = binding.id;
+      card.dataset.questionNumber = String(binding.number);
       card.dataset.status = cardStatus;
       const cardTop = document.createElement('div'); cardTop.className = 'question-top';
       const number = document.createElement('button'); number.type = 'button';
@@ -1796,8 +1835,17 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     }
   }
 
+  const onHashChange = () => {
+    const targetQ = parseQuestionTarget(win?.location?.hash || '');
+    if (targetQ !== null) {
+      scrollToQuestion(targetQ);
+    }
+  };
+  win?.addEventListener('hashchange', onHashChange);
+
   return { reconcile: render, dispose() {
     disposed = true; const elements = findPdfAssessment(document);
+    win?.removeEventListener('hashchange', onHashChange);
     clearPendingSubmit();
     removeResizeGrip();
     document.defaultView?.removeEventListener('resize', fitWorkspace);

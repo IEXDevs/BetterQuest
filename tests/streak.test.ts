@@ -746,4 +746,36 @@ test('createStreakPill opens and closes the calendar immediately on hover', () =
   dom.window.close();
 });
 
+test('marking a past-due overdue assignment completed later does not retroactively erase past streak breaks', () => {
+  const state = emptyState();
+  state.cache.courses = [{ id: 'course_1', sourceId: 'c1', title: 'Calculus', url: 'https://quest.cns.utexas.edu/student/course_1' }];
+  state.cache.assignments = [{
+    id: 'asg_1',
+    sourceId: 'a1',
+    courseId: 'course_1',
+    title: 'Homework 1',
+    url: 'https://quest.cns.utexas.edu/student/asg_1',
+    completion: 'not-completed',
+    kind: 'homework',
+    historical: null,
+    start: { iso: '2026-10-10T05:00:00.000Z', label: 'Oct 10', timeZone: 'America/Chicago' },
+    deadline: { iso: '2026-10-15T04:59:00.000Z', label: 'Oct 14', timeZone: 'America/Chicago' },
+  }];
+  state.streak = {
+    current: 0,
+    longest: 5,
+    lastActiveDate: '2026-10-14',
+    activeDates: ['2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14'],
+    freezesAvailable: 0,
+    frozenDates: [],
+    brokenDates: ['2026-10-15'],
+    startDate: '2026-10-10',
+  };
+
+  const marked = applyCommand(state, { kind: 'assignment:completion:set', assignmentId: 'asg_1', completed: true });
+  // Past break on 2026-10-15 must NOT be removed from history
+  assert.ok(marked.streak?.brokenDates?.includes('2026-10-15'), 'Historical break date must remain preserved');
+  assert.equal(marked.streak?.current, 0, 'Streak should not retroactively resurrect across a past break');
+});
+
 

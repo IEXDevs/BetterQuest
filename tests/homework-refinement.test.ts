@@ -753,3 +753,89 @@ test('answer boxes appear for questions whose response rows Quest renders later'
   } finally { workspace.dispose(); dom.window.close(); }
 });
 
+test('PDF mode automatically scrolls to target question when URL hash has #question-17', async () => {
+  const dom = new JSDOM('<main id="main-content"><div id="target">' +
+    '<div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF" src="/student/images/problem_pdf?instance=courseuserassignment_1"></iframe></div></div>' +
+    '<div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody>' +
+    responseRow(1) + responseRow(17) +
+    '</tbody></table></div></div></main>', {
+    url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1#question-17',
+    pretendToBeVisual: true,
+  });
+  const doc = dom.window.document;
+  const root = doc.querySelector<HTMLElement>('#target')!;
+  const scrollToCalls: number[] = [];
+  const workspace = createPdfAssessmentWorkspace(root, {
+    createPdfViewer: container => {
+      const element = doc.createElement('section');
+      container.append(element);
+      return {
+        element,
+        ready: Promise.resolve(true),
+        setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {}, markWrong() {}, celebrate() {}, announce() {},
+        scrollToQuestion(qn: number) { scrollToCalls.push(qn); return true; },
+        dispose() { element.remove(); },
+      };
+    },
+  });
+  try {
+    workspace.reconcile();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    assert.ok(scrollToCalls.includes(17), 'Should have scrolled to question 17 once viewer is ready');
+  } finally {
+    workspace.dispose();
+    dom.window.close();
+  }
+});
+
+test('when all questions of a homework are completed, BetterQuest automatically dispatches assignment:completion:set', async () => {
+  const dom = new JSDOM('<main id="main-content"><div id="target">' +
+    '<div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF" src="/student/images/problem_pdf?instance=courseuserassignment_1"></iframe></div></div>' +
+    '<div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody>' +
+    '<tr data-id="cuaip_1"><td>1.</td><td><select name="response"><option value="1" selected>1</option></select></td><td class="status">Submitted</td><td class="previous">1 / 1</td><td></td></tr>' +
+    '<tr data-id="cuaip_2"><td>2.</td><td><select name="response"><option value="2" selected>2</option></select></td><td class="status">Submitted</td><td class="previous">1 / 1</td><td></td></tr>' +
+    '</tbody></table></div></div></main>', {
+    url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1',
+    pretendToBeVisual: true,
+  });
+  const doc = dom.window.document;
+  const root = doc.querySelector<HTMLElement>('#target')!;
+  const commandsRun: any[] = [];
+  const workspace = createPdfAssessmentWorkspace(root, {
+    run: async (cmd: any) => {
+      commandsRun.push(cmd);
+      if (cmd.kind === 'state:read') {
+        return { bookmarks: [], cache: { courses: [], assignments: [{ id: 'asg_1', sourceId: 'courseuserassignment_1', courseId: 'c1', title: 'HW 1', completion: 'not-completed' }] } };
+      }
+      return {};
+    },
+    createPdfViewer: container => {
+      const element = doc.createElement('section');
+      container.append(element);
+      return {
+        element,
+        ready: Promise.resolve(true),
+        setSelected() {}, setFullscreen() {}, setAnsweredQuestions() {}, markWrong() {}, celebrate() {}, announce() {},
+        scrollToQuestion() { return true; },
+        dispose() { element.remove(); },
+      };
+    },
+  });
+  try {
+    workspace.reconcile();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    const completionCmd = commandsRun.find(c => c.kind === 'assignment:completion:set');
+    assert.ok(completionCmd, 'Should have dispatched assignment:completion:set');
+    assert.equal(completionCmd.completed, true);
+  } finally {
+    workspace.dispose();
+    dom.window.close();
+  }
+});
+
+test('styles collapse extra gaps when Saved Questions is open while preserving native clearance when closed', () => {
+  assert.match(QUEST_DARK_STYLES, /betterquest-saved-questions-open/);
+  assert.match(QUEST_DARK_STYLES, /#selector-div/);
+  assert.match(QUEST_DARK_STYLES, /#course-info-header-div/);
+});
+
