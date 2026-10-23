@@ -327,3 +327,47 @@ test('workspace response desk question cards render a bookmark button that saves
     dom.window.close();
   }
 });
+
+test('Saved Questions automatically opens in top navigation when saved questions exist', async () => {
+  const dom = page();
+  const f = store();
+  await seed(f);
+  const service = new BookmarkService(f.run);
+  const rows = await bindings(dom, f);
+  await service.add(rows[0].course, rows[0].assignment, rows[0].question);
+
+  const integration = startIntegration(dom.window.document, dom.window as unknown as Window, { run: f.run, subscribe: f.subscribe });
+  try {
+    await pause();
+    const view = dom.window.document.querySelector<HTMLElement>('[data-betterquest="saved-questions"]')!;
+    assert.ok(view, 'Saved questions view host was created automatically');
+    assert.equal(view.hidden, false, 'Saved questions view is open automatically');
+    assert.equal(dom.window.document.body.dataset.betterquestSavedQuestionsOpen, 'true');
+    assert.equal(view.previousElementSibling, dom.window.document.querySelector('.qh-navbar'));
+
+    // Test dismissal
+    const closeBtn = view.shadowRoot!.querySelector<HTMLButtonElement>('.actions button[aria-label="Close Saved Questions"]')!;
+    closeBtn.click();
+    assert.equal(view.hidden, true);
+    assert.equal(dom.window.document.body.dataset.betterquestSavedQuestionsOpen, undefined);
+  } finally {
+    integration.dispose();
+    dom.window.close();
+  }
+});
+
+test('Saved Questions does not automatically open when no saved questions exist', async () => {
+  const dom = page();
+  const f = store();
+  await seed(f);
+
+  const integration = startIntegration(dom.window.document, dom.window as unknown as Window, { run: f.run, subscribe: f.subscribe });
+  try {
+    await pause();
+    const view = dom.window.document.querySelector<HTMLElement>('[data-betterquest="saved-questions"]');
+    assert.equal(view, null, 'Saved questions view is not created/opened when no bookmarks exist');
+  } finally {
+    integration.dispose();
+    dom.window.close();
+  }
+});

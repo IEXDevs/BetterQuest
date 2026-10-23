@@ -21,6 +21,10 @@ export function startIntegration(document: Document, window: Window, options: { 
   let settings: ReturnType<typeof createSettingsMenu> | undefined;
   let navShell: { navbar: HTMLElement; dispose: () => void } | undefined;
   let lastUrl = window.location.href;
+  const bookmarkService = new BookmarkService(options.run || execute);
+  let savedDismissed = false;
+  let lastBookmarkCount = 0;
+  let checkInFlight = false;
   const features = startPageFeatures(document, window, options.run || execute, options.subscribe || subscribeLocal);
   void flushPendingStreakCredit(document, options.run || execute);
 
@@ -34,11 +38,59 @@ export function startIntegration(document: Document, window: Window, options: { 
     navShell?.dispose(); navShell = undefined;
   }
 
+  const openSaved = (userInitiated = true) => {
+    const navbar = findSavedQuestionsNavbar(document);
+    if (!navbar) return;
+    if (userInitiated) savedDismissed = false;
+    if (!savedView) {
+      savedView = createSavedQuestionsView(
+        document, bookmarkService, options.subscribe || subscribeLocal,
+        restoreFocus => {
+          savedDismissed = true;
+          if (restoreFocus && navigation?.host.isConnected) navigation.button.focus();
+        },
+        () => features.focusAssignments(),
+      );
+    }
+    savedView.open(navbar, features.hasAssignmentSection(), { focus: userInitiated, scroll: userInitiated });
+  };
+
+  const maybeAutoOpenSaved = () => {
+    if (disposed || (savedView && savedView.isOpen())) return;
+    if (/^#question-\d+/i.test(window.location.hash)) return;
+    const navbar = findSavedQuestionsNavbar(document);
+    if (!navbar) return;
+    if (checkInFlight) return;
+    checkInFlight = true;
+    void bookmarkService.list().then(bookmarks => {
+      checkInFlight = false;
+      if (disposed || (savedView && savedView.isOpen())) return;
+      const previousCount = lastBookmarkCount;
+      lastBookmarkCount = bookmarks.length;
+      if (bookmarks.length > previousCount && savedDismissed) {
+        savedDismissed = false;
+      }
+      if (bookmarks.length > 0 && !savedDismissed) {
+        openSaved(false);
+      }
+    }).catch(() => {
+      checkInFlight = false;
+    });
+  };
+
   function reconcile() {
     if (disposed) return;
     features.reconcile();
     const nextUrl = window.location.href;
-    if (nextUrl !== lastUrl) { settings?.close(false); savedView?.close(false); lastUrl = nextUrl; }
+    if (nextUrl !== lastUrl) {
+      settings?.close(false);
+      savedView?.close(false);
+      const isAnchorOnly = nextUrl.split('#')[0] === lastUrl.split('#')[0];
+      lastUrl = nextUrl;
+      if (!isAnchorOnly) {
+        savedDismissed = false;
+      }
+    }
     if (!isStudentPage(nextUrl)) { unmount(); return; }
     const target = findNavigation(document);
     if (!target) { unmount(); return; }
@@ -48,18 +100,9 @@ export function startIntegration(document: Document, window: Window, options: { 
     }
 
     if (!navigation) {
-      const openSaved = () => {
-        const navbar = findSavedQuestionsNavbar(document);
-        if (!navbar) return;
-        if (!savedView) savedView = createSavedQuestionsView(
-          document, new BookmarkService(options.run || execute), options.subscribe || subscribeLocal,
-          restoreFocus => { if (restoreFocus && navigation?.host.isConnected) navigation.button.focus(); }, () => features.focusAssignments(),
-        );
-        savedView.open(navbar, features.hasAssignmentSection());
-      };
       navigation = createNavigationButton(document, true, view => { settings?.toggle(view); });
       settings = createSettingsMenu(navigation.host, navigation.button, options.run || execute, options.subscribe || subscribeLocal,
-        { saved: openSaved, upcoming: () => features.focusAssignments(), hasUpcoming: () => features.hasAssignmentSection(), darkAvailable: features.darkAvailable,
+        { saved: () => openSaved(true), upcoming: () => features.focusAssignments(), hasUpcoming: () => features.hasAssignmentSection(), darkAvailable: features.darkAvailable,
           questLinks: () => questNavigationLinks(document) }, navigation.questButton);
     }
     const items = target.before;
@@ -75,6 +118,9 @@ export function startIntegration(document: Document, window: Window, options: { 
       navigation.questButton.title = 'Quest settings';
     }
     if (navbar && savedView?.isOpen()) savedView.position(navbar);
+    if (navbar && !savedDismissed && (!savedView || !savedView.isOpen())) {
+      maybeAutoOpenSaved();
+    }
   }
 
   function schedule() {
@@ -104,12 +150,16 @@ export function startIntegration(document: Document, window: Window, options: { 
   window.addEventListener('pageshow', schedule);
   const browserNavigation = (window as Window & { navigation?: EventTarget }).navigation;
   browserNavigation?.addEventListener('navigatesuccess', schedule);
+  const unsubscribeState = (options.subscribe || subscribeLocal)(() => {
+    maybeAutoOpenSaved();
+  });
   reconcile();
 
   return {
     reconcile,
     dispose() {
       disposed = true;
+      unsubscribeState();
       observer.disconnect();
       features.dispose();
       settings?.dispose(); settings = undefined;
