@@ -624,12 +624,17 @@ test('sidebar provides go to question on expanded view with green, orange, red, 
   try {
     const r = rail();
 
-    // 1. Expanded view has "Go to question" header and navigation
+    // 1. Expanded view keeps the status legend on one stable row
     const qnavHeader = r.querySelector('.qnav-header');
-    assert.ok(qnavHeader, 'Go to question header exists in expanded view');
-    assert.equal(qnavHeader?.querySelector('.qnav-title')?.textContent, 'Go to question');
+    assert.ok(qnavHeader, 'Question legend exists in expanded view');
+    assert.equal(qnavHeader?.querySelector('.qnav-title'), null);
+    assert.equal(qnavHeader?.textContent?.includes('Go to question'), false);
+    const expandedLegend = qnavHeader?.querySelector('.qnav-legend');
+    assert.equal(expandedLegend?.tagName, 'DIV');
+    assert.equal(expandedLegend?.querySelectorAll('.legend-item').length, 4);
     const railCss = r.querySelector('style')!.textContent!;
     assert.match(railCss, /\.qnav\{display:grid;grid-template-columns:repeat\(auto-fill,minmax\(34px,1fr\)\);gap:6px;padding:2px\}/, 'Expanded qnav is dynamic without inner scroll');
+    assert.match(railCss, /\.qnav-legend\{[^}]*flex-flow:row nowrap/, 'Expanded legend stays on one horizontal row');
 
     const navButtons = r.querySelectorAll<HTMLButtonElement>('.qnav-btn');
     assert.equal(navButtons.length, 4, 'All 4 question buttons exist');

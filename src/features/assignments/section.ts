@@ -18,7 +18,8 @@ export function createAssignmentSection(root: Element, run: Execute = execute, s
   shadow.addEventListener('click', event => event.stopPropagation());
   const style = document.createElement('style');
   style.textContent = `
-    :host { display:block; color:inherit; font-family:inherit; scroll-margin-top:84px; width:100%; }
+    :host { display:block; color:inherit; font-family:inherit; scroll-margin-top:84px; width:100%; cursor:default; user-select:none; -webkit-user-select:none; }
+    a, button, .view-all, .section-mark-btn, .assignment-link, .reload-btn { cursor:pointer; }
     * { box-sizing:border-box; }
     section { font:inherit; font-size:13px; line-height:1.4; text-align:left; width:100%; }
     h2 { font:inherit; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 8px; color:var(--bq-muted,#64748b); line-height:1.2; }

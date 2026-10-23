@@ -118,7 +118,7 @@ export function createCourseArtwork(root: Element) {
 
     const style = document.createElement('style');
     style.textContent = `
-      :host { display: inline-block; width: 96px; height: 96px; vertical-align: middle; }
+      :host { display: inline-block; width: 96px; height: 96px; vertical-align: middle; cursor: default; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
       .art {
         position: relative;
         isolation: isolate;
@@ -172,6 +172,10 @@ export function createCourseArtwork(root: Element) {
         z-index: 3;
         padding: 0 10px 9px;
         text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 2px 8px rgba(0, 0, 0, 0.6);
+        user-select: none;
+        -webkit-user-select: none;
+        pointer-events: none;
+        cursor: default;
       }
       .department {
         display: block;

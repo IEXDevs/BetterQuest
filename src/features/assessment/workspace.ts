@@ -548,10 +548,11 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     :host([data-collapsed="true"]) .questions{display:none!important}
     .side{display:flex;flex-direction:column;gap:8px;margin-top:10px}
     :host([data-collapsed="true"]) .side{flex:1;min-height:0;margin-top:10px;overflow:hidden}
-    .qnav-header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;row-gap:2px;column-gap:8px;padding:0 2px;margin-bottom:2px;max-width:100%}
+    .qnav-header{display:block;padding:0 2px;margin-bottom:8px;max-width:100%;min-height:18px}
     :host([data-collapsed="true"]) .qnav-header{display:none}
-    .qnav-title{font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.04em;color:var(--bq-assessment-muted)}
-    .qnav-legend{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:10.5px;color:var(--bq-assessment-muted);min-width:0}
+    .qnav-legend{display:flex;flex-flow:row nowrap;align-items:center;justify-content:space-between;gap:8px;width:100%;height:18px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;font-size:10.5px;line-height:18px;color:var(--bq-assessment-muted)}
+    .qnav-legend::-webkit-scrollbar{display:none}
+    .qnav-legend .legend-item{display:inline-flex;flex:0 0 auto;align-items:center;gap:4px;white-space:nowrap;line-height:18px}
     .qnav{display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));gap:6px;padding:2px}
     :host([data-collapsed="true"]) .qnav{grid-template-columns:repeat(3,minmax(0,1fr));flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;padding-right:2px;align-content:start}
     .qnav-btn{aspect-ratio:1;min-height:34px;border:1.5px solid var(--bq-border,#d7e2f0);border-radius:3px;background:var(--bq-raised,#f2f5f7);color:var(--bq-assessment-muted);font:750 13px/1 inherit;cursor:pointer;transition:border-color .15s ease,background .15s ease,transform .15s ease,box-shadow .15s ease;display:grid;place-items:center}
@@ -680,15 +681,15 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   const qnav = document.createElement('nav'); qnav.className = 'qnav'; qnav.setAttribute('aria-label', 'Questions');
 
   const qnavHeader = document.createElement('div'); qnavHeader.className = 'qnav-header';
-  const qnavTitle = document.createElement('span'); qnavTitle.className = 'qnav-title'; qnavTitle.textContent = 'Go to question';
   const qnavLegend = document.createElement('div'); qnavLegend.className = 'qnav-legend';
+  qnavLegend.setAttribute('aria-label', 'Question status');
   qnavLegend.innerHTML = `
-    <span class="legend-item"><span class="legend-dot dot-done" aria-hidden="true"></span>Done</span>
-    <span class="legend-item"><span class="legend-dot dot-retry" aria-hidden="true"></span>Solved on retry</span>
-    <span class="legend-item"><span class="legend-dot dot-retry-wrong" aria-hidden="true"></span>Still trying</span>
-    <span class="legend-item"><span class="legend-dot dot-wrong" aria-hidden="true"></span>Incorrect</span>
+    <div class="legend-item"><span class="legend-dot dot-done" aria-hidden="true"></span><span>Done</span></div>
+    <div class="legend-item"><span class="legend-dot dot-retry" aria-hidden="true"></span><span>Solved on retry</span></div>
+    <div class="legend-item"><span class="legend-dot dot-retry-wrong" aria-hidden="true"></span><span>Still trying</span></div>
+    <div class="legend-item"><span class="legend-dot dot-wrong" aria-hidden="true"></span><span>Incorrect</span></div>
   `;
-  qnavHeader.append(qnavTitle, qnavLegend);
+  qnavHeader.append(qnavLegend);
 
   const deckFooter = document.createElement('div'); deckFooter.className = 'deck-footer';
   const deckPct = document.createElement('div'); deckPct.className = 'deck-pct'; deckPct.setAttribute('aria-label', 'Completion progress');

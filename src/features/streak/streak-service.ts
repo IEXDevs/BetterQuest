@@ -343,6 +343,8 @@ export interface CalendarDay {
   day: number;
   dateStr: string;
   status: 'before-start' | 'active' | 'frozen' | 'missed' | 'rest' | 'future';
+  /** Why this day kept or canceled the streak. Shown when the day is hovered. */
+  reason: string;
 }
 
 export interface CalendarMonth {
@@ -409,7 +411,12 @@ export function getStreakCalendar(
       } else {
         dayStatus = 'rest';
       }
-      days.push({ day: d, dateStr, status: dayStatus });
+      days.push({
+        day: d,
+        dateStr,
+        status: dayStatus,
+        reason: calendarDayReason(dayStatus, dateStr, todayStr, facts),
+      });
     }
 
     months.push({ year: y, month: m, title: monthTitle, firstDayOfWeek, daysInMonth, days });
@@ -421,6 +428,29 @@ export function getStreakCalendar(
   }
 
   return months;
+}
+
+function calendarDayReason(
+  status: CalendarDay['status'],
+  dateStr: string,
+  todayStr: string,
+  facts: StreakFacts,
+): string {
+  if (status === 'active') return 'Streak kept: you answered a question';
+  if (status === 'frozen') return 'Streak kept: a freeze covered this day';
+  if (status === 'rest') return 'Streak kept: nothing was due';
+  if (status === 'missed') {
+    return facts.hardBreaks.has(dateStr)
+      ? 'Streak canceled: an assignment was still unfinished after the due date'
+      : 'Streak canceled: homework was open and no question was answered';
+  }
+  if (status === 'before-start') return 'Before your streak started';
+  if (dateStr === todayStr) {
+    return facts.obligations.has(dateStr)
+      ? 'Today is still open: answer a question to keep your streak'
+      : 'Today is still open: nothing is due';
+  }
+  return 'Coming up';
 }
 
 /** Returns the display emoji/symbol for a calendar day status. */

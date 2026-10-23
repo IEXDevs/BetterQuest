@@ -522,6 +522,13 @@ export const QUEST_DARK_STYLES = `
     text-align: left;
     padding: 14px 20px 18px;
     background: transparent;
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+  }
+  #main-content #student-course-info-header :is(a, button, .bq-contact-btn, .view-all, .section-mark-btn, .assignment-link) {
+    cursor: pointer;
   }
   #main-content #student-course-info-header > .row.text-center,
   #main-content #student-course-info-header > .row {

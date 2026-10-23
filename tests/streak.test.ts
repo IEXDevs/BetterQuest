@@ -555,6 +555,18 @@ test('getStreakCalendar generates months starting from start date up to current 
   const oct16 = withHomework[2].days.find(d => d.day === 16)!;
   assert.equal(oct16.status, 'missed');
   assert.equal(getCalendarDayIcon(oct16.status), '❌');
+  assert.equal(oct16.reason, 'Streak canceled: homework was open and no question was answered');
+
+  const overdue = getStreakCalendar(streak, '2026-10-19', {
+    now: Date.parse('2026-10-19T18:00:00.000Z'),
+    assignments: [homework({
+      start: { iso: '2026-10-16T05:00:00.000Z', label: 'Oct 16', timeZone: 'America/Chicago' },
+      deadline: { iso: '2026-10-18T04:59:00.000Z', label: 'Oct 17, 11:59 PM CDT', timeZone: 'America/Chicago' },
+    })],
+  });
+  const dueDay = overdue[2].days.find(d => d.dateStr === '2026-10-17')!;
+  assert.equal(dueDay.status, 'missed');
+  assert.equal(dueDay.reason, 'Streak canceled: an assignment was still unfinished after the due date');
 });
 
 test('createStreakPill renders active green badge with fire icon, freezes, and interactive calendar popover', () => {
@@ -609,7 +621,13 @@ test('createStreakPill renders active green badge with fire icon, freezes, and i
 
   const sep3Cell = popover.querySelector<HTMLElement>('.streak-cal-cell[data-date="2026-09-03"]')!;
   assert.equal(sep3Cell.dataset.status, 'rest');
-  assert.equal(sep3Cell.querySelector('.streak-day-tip')?.textContent, 'No homework due, so your streak stays protected');
+  const sep3Tip = sep3Cell.querySelector('.streak-day-tip');
+  assert.equal(sep3Tip?.tagName, 'DIV');
+  assert.equal(sep3Tip?.textContent, 'Streak kept: nothing was due');
+  sep3Cell.dispatchEvent(new dom.window.MouseEvent('mouseenter', { bubbles: true }));
+  assert.ok(sep3Cell.classList.contains('is-hovered'), 'Hovering a day should reveal why the streak was kept');
+  sep3Cell.dispatchEvent(new dom.window.MouseEvent('mouseleave', { bubbles: true }));
+  assert.ok(!sep3Cell.classList.contains('is-hovered'));
 
   // Clicking prev again moves to August 2026 (the start month)
   const prevBtn2 = popover.querySelector<HTMLButtonElement>('.streak-cal-prev')!;

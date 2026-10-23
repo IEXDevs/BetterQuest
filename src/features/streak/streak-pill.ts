@@ -107,6 +107,7 @@ export const streakPillStyles = `
     border: 1px solid var(--bq-border, #e2e8f0);
     border-radius: 12px;
     box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.18), 0 8px 16px -4px rgba(0, 0, 0, 0.08);
+    overflow: visible;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -195,10 +196,13 @@ export const streakPillStyles = `
     margin-bottom: 6px;
   }
   .streak-cal-grid {
+    position: relative;
+    z-index: 2;
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 4px;
     text-align: center;
+    overflow: visible;
   }
   .streak-cal-cell {
     position: relative;
@@ -211,33 +215,32 @@ export const streakPillStyles = `
     border-radius: 8px;
     font-size: 14px;
     cursor: default;
-    transition: transform .12s ease;
+    overflow: visible;
   }
-  .streak-cal-cell:hover:not(.streak-cal-empty) {
-    z-index: 3;
-    transform: scale(1.05);
+  .streak-cal-cell:hover:not(.streak-cal-empty),
+  .streak-cal-cell.is-hovered:not(.streak-cal-empty) {
+    z-index: 6;
   }
   .streak-day-tip {
     position: absolute;
     left: 50%;
     bottom: calc(100% + 8px);
-    z-index: 4;
+    z-index: 8;
+    display: none;
     width: max-content;
-    max-width: 168px;
-    padding: 6px 8px;
+    max-width: 196px;
+    padding: 7px 9px;
     border-radius: 8px;
-    background: var(--bq-text, #18253a);
-    color: var(--bq-surface, #fff);
+    background: #18253a;
+    color: #fff;
     font-size: 12px;
     font-weight: 600;
     line-height: 1.35;
     text-align: center;
     white-space: normal;
-    opacity: 0;
-    visibility: hidden;
     pointer-events: none;
     transform: translateX(-50%);
-    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.22);
   }
   .streak-day-tip::after {
     content: '';
@@ -246,12 +249,12 @@ export const streakPillStyles = `
     left: 50%;
     transform: translateX(-50%);
     border: 5px solid transparent;
-    border-top-color: var(--bq-text, #18253a);
+    border-top-color: #18253a;
   }
   .streak-cal-cell:hover .streak-day-tip,
+  .streak-cal-cell.is-hovered .streak-day-tip,
   .streak-cal-cell:focus-visible .streak-day-tip {
-    opacity: 1;
-    visibility: visible;
+    display: block;
   }
   .streak-cal-num {
     font-size: 11px;
@@ -282,6 +285,8 @@ export const streakPillStyles = `
     color: var(--bq-muted, #94a3b8);
   }
   .streak-cal-legend {
+    position: relative;
+    z-index: 1;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -430,8 +435,9 @@ export function createStreakPill(
       cell.dataset.status = d.status;
       cell.dataset.date = d.dateStr;
 
-      const note = dayNote(d.status, d.dateStr === currentTodayStr);
+      const note = d.reason;
       cell.setAttribute('aria-label', `${d.dateStr}: ${note}`);
+      cell.tabIndex = 0;
 
       const num = create('span');
       num.className = 'streak-cal-num';
@@ -441,9 +447,15 @@ export function createStreakPill(
       icon.className = 'streak-cal-icon';
       icon.textContent = getCalendarDayIcon(d.status);
 
-      const tip = create('span');
+      const tip = create('div');
       tip.className = 'streak-day-tip';
+      tip.setAttribute('role', 'tooltip');
       tip.textContent = note;
+
+      cell.addEventListener('mouseenter', () => cell.classList.add('is-hovered'));
+      cell.addEventListener('mouseleave', () => cell.classList.remove('is-hovered'));
+      cell.addEventListener('focus', () => cell.classList.add('is-hovered'));
+      cell.addEventListener('blur', () => cell.classList.remove('is-hovered'));
 
       cell.append(num, icon, tip);
       daysGrid.append(cell);
@@ -533,11 +545,3 @@ export function createStreakPill(
   return { element: container, update };
 }
 
-function dayNote(status: CalendarMonth['days'][number]['status'], isToday: boolean): string {
-  if (status === 'active') return 'You answered a question';
-  if (status === 'frozen') return 'A freeze kept your streak going';
-  if (status === 'missed') return 'This day broke your streak';
-  if (status === 'rest') return 'No homework due, so your streak stays protected';
-  if (status === 'before-start') return 'Before your streak';
-  return isToday ? 'Today is still open' : 'Coming up';
-}
