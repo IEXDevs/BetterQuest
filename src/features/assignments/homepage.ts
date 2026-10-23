@@ -5,6 +5,7 @@ import type { Subscribe } from './section';
 import { syncCoursesSequentially, syncTargetsFromCourses, type CourseSyncTarget } from './course-sync';
 import { assignmentIsCompleted, completionText, displayDeadline, type CompletionOverrides } from './view-model';
 import { createStreakPill, streakPillStyles } from '../streak/streak-pill';
+import { streakCreditSettled } from '../streak/pending-credit';
 
 function canonical(value: string) { const url = new URL(value); url.hash = ''; url.searchParams.sort(); return url.href; }
 
@@ -297,6 +298,8 @@ export function createHomepageOverview(root: Element, run: Execute = execute, su
   async function refresh() {
     if (disposed || !position()) return;
     const current = ++generation;
+    await streakCreditSettled();
+    if (disposed || current !== generation) return;
     try {
       const discovered = readHomepageCourses(document);
       const signature = JSON.stringify(discovered);

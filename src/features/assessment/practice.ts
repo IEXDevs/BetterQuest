@@ -1,5 +1,6 @@
 import { findPracticeSlides } from '../../adapters/quest/assessment';
 import { execute, type Execute } from '../../shared/client';
+import { rememberStreakCredit } from '../streak/pending-credit';
 
 /**
  * Quest's Slides view for practice and informational items ships as bare MDB:
@@ -159,11 +160,7 @@ export function createPracticeSlideEnhancement(root: HTMLElement, options: { run
   function recordPracticeActivity() {
     if (!practiceStreakRecorded) {
       practiceStreakRecorded = true;
-      try {
-        void run({ kind: 'streak:record' }).catch(() => {});
-      } catch {
-        /* ignore */
-      }
+      rememberStreakCredit(doc, run);
     }
   }
   root.addEventListener('click', recordPracticeActivity, true);

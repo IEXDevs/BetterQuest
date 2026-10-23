@@ -1,4 +1,5 @@
 import { execute, type Execute } from '../../shared/client';
+import { rememberStreakCredit } from '../streak/pending-credit';
 
 export interface ReviewStats {
   completed: number;
@@ -271,7 +272,7 @@ export function enhanceCourseReviewTab(document: Document, options: { run?: Exec
     try {
       const prevStats = JSON.parse(existingDashboard.dataset.stats);
       if (typeof prevStats?.completed === 'number' && stats.completed > prevStats.completed) {
-        void run({ kind: 'streak:record' }).catch(() => {});
+        rememberStreakCredit(document, run);
       }
     } catch {
       /* ignore */

@@ -15,6 +15,7 @@ import { execute, type Execute } from '../../shared/client';
 import { BookmarkService } from '../bookmarks/service';
 import type { Assignment, Course, Question } from '../../shared/models';
 import { assignmentId, courseId, questionId, sourceUrl } from '../../shared/identity';
+import { rememberStreakCredit } from '../streak/pending-credit';
 
 type PdfViewer = ReturnType<typeof createInteractivePdfViewer>;
 type PdfViewerFactory = (container: HTMLElement, options: Parameters<typeof createInteractivePdfViewer>[1]) => any;
@@ -123,7 +124,7 @@ function installStyles(document: Document) {
     }
     #target[data-betterquest-pdf-workspace="enhanced"][data-betterquest-rail="collapsed"],
     [data-betterquest-pdf-workspace="enhanced"][data-betterquest-rail="collapsed"]{
-      grid-template-columns:minmax(0,1fr) 160px!important;
+      grid-template-columns:minmax(0,1fr) minmax(0,160px)!important;
     }
     [data-betterquest-pdf-workspace="enhanced"] > #pdf-frame{
       grid-column:1!important;
@@ -509,7 +510,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   const shadow = host.attachShadow({ mode: 'open' });
   const localStyle = document.createElement('style');
   localStyle.textContent = `
-    :host{display:block;min-width:0;min-height:0;color:var(--bq-text,#18253a);font:14px/1.4 ui-rounded,"Avenir Next",sans-serif;color-scheme:light dark;--bq-assessment-muted:color-mix(in srgb,var(--bq-muted,#748491) 70%,var(--bq-text,#18253a));--bq-assessment-accent:color-mix(in srgb,var(--bq-accent,#227ab0) 78%,var(--bq-text,#18253a))}
+    :host{display:block;min-width:0;max-width:100%;min-height:0;overflow:hidden;color:var(--bq-text,#18253a);font:14px/1.4 ui-rounded,"Avenir Next",sans-serif;color-scheme:light dark;--bq-assessment-muted:color-mix(in srgb,var(--bq-muted,#748491) 70%,var(--bq-text,#18253a));--bq-assessment-accent:color-mix(in srgb,var(--bq-accent,#227ab0) 78%,var(--bq-text,#18253a))}
     *{box-sizing:border-box}
     .rail{height:100%;max-height:100%;overflow:auto;padding:16px;border:1px solid var(--bq-border,#d7e2f0);border-radius:3px;background:color-mix(in srgb,var(--bq-surface,#fff) 96%,transparent);box-shadow:0 18px 50px #172a3b18;scrollbar-width:thin}
     header{position:sticky;top:-16px;z-index:2;margin:-16px -16px 12px;padding:16px;background:var(--bq-surface,#fff);border-bottom:1px solid var(--bq-border,#d7e2f0)}
@@ -564,13 +565,15 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     .qnav-btn.q-wrong{border-color:#dc2626;background:color-mix(in srgb,#dc2626 16%,var(--bq-raised,#f2f5f7));color:color-mix(in srgb,#b91c1c 85%,var(--bq-text,#18253a))}
 
     .deck-footer{display:none}
-    :host([data-collapsed="true"]) .deck-footer{display:flex;flex-direction:column;gap:10px;margin-top:auto;padding-top:10px;border-top:1px solid var(--bq-border,#d7e2f0);flex-shrink:0}
-    .deck-pct{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 4px;border-radius:3px;background:var(--bq-raised,#f2f5f7);border:1px solid var(--bq-border,#d7e2f0);text-align:center}
+    :host([data-collapsed="true"]) .deck-footer{display:flex;flex-direction:column;gap:10px;margin-top:auto;padding-top:10px;border-top:1px solid var(--bq-border,#d7e2f0);flex-shrink:0;min-width:0;max-width:100%;overflow:hidden}
+    .deck-pct{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 4px;border-radius:3px;background:var(--bq-raised,#f2f5f7);border:1px solid var(--bq-border,#d7e2f0);text-align:center;min-width:0;max-width:100%;overflow:hidden}
     .pct-value{font:800 24px/1 ui-rounded,"Avenir Next",system-ui,sans-serif;color:var(--bq-text,#18253a);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
     .pct-label{font:700 11px/1.2 ui-rounded,"Avenir Next",system-ui,sans-serif;color:var(--bq-assessment-muted);letter-spacing:.02em}
 
-    .legend{display:grid;grid-template-columns:repeat(2,1fr);gap:4px 6px;font-size:10.5px;color:var(--bq-assessment-muted);flex-shrink:0;padding:0 2px}
-    .legend-item{display:flex;align-items:center;gap:5px;white-space:nowrap}
+    .legend{display:flex;flex-direction:column;gap:4px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow:hidden;padding:6px;border:1px solid var(--bq-border,#d7e2f0);border-radius:3px;font-size:10.5px;line-height:1.2;color:var(--bq-assessment-muted)}
+    .legend-item{display:flex;align-items:center;gap:5px}
+    .legend .legend-item{min-width:0;max-width:100%;overflow:hidden}
+    .legend .legend-item > span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .legend-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
     .legend-dot.dot-done{background:#16a34a;border:1px solid #15803d}
     .legend-dot.dot-retry{background:#c4b5fd;border:1px solid #8b5cf6}
@@ -726,11 +729,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   const viewerFactory = options.createPdfViewer || (typeof chrome !== 'undefined' ? createInteractivePdfViewer : undefined);
   const run = options.run || execute;
   const recordStreakSafe = () => {
-    try {
-      void run({ kind: 'streak:record' }).catch(() => {});
-    } catch {
-      /* ignore storage errors in environments without extension host */
-    }
+    rememberStreakCredit(document, run);
   };
   const bookmarkService = new BookmarkService(run);
   let bookmarkedIds = new Set<string>();
@@ -1047,6 +1046,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
           const fresh = readFreshSubmits(document).find(item => item.path === path && item.qn === qn);
           if (fresh && binding.attempts > fresh.attempts && consumeFreshSubmit(document, qn)) {
             console.info(`[BetterQuest] Question ${qn}: incorrect — bringing the mark back after refresh.`);
+            recordStreakSafe();
             wrongMarks.set(qn, new Set([fresh.value]));
             pdfViewer?.markWrong?.(qn, fresh.value);
             pdfViewer?.announce?.(qn, 'wrong');
@@ -1090,8 +1090,11 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       const view = document.defaultView;
       const pageX = view?.scrollX ?? 0;
       const pageY = view?.scrollY ?? 0;
-      binding.submit.click();
+      const optionValue = selectedOption.value;
+      const attempts = binding.attempts;
       recordStreakSafe();
+      recordFreshSubmit(document, questionNumber, optionValue, attempts);
+      binding.submit.click();
       // The submit button lives in Quest's hidden response table, so its own
       // handler can drag the page down to reveal it. Undo any jump it makes.
       const restorePage = () => {
@@ -1100,8 +1103,6 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       restorePage();
       view?.requestAnimationFrame(restorePage);
       clearPendingSubmit();
-      const optionValue = selectedOption.value;
-      const attempts = binding.attempts;
       const viaBetterQuest = true;
       const timer = setTimeout(() => {
         // Quest never reflected the submit: verify before handing control back.
@@ -1115,8 +1116,6 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         if (pendingSubmit?.questionNumber === questionNumber) clearPendingSubmit();
       }, 10000);
       pendingSubmit = { questionNumber, optionValue, attempts, viaBetterQuest, timer };
-      // Remember the attempt so a refresh right after submitting still shows the verdict.
-      recordFreshSubmit(document, questionNumber, optionValue, attempts);
       return true;
     });
   }
@@ -1862,11 +1861,7 @@ export function createSlideAssessmentEnhancement(presentation: HTMLElement, opti
   const document = presentation.ownerDocument;
   const run = options.run || execute;
   const recordSlideStreakSafe = () => {
-    try {
-      void run({ kind: 'streak:record' }).catch(() => {});
-    } catch {
-      /* ignore storage errors in environments without extension host */
-    }
+    rememberStreakCredit(document, run);
   };
   const originalHidden = new WeakMap<HTMLButtonElement, boolean>();
   const originalSpot = new WeakMap<HTMLButtonElement, { parent: ParentNode; next: Node | null }>();

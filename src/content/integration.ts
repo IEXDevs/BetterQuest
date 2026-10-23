@@ -8,6 +8,7 @@ import { BookmarkService } from '../features/bookmarks/service';
 import { createSavedQuestionsView } from '../features/bookmarks/saved-view';
 import { findSavedQuestionsNavbar } from '../adapters/quest/saved-questions-placement';
 import { createSettingsMenu } from '../features/settings/menu';
+import { flushPendingStreakCredit } from '../features/streak/pending-credit';
 
 export interface Integration { reconcile: () => void; dispose: () => void }
 
@@ -21,6 +22,7 @@ export function startIntegration(document: Document, window: Window, options: { 
   let navShell: { navbar: HTMLElement; dispose: () => void } | undefined;
   let lastUrl = window.location.href;
   const features = startPageFeatures(document, window, options.run || execute, options.subscribe || subscribeLocal);
+  void flushPendingStreakCredit(document, options.run || execute);
 
   // Remove orphaned hosts from a previous injection, without touching Quest nodes.
   document.querySelectorAll('[data-betterquest="navigation"], [data-betterquest="panel"], [data-betterquest="saved-questions"]').forEach(node => node.remove());

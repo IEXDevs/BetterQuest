@@ -1,15 +1,12 @@
 import { execute, type Execute } from '../../shared/client';
+import { rememberStreakCredit } from '../streak/pending-credit';
 
 /** Keep the original download URL and native link behavior in every assessment view. */
 export function createAssessmentHeader(root: HTMLElement, options: { run?: Execute } = {}) {
   const doc = root.ownerDocument;
   const run = options.run || execute;
   const onAssessmentSubmit = () => {
-    try {
-      void run({ kind: 'streak:record' }).catch(() => {});
-    } catch {
-      /* ignore */
-    }
+    rememberStreakCredit(doc, run);
   };
   doc.addEventListener('submit', onAssessmentSubmit, true);
   const style = doc.createElement('style');

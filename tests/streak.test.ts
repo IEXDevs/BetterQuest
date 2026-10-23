@@ -12,6 +12,7 @@ import {
   type StreakContext,
 } from '../src/features/streak/streak-service';
 import { createStreakPill } from '../src/features/streak/streak-pill';
+import { flushPendingStreakCredit, rememberStreakCredit } from '../src/features/streak/pending-credit';
 import { applyCommand } from '../src/storage/commands';
 import { emptyState, type Assignment, type StreakData } from '../src/shared/models';
 import { assignmentId, courseId, questionId } from '../src/shared/identity';
@@ -681,6 +682,48 @@ test('createStreakPill updates to blue frozen state and red broken state', () =>
   assert.equal(badge.querySelector('span')?.textContent, '5 day streak');
 
   dom.window.close();
+});
+
+test('answering today shows the streak as kept instead of still open', () => {
+  const today = '2026-10-22';
+  const context: StreakContext = {
+    now: Date.parse('2026-10-22T22:00:00.000Z'),
+    assignments: [homework({
+      start: { iso: '2026-10-20T05:00:00.000Z', label: 'Oct 20', timeZone: 'America/Chicago' },
+      deadline: { iso: '2026-10-28T04:59:00.000Z', label: 'Oct 27, 11:59 PM CDT', timeZone: 'America/Chicago' },
+    })],
+  };
+  const open = getStreakCalendar(undefined, today, context);
+  const before = open.at(-1)!.days.find(day => day.dateStr === today)!;
+  assert.equal(before.reason, 'Today is still open: answer a question to keep your streak');
+
+  const streak = updateStreakData(null, today, context);
+  const answered = getStreakCalendar(streak, today, context);
+  const after = answered.at(-1)!.days.find(day => day.dateStr === today)!;
+  assert.equal(after.status, 'active');
+  assert.equal(after.reason, 'Streak kept: you answered a question');
+});
+
+test('a streak credit lost in a reload is saved on the next page', async () => {
+  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
+    url: 'https://quest.cns.utexas.edu/student',
+  });
+  const dates: string[] = [];
+  const run = async (command: { kind: string; date?: string }) => {
+    if (command.kind === 'streak:record' && command.date) dates.push(command.date);
+    return emptyState();
+  };
+  try {
+    dom.window.sessionStorage.setItem('betterquest_streak_pending', '2026-10-22');
+    await flushPendingStreakCredit(dom.window.document, run);
+    assert.deepEqual(dates, ['2026-10-22']);
+    assert.equal(dom.window.sessionStorage.getItem('betterquest_streak_pending'), null);
+
+    rememberStreakCredit(dom.window.document, run, '2026-10-22');
+    assert.equal(dom.window.sessionStorage.getItem('betterquest_streak_pending'), '2026-10-22');
+  } finally {
+    dom.window.close();
+  }
 });
 
 test('createStreakPill opens and closes the calendar immediately on hover', () => {

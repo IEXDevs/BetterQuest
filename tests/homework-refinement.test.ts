@@ -685,6 +685,7 @@ test('sidebar provides go to question on expanded view with green, orange, red, 
     assert.ok(legend, 'Legend exists in the rail');
     const legendDots = legend?.querySelectorAll('.legend-dot');
     assert.equal(legendDots?.length, 5, 'Legend has 5 status dots');
+    assert.match(railCss, /\.legend\{[^}]*flex-direction:column[^}]*overflow:hidden/, 'Compact legend stays inside the sidebar');
 
     const pctValue = r.querySelector('.pct-value');
     assert.ok(pctValue, 'Percentage readout exists at the bottom');
