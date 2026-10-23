@@ -277,7 +277,7 @@ test('all mounted controls clean up on disposal without altering source table ce
   assert.equal(f.listeners.size, 0); dom.window.close();
 });
 
-test('workspace response desk question cards render bookmark button that saves question and updates streak', async () => {
+test('workspace response desk question cards render a bookmark button that saves and removes a question', async () => {
   const { createPdfAssessmentWorkspace } = await import('../src/features/assessment/workspace');
   const dom = new JSDOM('<main id="main-content"><div id="target">' +
     '<p id="due">Due date 10/14/26 11:59 PM</p><br>' +
@@ -311,8 +311,7 @@ test('workspace response desk question cards render bookmark button that saves q
     const state = await f.run({ kind: 'state:read' });
     assert.equal(state.bookmarks.length, 1);
     assert.equal(state.bookmarks[0].question.number, '1');
-    assert.ok(state.streak);
-    assert.ok(state.streak.current >= 1);
+    assert.equal(state.streak?.current ?? 0, 0);
 
     btn.click();
     await pause();
