@@ -124,7 +124,6 @@ export const streakPillStyles = `
     pointer-events: auto;
   }
   .streak-pill-wrapper.is-open .streak-calendar-popover,
-  .streak-pill-wrapper:hover .streak-calendar-popover,
   .streak-pill-wrapper:focus-within .streak-calendar-popover {
     opacity: 1;
     visibility: visible;
@@ -266,8 +265,12 @@ export const streakPillStyles = `
     font-size: 16px;
     line-height: 1;
   }
-  .streak-cal-day.status-active {
+  .streak-cal-day.status-active,
+  .streak-cal-day.status-kept {
     background: color-mix(in srgb, #16a34a 14%, transparent);
+  }
+  .streak-cal-day.status-kept .streak-cal-icon {
+    color: var(--bq-muted, #94a3b8);
   }
   .streak-cal-day.status-frozen {
     background: color-mix(in srgb, #2563eb 14%, transparent);
@@ -503,7 +506,7 @@ export function createStreakPill(
     badge.innerHTML = `${iconSvg}<span>${label}</span>`;
     badge.title = status === 'frozen'
       ? (currentStreak?.longest ? `Current streak: ${count} days · Best: ${currentStreak.longest} days · Get a 5 day streak for 2 freezes` : 'Get a 5 day streak for 2 freezes')
-      : (currentStreak?.longest ? `Current streak: ${count} days · Best: ${currentStreak.longest} days` : 'Your streak stays alive on days with nothing due. Answer a question when you have homework.');
+      : (currentStreak?.longest ? `Current streak: ${count} days · Best: ${currentStreak.longest} days` : 'Days with nothing due still count. Answer a question when you have homework.');
 
     if (currentStreak?.freezesAvailable) {
       const freezeTag = create('span');
@@ -520,19 +523,36 @@ export function createStreakPill(
     renderMonth();
   }
 
+  const hoverDelayMs = 150;
+  let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearHoverTimer() {
+    if (hoverTimer !== null) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
+  }
+
   function showPopover() {
+    clearHoverTimer();
     container.classList.add('is-open');
     badge.setAttribute('aria-expanded', 'true');
     popover.setAttribute('aria-hidden', 'false');
   }
 
   function hidePopover() {
+    clearHoverTimer();
     container.classList.remove('is-open');
     badge.setAttribute('aria-expanded', 'false');
     popover.setAttribute('aria-hidden', 'true');
   }
 
-  container.addEventListener('mouseenter', showPopover);
+  function schedulePopover() {
+    if (container.classList.contains('is-open') || hoverTimer !== null) return;
+    hoverTimer = setTimeout(showPopover, hoverDelayMs);
+  }
+
+  container.addEventListener('mouseenter', schedulePopover);
   container.addEventListener('mouseleave', hidePopover);
   container.addEventListener('focusin', showPopover);
   container.addEventListener('focusout', (e) => {
@@ -542,6 +562,12 @@ export function createStreakPill(
   // Initial render
   update(initialStreak, initialTodayStr);
 
-  return { element: container, update };
+  return {
+    element: container,
+    update,
+    dispose() {
+      clearHoverTimer();
+    },
+  };
 }
 

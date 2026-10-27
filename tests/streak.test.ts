@@ -9,6 +9,7 @@ import {
   getStreakBadgeStatus,
   getStreakCalendar,
   getCalendarDayIcon,
+  localDateString,
   type StreakContext,
 } from '../src/features/streak/streak-service';
 import { createStreakPill } from '../src/features/streak/streak-pill';
@@ -17,6 +18,22 @@ import { applyCommand } from '../src/storage/commands';
 import { emptyState, type Assignment, type StreakData } from '../src/shared/models';
 import { assignmentId, courseId, questionId } from '../src/shared/identity';
 import { createPdfAssessmentWorkspace, createSlideAssessmentEnhancement } from '../src/features/assessment/workspace';
+
+function shiftDate(dateStr: string, days: number): string {
+  const date = new Date(`${dateStr}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function daysFrom(start: string, end: string): number {
+  if (end < start) return 0;
+  const startMs = new Date(`${start}T12:00:00`).getTime();
+  const endMs = new Date(`${end}T12:00:00`).getTime();
+  return Math.round((endMs - startMs) / 86_400_000) + 1;
+}
 
 test('calculateStreak returns 0 for empty active dates', () => {
   const result = calculateStreak([]);
@@ -62,12 +79,51 @@ function homework(partial: Partial<Assignment> = {}): Assignment {
   };
 }
 
-test('calculateStreak keeps a streak across days with nothing due', () => {
+test('calculateStreak counts days with nothing due once a streak has started', () => {
   const today = '2026-10-19';
   const pastDates = ['2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13'];
   const result = calculateStreak(pastDates, today);
-  assert.equal(result.current, 4);
-  assert.equal(result.longest, 4);
+  // Oct 10-13 were answered. Oct 14-18 had nothing due and still count. Today is still open.
+  assert.equal(result.current, 9);
+  assert.equal(result.longest, 9);
+});
+
+test('rest days inside a streak count, and rest days after a miss do not until work resumes', () => {
+  const today = '2026-10-27';
+  const active = ['2026-10-20', '2026-10-22', '2026-10-23', '2026-10-26'];
+  const result = calculateStreak(active, today, [], undefined, ['2026-10-19']);
+  // Oct 20-26, including the three days with nothing done. Today is still open.
+  assert.equal(result.current, 7);
+  assert.equal(result.longest, 7);
+
+  const restarted = calculateStreak(['2026-10-10', ...active], today, [], undefined, ['2026-10-19']);
+  assert.equal(restarted.current, 7);
+  assert.equal(restarted.longest, 9);
+
+  const calendar = getStreakCalendar({
+    current: 0,
+    longest: 0,
+    lastActiveDate: '2026-10-26',
+    activeDates: active,
+    freezesAvailable: 0,
+    frozenDates: [],
+    brokenDates: ['2026-10-19'],
+    startDate: '2026-10-01',
+  }, today);
+  const october = calendar.at(-1)!;
+  const status = (day: number) => october.days.find(entry => entry.day === day)!.status;
+  assert.equal(status(18), 'rest');
+  assert.equal(status(19), 'missed');
+  assert.equal(status(20), 'active');
+  assert.equal(getCalendarDayIcon('active'), '🔥');
+  for (const day of [21, 24, 25]) {
+    assert.equal(status(day), 'kept');
+    assert.equal(getCalendarDayIcon('kept'), '—');
+  }
+  assert.equal(status(22), 'active');
+  assert.equal(status(23), 'active');
+  assert.equal(status(26), 'active');
+  assert.equal(status(27), 'future');
 });
 
 test('calculateStreak breaks when homework was open and no question was answered', () => {
@@ -145,7 +201,7 @@ test('applyCommand assignment:completion:set does not invent a question day, and
 
   const marked = applyCommand(state, { kind: 'assignment:completion:set', assignmentId: 'asg_1', completed: true });
   assert.deepEqual(marked.streak?.activeDates, ['2026-10-17', '2026-10-18']);
-  assert.equal(marked.streak?.current, 2);
+  assert.equal(marked.streak?.current, daysFrom('2026-10-17', shiftDate(localDateString(), -1)));
 
   const unmarked = applyCommand(marked, { kind: 'assignment:completion:set', assignmentId: 'asg_1', completed: false });
   assert.equal(unmarked.streak?.current, 0);
@@ -401,7 +457,7 @@ test('updateStreakData does not spend a freeze when nothing is due', () => {
   };
 
   streak = updateStreakData(streak, '2026-10-07');
-  assert.equal(streak.current, 6);
+  assert.equal(streak.current, 7);
   assert.equal(streak.freezesAvailable, 2);
   assert.deepEqual(streak.frozenDates, []);
   assert.ok(streak.activeDates.includes('2026-10-07'));
@@ -425,7 +481,7 @@ test('updateStreakData consumes a freeze when homework was skipped', () => {
   assert.ok(streak.activeDates.includes('2026-10-07'));
 });
 
-test('reconcileStreak leaves a rest day alone and protects a skipped homework day', () => {
+test('reconcileStreak counts a rest day without spending a freeze, and protects a skipped homework day', () => {
   const streak = {
     current: 5,
     longest: 5,
@@ -437,7 +493,7 @@ test('reconcileStreak leaves a rest day alone and protects a skipped homework da
   };
 
   const rested = reconcileStreak(streak, '2026-10-07');
-  assert.equal(rested.current, 5);
+  assert.equal(rested.current, 6);
   assert.equal(rested.freezesAvailable, 2);
   assert.deepEqual(rested.frozenDates, []);
 
@@ -486,7 +542,7 @@ test('getStreakBadgeStatus reflects active, frozen, and broken states with prope
   };
   const statusRested = getStreakBadgeStatus(restedStreak, '2026-10-19');
   assert.equal(statusRested.status, 'active');
-  assert.equal(statusRested.count, 5);
+  assert.equal(statusRested.count, 13);
 
   const overdue = homework({
     start: { iso: '2026-10-06T05:00:00.000Z', label: 'Oct 6', timeZone: 'America/Chicago' },
@@ -536,9 +592,9 @@ test('getStreakCalendar generates months starting from start date up to current 
   assert.equal(sep2.status, 'frozen');
   assert.equal(getCalendarDayIcon(sep2.status), '🧊');
 
-  // Sep 3 had nothing due, so it is a rest day
+  // Sep 3 had nothing due, so it still counts: green, with no fire
   const sep3 = calendar[1].days.find(d => d.day === 3)!;
-  assert.equal(sep3.status, 'rest');
+  assert.equal(sep3.status, 'kept');
   assert.equal(getCalendarDayIcon(sep3.status), '—');
 
   // In October: Oct 25 is future -> grey hyphen
@@ -591,14 +647,14 @@ test('createStreakPill renders active green badge with fire icon, freezes, and i
   assert.ok(badge);
   assert.ok(badge.classList.contains('active'), 'Badge should have active class');
   assert.equal(badge.getAttribute('data-state'), 'active');
-  assert.equal(badge.querySelector('span')?.textContent, '8 day streak');
+  assert.equal(badge.querySelector('span')?.textContent, '66 day streak');
   assert.equal(badge.querySelector('.streak-freeze-tag')?.textContent, '🧊2');
   assert.equal(badge.querySelector('.streak-freeze-tag')?.getAttribute('title'), 'Get a 5 day streak for 2 freezes');
 
   const popover = pill.element.querySelector('.streak-calendar-popover')!;
   assert.ok(popover);
   assert.match(popover.querySelector('.streak-cal-title')?.textContent || '', /October 2026/);
-  assert.match(popover.querySelector('.streak-stat-count')?.textContent || '', /8 day streak/);
+  assert.match(popover.querySelector('.streak-stat-count')?.textContent || '', /66 day streak/);
   assert.match(popover.querySelector('.streak-stat-freezes')?.textContent || '', /2 freezes left/);
   assert.equal(popover.querySelector('.streak-stat-freezes')?.getAttribute('title'), 'Get a 5 day streak for 2 freezes');
 
@@ -621,7 +677,8 @@ test('createStreakPill renders active green badge with fire icon, freezes, and i
   assert.equal(sep2Cell.querySelector('.streak-cal-icon')?.textContent, '🧊');
 
   const sep3Cell = popover.querySelector<HTMLElement>('.streak-cal-cell[data-date="2026-09-03"]')!;
-  assert.equal(sep3Cell.dataset.status, 'rest');
+  assert.equal(sep3Cell.dataset.status, 'kept');
+  assert.equal(sep3Cell.querySelector('.streak-cal-icon')?.textContent, '—');
   const sep3Tip = sep3Cell.querySelector('.streak-day-tip');
   assert.equal(sep3Tip?.tagName, 'DIV');
   assert.equal(sep3Tip?.textContent, 'Streak kept: nothing was due');
@@ -726,24 +783,39 @@ test('a streak credit lost in a reload is saved on the next page', async () => {
   }
 });
 
-test('createStreakPill opens and closes the calendar immediately on hover', () => {
+test('createStreakPill waits 150ms before opening the calendar on hover', async () => {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
   const doc = dom.window.document;
 
   const pill = createStreakPill(null, '2026-10-19', doc);
   doc.body.append(pill.element);
 
-  assert.ok(!pill.element.classList.contains('is-open'));
+  const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-  pill.element.dispatchEvent(new dom.window.MouseEvent('mouseenter', { bubbles: true }));
-  assert.ok(pill.element.classList.contains('is-open'), 'Calendar should open as soon as the pointer enters');
-  assert.equal(pill.element.querySelector('.streak-badge')?.getAttribute('aria-expanded'), 'true');
+  try {
+    assert.ok(!pill.element.classList.contains('is-open'));
 
-  pill.element.dispatchEvent(new dom.window.MouseEvent('mouseleave', { bubbles: true }));
-  assert.ok(!pill.element.classList.contains('is-open'), 'Calendar should close as soon as the pointer leaves');
-  assert.equal(pill.element.querySelector('.streak-badge')?.getAttribute('aria-expanded'), 'false');
+    pill.element.dispatchEvent(new dom.window.MouseEvent('mouseenter', { bubbles: true }));
+    assert.ok(!pill.element.classList.contains('is-open'), 'Calendar should stay closed during the hover wait');
+    await wait(100);
+    assert.ok(!pill.element.classList.contains('is-open'), 'Calendar should still be closed before 150ms');
+    await wait(80);
+    assert.ok(pill.element.classList.contains('is-open'), 'Calendar should open after 150ms');
+    assert.equal(pill.element.querySelector('.streak-badge')?.getAttribute('aria-expanded'), 'true');
 
-  dom.window.close();
+    pill.element.dispatchEvent(new dom.window.MouseEvent('mouseleave', { bubbles: true }));
+    assert.ok(!pill.element.classList.contains('is-open'), 'Calendar should close as soon as the pointer leaves');
+    assert.equal(pill.element.querySelector('.streak-badge')?.getAttribute('aria-expanded'), 'false');
+
+    pill.element.dispatchEvent(new dom.window.MouseEvent('mouseenter', { bubbles: true }));
+    await wait(40);
+    pill.element.dispatchEvent(new dom.window.MouseEvent('mouseleave', { bubbles: true }));
+    await wait(150);
+    assert.ok(!pill.element.classList.contains('is-open'), 'Leaving before 150ms should not open the calendar');
+  } finally {
+    pill.dispose?.();
+    dom.window.close();
+  }
 });
 
 test('marking a past-due overdue assignment completed later does not retroactively erase past streak breaks', () => {

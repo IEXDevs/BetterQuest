@@ -146,8 +146,9 @@ function earliestMark(dates: string[], today: string): string {
 }
 
 /**
- * Current streak counts question days and freezes.
- * Days with nothing due are rest days: they do not add a day and do not break the streak.
+ * Current streak counts question days, freezes, and days with nothing due.
+ * A rest day counts once a streak is already going. It does not start a streak by itself,
+ * and it does not break one. Today stays open until the day is over or a question is answered.
  * A missed question day, or an unfinished assignment past its due date, ends the streak.
  */
 export function calculateStreak(
@@ -157,37 +158,65 @@ export function calculateStreak(
   context?: StreakContext,
   brokenDates?: string[],
 ): { current: number; longest: number } {
+  const { current, longest } = accountStreak(activeDates, todayStr, frozenDates, context, brokenDates);
+  return { current, longest };
+}
+
+function accountStreak(
+  activeDates: string[],
+  todayStr: string,
+  frozenDates: string[],
+  context?: StreakContext,
+  brokenDates?: string[],
+): { current: number; longest: number; keptRest: Set<string> } {
   const active = new Set(activeDates.filter(validDate));
   const frozen = new Set(frozenDates.filter(validDate));
   const facts = buildFacts(todayStr, context, brokenDates);
   const limit = earliestMark([...active, ...frozen], todayStr);
-
-  let current = 0;
-  let day = todayStr;
-  for (let step = 0; step < 500; step++) {
-    const role = dayRole(day, todayStr, active, frozen, facts);
-    if (role === 'break' || role === 'miss') break;
-    if (role === 'credit' || role === 'frozen') current += QUESTION_MINIMUM_DATES;
-    if (day === limit) break;
-    day = shiftDay(day, -1);
-  }
+  const keptRest = new Set<string>();
 
   let longest = 0;
   let run = 0;
-  day = limit;
+  let alive = false;
+  let day = limit;
   for (let step = 0; step < 500; step++) {
     const role = dayRole(day, todayStr, active, frozen, facts);
     if (role === 'credit' || role === 'frozen') {
+      alive = true;
+      run += 1;
+      if (run > longest) longest = run;
+    } else if (role === 'rest' && alive) {
+      keptRest.add(day);
       run += 1;
       if (run > longest) longest = run;
     } else if (role === 'break' || role === 'miss') {
       run = 0;
+      alive = false;
     }
     if (day === todayStr) break;
     day = shiftDay(day, 1);
   }
 
-  return { current, longest: Math.max(longest, current) };
+  let current = 0;
+  let trailingRest = 0;
+  let anchored = false;
+  day = todayStr;
+  for (let step = 0; step < 500; step++) {
+    const role = dayRole(day, todayStr, active, frozen, facts);
+    if (role === 'break' || role === 'miss') break;
+    if (role === 'credit' || role === 'frozen') {
+      current += QUESTION_MINIMUM_DATES + trailingRest;
+      trailingRest = 0;
+      anchored = true;
+    } else if (role === 'rest') {
+      if (anchored) current += QUESTION_MINIMUM_DATES;
+      else trailingRest += 1;
+    }
+    if (day === limit) break;
+    day = shiftDay(day, -1);
+  }
+
+  return { current, longest: Math.max(longest, current), keptRest };
 }
 
 /** Records an active date and returns an updated, trimmed list (last 180 active dates). */
@@ -367,7 +396,8 @@ export function getStreakBadgeStatus(
 export interface CalendarDay {
   day: number;
   dateStr: string;
-  status: 'before-start' | 'active' | 'frozen' | 'missed' | 'rest' | 'future';
+  /** `kept` is a rest day inside a streak: it counts, but nothing was completed. */
+  status: 'before-start' | 'active' | 'frozen' | 'missed' | 'rest' | 'kept' | 'future';
   /** Why this day kept or canceled the streak. Shown when the day is hovered. */
   reason: string;
 }
@@ -383,7 +413,8 @@ export interface CalendarMonth {
 
 /**
  * Generates monthly calendar grids from the start month up to the current month.
- * Rest days (nothing due) stay neutral. Missed homework and overdue unfinished
+ * Rest days inside a streak are marked kept: they count, with no completed-work mark.
+ * Rest days outside a streak stay neutral. Missed homework and overdue unfinished
  * assignments show as missed.
  */
 export function getStreakCalendar(
@@ -394,6 +425,7 @@ export function getStreakCalendar(
   const activeSet = new Set(streak?.activeDates || []);
   const freezeSet = new Set(streak?.frozenDates || []);
   const facts = buildFacts(todayStr, context, streak?.brokenDates);
+  const { keptRest } = accountStreak(streak?.activeDates || [], todayStr, streak?.frozenDates || [], context, streak?.brokenDates);
 
   const earliest = streak?.startDate ||
     (streak?.activeDates && streak.activeDates.length > 0 ? [...streak.activeDates].sort()[0] : todayStr);
@@ -433,6 +465,8 @@ export function getStreakCalendar(
         dayStatus = 'future';
       } else if (facts.obligations.has(dateStr)) {
         dayStatus = 'missed';
+      } else if (keptRest.has(dateStr)) {
+        dayStatus = 'kept';
       } else {
         dayStatus = 'rest';
       }
@@ -463,7 +497,7 @@ function calendarDayReason(
 ): string {
   if (status === 'active') return 'Streak kept: you answered a question';
   if (status === 'frozen') return 'Streak kept: a freeze covered this day';
-  if (status === 'rest') return 'Streak kept: nothing was due';
+  if (status === 'rest' || status === 'kept') return 'Streak kept: nothing was due';
   if (status === 'missed') {
     return facts.hardBreaks.has(dateStr)
       ? 'Streak canceled: an assignment was still unfinished after the due date'
@@ -487,6 +521,7 @@ export function getCalendarDayIcon(status: CalendarDay['status']): string {
       return '🧊';
     case 'missed':
       return '❌';
+    case 'kept':
     case 'rest':
     case 'before-start':
     case 'future':
