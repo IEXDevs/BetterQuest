@@ -437,6 +437,93 @@ test('updateStreakData awards 2 freezes on 5-day streak milestone', () => {
   assert.equal(streak.freezesAvailable, 4);
 });
 
+test('every five streak days grants two more freezes, with no cap, including a streak that missed its reward', () => {
+  let streak = updateStreakData(null, '2026-10-01');
+  for (let day = 2; day <= 20; day++) {
+    streak = updateStreakData(streak, `2026-10-${String(day).padStart(2, '0')}`);
+  }
+  assert.equal(streak.current, 20);
+  assert.equal(streak.freezesAvailable, 8);
+  streak = updateStreakData(streak, '2026-10-20');
+  assert.equal(streak.freezesAvailable, 8);
+
+  const missed = reconcileStreak({
+    current: 8,
+    longest: 8,
+    lastActiveDate: '2026-10-26',
+    activeDates: ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25', '2026-10-26'],
+    freezesAvailable: 0,
+    frozenDates: [],
+    startDate: '2026-10-19',
+  }, '2026-10-27');
+  assert.equal(missed.current, 8);
+  assert.equal(missed.freezesAvailable, 2);
+  assert.equal(reconcileStreak(missed, '2026-10-27').freezesAvailable, 2);
+
+  const caughtUp = reconcileStreak({
+    current: 10,
+    longest: 10,
+    lastActiveDate: '2026-10-26',
+    activeDates: ['2026-10-17', '2026-10-18', '2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25', '2026-10-26'],
+    freezesAvailable: 2,
+    frozenDates: [],
+    startDate: '2026-10-17',
+  }, '2026-10-27');
+  assert.equal(caughtUp.current, 10);
+  assert.equal(caughtUp.freezesAvailable, 4);
+
+  const broken = { ...streak, brokenDates: ['2026-10-21'] };
+  assert.equal(reconcileStreak(broken, '2026-10-22').freezesAvailable, 8);
+  let restarted: StreakData = broken;
+  for (let day = 1; day <= 5; day++) restarted = updateStreakData(restarted, `2026-11-0${day}`);
+  assert.equal(restarted.current, 5);
+  assert.equal(restarted.freezesAvailable, 10);
+
+  const afterMiss = reconcileStreak({
+    current: 1,
+    longest: 1,
+    lastActiveDate: '2026-10-29',
+    activeDates: ['2026-10-20', '2026-10-22', '2026-10-23', '2026-10-26', '2026-10-29'],
+    freezesAvailable: 0,
+    frozenDates: [],
+    brokenDates: ['2026-10-19', '2026-10-28'],
+    startDate: '2026-10-01',
+  }, '2026-10-29', {
+    now: Date.parse('2026-10-29T18:00:00.000Z'),
+    assignments: [homework({
+      start: { iso: '2026-10-28T05:00:00.000Z', label: 'Oct 28', timeZone: 'America/Chicago' },
+      deadline: { iso: '2026-10-29T04:59:00.000Z', label: 'Oct 28, 11:59 PM CDT', timeZone: 'America/Chicago' },
+    })],
+  });
+  assert.equal(afterMiss.current, 10);
+  assert.equal(afterMiss.freezesAvailable, 3);
+  assert.deepEqual(afterMiss.frozenDates, ['2026-10-28']);
+
+  const rerun = reconcileStreak(afterMiss, '2026-10-29', {
+    now: Date.parse('2026-10-29T18:00:00.000Z'),
+    assignments: [homework({
+      start: { iso: '2026-10-28T05:00:00.000Z', label: 'Oct 28', timeZone: 'America/Chicago' },
+      deadline: { iso: '2026-10-29T04:59:00.000Z', label: 'Oct 28, 11:59 PM CDT', timeZone: 'America/Chicago' },
+    })],
+  });
+  assert.equal(rerun.current, 10);
+  assert.equal(rerun.freezesAvailable, 3);
+  assert.deepEqual(rerun.frozenDates, ['2026-10-28']);
+
+  const october = getStreakCalendar(afterMiss, '2026-10-29', {
+    now: Date.parse('2026-10-29T18:00:00.000Z'),
+    assignments: [homework({
+      start: { iso: '2026-10-28T05:00:00.000Z', label: 'Oct 28', timeZone: 'America/Chicago' },
+      deadline: { iso: '2026-10-29T04:59:00.000Z', label: 'Oct 28, 11:59 PM CDT', timeZone: 'America/Chicago' },
+    })],
+  }).at(-1)!;
+  const status = (day: number) => october.days.find(entry => entry.day === day)!.status;
+  for (const day of [21, 24, 25, 27]) assert.equal(status(day), 'kept');
+  assert.equal(status(28), 'frozen');
+  assert.equal(status(29), 'active');
+  assert.equal(status(30), 'future');
+});
+
 const openHomework: StreakContext = {
   now: Date.parse('2026-10-07T18:00:00.000Z'),
   assignments: [homework({
@@ -648,14 +735,14 @@ test('createStreakPill renders active green badge with fire icon, freezes, and i
   assert.ok(badge.classList.contains('active'), 'Badge should have active class');
   assert.equal(badge.getAttribute('data-state'), 'active');
   assert.equal(badge.querySelector('span')?.textContent, '66 day streak');
-  assert.equal(badge.querySelector('.streak-freeze-tag')?.textContent, '🧊2');
+  assert.equal(badge.querySelector('.streak-freeze-tag')?.textContent, '🧊25');
   assert.equal(badge.querySelector('.streak-freeze-tag')?.getAttribute('title'), 'Get a 5 day streak for 2 freezes');
 
   const popover = pill.element.querySelector('.streak-calendar-popover')!;
   assert.ok(popover);
   assert.match(popover.querySelector('.streak-cal-title')?.textContent || '', /October 2026/);
   assert.match(popover.querySelector('.streak-stat-count')?.textContent || '', /66 day streak/);
-  assert.match(popover.querySelector('.streak-stat-freezes')?.textContent || '', /2 freezes left/);
+  assert.match(popover.querySelector('.streak-stat-freezes')?.textContent || '', /25 freezes left/);
   assert.equal(popover.querySelector('.streak-stat-freezes')?.getAttribute('title'), 'Get a 5 day streak for 2 freezes');
 
   // Month navigation: Next button should be disabled because October is the current month
@@ -802,6 +889,15 @@ test('createStreakPill waits 150ms before opening the calendar on hover', async 
     await wait(80);
     assert.ok(pill.element.classList.contains('is-open'), 'Calendar should open after 150ms');
     assert.equal(pill.element.querySelector('.streak-badge')?.getAttribute('aria-expanded'), 'true');
+
+    const surface = pill.element.querySelector('.streak-cal-title')!;
+    surface.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
+    pill.element.dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true }));
+    assert.ok(pill.element.classList.contains('is-open'), 'Clicking the calendar should keep it open');
+    pill.element.querySelector<HTMLButtonElement>('.streak-cal-prev')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    assert.ok(pill.element.classList.contains('is-open'), 'Changing months should keep the calendar open');
+    doc.dispatchEvent(new dom.window.MouseEvent('mouseup', { bubbles: true }));
+    assert.ok(pill.element.classList.contains('is-open'), 'Releasing the click inside the calendar should keep it open');
 
     pill.element.dispatchEvent(new dom.window.MouseEvent('mouseleave', { bubbles: true }));
     assert.ok(!pill.element.classList.contains('is-open'), 'Calendar should close as soon as the pointer leaves');

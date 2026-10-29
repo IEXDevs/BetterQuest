@@ -114,6 +114,8 @@ export interface StreakData {
   frozenDates?: string[];
   startDate?: string | null;
   brokenDates?: string[];
+  /** How many 5-day rewards have already been granted for this streak. */
+  freezeMilestonesAwarded?: number;
 }
 
 export interface LocalState {

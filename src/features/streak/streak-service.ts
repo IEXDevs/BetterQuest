@@ -1,7 +1,6 @@
 import type { Assignment, StreakData } from '../../shared/models';
 
-/** One answered question, or newly completed work, satisfies a day that has homework. */
-const QUESTION_MINIMUM_DATES = 1;
+
 
 const KNOWN_INCOMPLETE = new Set<Assignment['completion']>(['not-completed', 'in-progress', 'not-started']);
 
@@ -67,6 +66,7 @@ function knownIncomplete(assignment: Assignment, overrides?: StreakContext['comp
 interface StreakFacts {
   hardBreaks: Set<string>;
   obligations: Set<string>;
+  assignmentDays: Set<string>;
 }
 
 function addRange(days: Set<string>, start: string, end: string) {
@@ -86,6 +86,7 @@ function addRange(days: Set<string>, start: string, end: string) {
 function buildFacts(today: string, context?: StreakContext, brokenDates?: string[]): StreakFacts {
   const hardBreaks = new Set<string>(brokenDates?.filter(validDate) ?? []);
   const obligations = new Set<string>();
+  const assignmentDays = new Set<string>();
   const now = context?.now ?? Date.now();
   const overrides = context?.completionOverrides;
   const yesterday = shiftDay(today, -1);
@@ -95,6 +96,16 @@ function buildFacts(today: string, context?: StreakContext, brokenDates?: string
     const dueDay = assignment.deadline?.iso ? zonedDay(assignment.deadline.iso, assignment.deadline.timeZone) : null;
     const dueInstant = assignment.deadline?.iso ? Date.parse(assignment.deadline.iso) : NaN;
     const overdue = Number.isFinite(dueInstant) && dueInstant < now;
+
+    if (startDay && dueDay) {
+      addRange(assignmentDays, startDay, dueDay <= today ? dueDay : today);
+    } else if (dueDay) {
+      assignmentDays.add(dueDay);
+    } else if (startDay) {
+      addRange(assignmentDays, startDay, today);
+    } else {
+      assignmentDays.add(today);
+    }
 
     // Data cannot be changed from the past:
     // If an assignment was overdue and its deadline was in the past (dueDay < today),
@@ -123,19 +134,10 @@ function buildFacts(today: string, context?: StreakContext, brokenDates?: string
   }
 
   for (const day of hardBreaks) obligations.delete(day);
-  return { hardBreaks, obligations };
+  return { hardBreaks, obligations, assignmentDays };
 }
 
-type DayRole = 'credit' | 'frozen' | 'rest' | 'pending' | 'miss' | 'break';
 
-function dayRole(day: string, today: string, active: Set<string>, frozen: Set<string>, facts: StreakFacts): DayRole {
-  if (facts.hardBreaks.has(day)) return 'break';
-  if (active.has(day)) return 'credit';
-  if (frozen.has(day)) return 'frozen';
-  if (facts.obligations.has(day)) return day === today ? 'pending' : 'miss';
-  if (day === today) return 'pending';
-  return 'rest';
-}
 
 function earliestMark(dates: string[], today: string): string {
   let earliest = today;
@@ -145,11 +147,22 @@ function earliestMark(dates: string[], today: string): string {
   return earliest;
 }
 
+export interface AccountStreakResult {
+  current: number;
+  longest: number;
+  keptRest: Set<string>;
+  milestones: number;
+  freezesAvailable: number;
+  frozenDates: string[];
+  brokenDates: string[];
+}
+
 /**
  * Current streak counts question days, freezes, and days with nothing due.
  * A rest day counts once a streak is already going. It does not start a streak by itself,
  * and it does not break one. Today stays open until the day is over or a question is answered.
- * A missed question day, or an unfinished assignment past its due date, ends the streak.
+ * A missed question day, or an unfinished assignment past its due date, ends the streak
+ * unless protected by an earned streak freeze.
  */
 export function calculateStreak(
   activeDates: string[],
@@ -165,58 +178,142 @@ export function calculateStreak(
 function accountStreak(
   activeDates: string[],
   todayStr: string,
-  frozenDates: string[],
+  existingFrozen: string[] = [],
   context?: StreakContext,
-  brokenDates?: string[],
-): { current: number; longest: number; keptRest: Set<string> } {
+  brokenDates: string[] = [],
+  storedFreezes?: number,
+  autoSpendFreezes: boolean = false,
+): AccountStreakResult {
   const active = new Set(activeDates.filter(validDate));
-  const frozen = new Set(frozenDates.filter(validDate));
   const facts = buildFacts(todayStr, context, brokenDates);
-  const limit = earliestMark([...active, ...frozen], todayStr);
-  const keptRest = new Set<string>();
+  const previouslyFrozen = new Set(existingFrozen.filter(validDate));
+  const limit = earliestMark([...active, ...previouslyFrozen], todayStr);
 
-  let longest = 0;
-  let run = 0;
-  let alive = false;
-  let day = limit;
-  for (let step = 0; step < 500; step++) {
-    const role = dayRole(day, todayStr, active, frozen, facts);
-    if (role === 'credit' || role === 'frozen') {
-      alive = true;
-      run += 1;
-      if (run > longest) longest = run;
-    } else if (role === 'rest' && alive) {
-      keptRest.add(day);
-      run += 1;
-      if (run > longest) longest = run;
-    } else if (role === 'break' || role === 'miss') {
-      run = 0;
-      alive = false;
+  function simulate(extraBanked: number): AccountStreakResult {
+    let run = 0;
+    let alive = false;
+    let milestonesInRun = 0;
+    let freezesInPocket = extraBanked;
+    const frozenDates = new Set<string>(previouslyFrozen);
+    const keptRest = new Set<string>();
+    const recordedBreaks = new Set<string>();
+    const runs: number[] = [];
+
+    let day = limit;
+    for (let step = 0; step < 500; step++) {
+      const isToday = day === todayStr;
+      const isActive = active.has(day);
+      const isPreviouslyFrozen = previouslyFrozen.has(day);
+      const isHardBreak = facts.hardBreaks.has(day);
+      const isObligation = facts.obligations.has(day);
+
+      if (isPreviouslyFrozen) {
+        alive = true;
+        freezesInPocket = Math.max(0, freezesInPocket - 1);
+        frozenDates.add(day);
+        run += 1;
+        const currentMilestones = Math.floor(run / 5);
+        if (currentMilestones > milestonesInRun) {
+          freezesInPocket += (currentMilestones - milestonesInRun) * 2;
+          milestonesInRun = currentMilestones;
+        }
+      } else if (isHardBreak && !isToday) {
+        const canFreeze = autoSpendFreezes && alive && freezesInPocket > 0 && facts.assignmentDays.has(day);
+        if (canFreeze) {
+          freezesInPocket -= 1;
+          frozenDates.add(day);
+          run += 1;
+          const currentMilestones = Math.floor(run / 5);
+          if (currentMilestones > milestonesInRun) {
+            freezesInPocket += (currentMilestones - milestonesInRun) * 2;
+            milestonesInRun = currentMilestones;
+          }
+        } else {
+          if (run > 0) runs.push(run);
+          run = 0;
+          alive = false;
+          milestonesInRun = 0;
+          recordedBreaks.add(day);
+        }
+      } else if (isActive) {
+        alive = true;
+        run += 1;
+        const currentMilestones = Math.floor(run / 5);
+        if (currentMilestones > milestonesInRun) {
+          freezesInPocket += (currentMilestones - milestonesInRun) * 2;
+          milestonesInRun = currentMilestones;
+        }
+      } else if (isObligation) {
+        if (isToday) {
+          // Today is still ongoing; question can still be answered
+        } else if (autoSpendFreezes && alive && freezesInPocket > 0) {
+          // A freeze covers this missed day
+          freezesInPocket -= 1;
+          frozenDates.add(day);
+          run += 1;
+          const currentMilestones = Math.floor(run / 5);
+          if (currentMilestones > milestonesInRun) {
+            freezesInPocket += (currentMilestones - milestonesInRun) * 2;
+            milestonesInRun = currentMilestones;
+          }
+        } else {
+          // No freeze available or auto-spend disabled; streak breaks
+          if (run > 0) runs.push(run);
+          run = 0;
+          alive = false;
+          milestonesInRun = 0;
+          recordedBreaks.add(day);
+        }
+      } else {
+        // Rest day: nothing was due
+        if (isToday) {
+          // Today is open and pending
+        } else if (alive) {
+          keptRest.add(day);
+          run += 1;
+          const currentMilestones = Math.floor(run / 5);
+          if (currentMilestones > milestonesInRun) {
+            freezesInPocket += (currentMilestones - milestonesInRun) * 2;
+            milestonesInRun = currentMilestones;
+          }
+        } else {
+          run = 0;
+        }
+      }
+
+      if (isToday) {
+        if (run > 0) runs.push(run);
+        break;
+      }
+      day = shiftDay(day, 1);
     }
-    if (day === todayStr) break;
-    day = shiftDay(day, 1);
+
+    const current = run;
+    const longest = runs.reduce((best, len) => Math.max(best, len), current);
+    const milestones = runs.reduce((tot, len) => tot + Math.floor(len / 5), 0);
+    const finalBroken = [...new Set([...brokenDates, ...recordedBreaks])]
+      .filter(d => validDate(d) && !frozenDates.has(d))
+      .sort()
+      .slice(-180);
+
+    return {
+      current,
+      longest,
+      keptRest,
+      milestones,
+      freezesAvailable: freezesInPocket,
+      frozenDates: [...frozenDates].sort().slice(-180),
+      brokenDates: finalBroken,
+    };
   }
 
-  let current = 0;
-  let trailingRest = 0;
-  let anchored = false;
-  day = todayStr;
-  for (let step = 0; step < 500; step++) {
-    const role = dayRole(day, todayStr, active, frozen, facts);
-    if (role === 'break' || role === 'miss') break;
-    if (role === 'credit' || role === 'frozen') {
-      current += QUESTION_MINIMUM_DATES + trailingRest;
-      trailingRest = 0;
-      anchored = true;
-    } else if (role === 'rest') {
-      if (anchored) current += QUESTION_MINIMUM_DATES;
-      else trailingRest += 1;
-    }
-    if (day === limit) break;
-    day = shiftDay(day, -1);
+  const initial = simulate(0);
+  const visibleEarned = initial.milestones * 2;
+  if (storedFreezes !== undefined && storedFreezes > visibleEarned) {
+    const extraBanked = storedFreezes - visibleEarned;
+    return simulate(extraBanked);
   }
-
-  return { current, longest: Math.max(longest, current), keptRest };
+  return initial;
 }
 
 /** Records an active date and returns an updated, trimmed list (last 180 active dates). */
@@ -231,40 +328,6 @@ export function recordActiveDate(
   return sorted.slice(-180);
 }
 
-function protectObligationGaps(
-  lastActive: string | null | undefined,
-  target: string,
-  activeDates: string[],
-  frozenDates: string[],
-  freezesAvailable: number,
-  context?: StreakContext,
-  brokenDates?: string[],
-): { frozenDates: string[]; freezesAvailable: number } {
-  if (!validDate(lastActive) || !validDate(target) || lastActive >= target || freezesAvailable <= 0) {
-    return { frozenDates, freezesAvailable };
-  }
-  const facts = buildFacts(target, context, brokenDates);
-  let latestBreak: string | null = null;
-  for (const day of facts.hardBreaks) {
-    if (day > lastActive && day < target && (!latestBreak || day > latestBreak)) latestBreak = day;
-  }
-  const active = new Set(activeDates);
-  const frozen = new Set(frozenDates);
-  const nextFrozen = [...frozenDates];
-  let available = freezesAvailable;
-  let day = shiftDay(latestBreak ?? lastActive, 1);
-  while (day < target && available > 0) {
-    if (facts.hardBreaks.has(day)) break;
-    if (!active.has(day) && !frozen.has(day) && facts.obligations.has(day)) {
-      nextFrozen.push(day);
-      frozen.add(day);
-      available -= 1;
-    }
-    day = shiftDay(day, 1);
-  }
-  return { frozenDates: nextFrozen, freezesAvailable: available };
-}
-
 /**
  * Records a question day. Freezes cover skipped homework days only.
  * A day with nothing available does not spend a freeze.
@@ -277,45 +340,31 @@ export function updateStreakData(
   const existingDates = currentStreak?.activeDates || [];
   const existingFrozen = currentStreak?.frozenDates || [];
   const existingBroken = currentStreak?.brokenDates || [];
-  let freezesAvailable = currentStreak?.freezesAvailable ?? 0;
   const startDate = currentStreak?.startDate || (existingDates[0] ? [...existingDates].sort()[0] : newDate);
-  const protectedGap = protectObligationGaps(
-    currentStreak?.lastActiveDate,
+  const activeDates = recordActiveDate(existingDates, newDate);
+
+  const result = accountStreak(
+    activeDates,
     newDate,
-    existingDates,
     existingFrozen,
-    freezesAvailable,
     context,
     existingBroken,
+    currentStreak?.freezesAvailable,
+    true,
   );
-  freezesAvailable = protectedGap.freezesAvailable;
-  const frozenDates = protectedGap.frozenDates;
 
-  const activeDates = recordActiveDate(existingDates, newDate);
-  const prevCurrent = currentStreak?.current || 0;
-  const { current, longest } = calculateStreak(activeDates, newDate, frozenDates, context, existingBroken);
   const prevLongest = currentStreak?.longest || 0;
 
-  // Award 2 streak freezes when reaching 5 days straight (and for every 5-day cycle: 5, 10, 15, ...)
-  const prevMilestones = Math.floor(prevCurrent / 5);
-  const newMilestones = Math.floor(current / 5);
-  if (newMilestones > prevMilestones && current >= 5) {
-    const earnedFreezes = (newMilestones - prevMilestones) * 2;
-    freezesAvailable += earnedFreezes;
-  }
-
-  const facts = buildFacts(newDate, context, existingBroken);
-  const brokenDates = [...new Set([...existingBroken, ...facts.hardBreaks])].sort().slice(-180);
-
   return {
-    current,
-    longest: Math.max(longest, prevLongest),
+    current: result.current,
+    longest: Math.max(result.longest, prevLongest),
     lastActiveDate: newDate,
     activeDates,
-    freezesAvailable,
-    frozenDates: [...new Set(frozenDates)].sort().slice(-180),
+    freezesAvailable: result.freezesAvailable,
+    frozenDates: result.frozenDates,
     startDate,
-    brokenDates,
+    brokenDates: result.brokenDates,
+    freezeMilestonesAwarded: result.milestones,
   };
 }
 
@@ -336,29 +385,27 @@ export function reconcileStreak(
   const existingFrozen = currentStreak.frozenDates || [];
   const existingBroken = currentStreak.brokenDates || [];
   const startDate = currentStreak.startDate || (existingDates[0] ? [...existingDates].sort()[0] : null);
-  const protectedGap = protectObligationGaps(
-    currentStreak.lastActiveDate,
-    todayStr,
+
+  const result = accountStreak(
     existingDates,
+    todayStr,
     existingFrozen,
-    currentStreak.freezesAvailable ?? 0,
     context,
     existingBroken,
+    currentStreak.freezesAvailable,
+    true,
   );
-  const frozenDates = [...new Set(protectedGap.frozenDates)].sort();
-  const { current, longest } = calculateStreak(existingDates, todayStr, frozenDates, context, existingBroken);
-  const facts = buildFacts(todayStr, context, existingBroken);
-  const brokenDates = [...new Set([...existingBroken, ...facts.hardBreaks])].sort().slice(-180);
 
   return {
-    current,
-    longest: Math.max(longest, currentStreak.longest || 0),
+    current: result.current,
+    longest: Math.max(result.longest, currentStreak.longest || 0),
     lastActiveDate: currentStreak.lastActiveDate,
     activeDates: existingDates,
-    freezesAvailable: protectedGap.freezesAvailable,
-    frozenDates,
+    freezesAvailable: result.freezesAvailable,
+    frozenDates: result.frozenDates,
     startDate,
-    brokenDates,
+    brokenDates: result.brokenDates,
+    freezeMilestonesAwarded: result.milestones,
   };
 }
 
@@ -425,7 +472,15 @@ export function getStreakCalendar(
   const activeSet = new Set(streak?.activeDates || []);
   const freezeSet = new Set(streak?.frozenDates || []);
   const facts = buildFacts(todayStr, context, streak?.brokenDates);
-  const { keptRest } = accountStreak(streak?.activeDates || [], todayStr, streak?.frozenDates || [], context, streak?.brokenDates);
+  const { keptRest } = accountStreak(
+    streak?.activeDates || [],
+    todayStr,
+    streak?.frozenDates || [],
+    context,
+    streak?.brokenDates,
+    undefined,
+    false,
+  );
 
   const earliest = streak?.startDate ||
     (streak?.activeDates && streak.activeDates.length > 0 ? [...streak.activeDates].sort()[0] : todayStr);
@@ -455,12 +510,12 @@ export function getStreakCalendar(
         dayStatus = 'before-start';
       } else if (dateStr > todayStr) {
         dayStatus = 'future';
+      } else if (freezeSet.has(dateStr)) {
+        dayStatus = 'frozen';
       } else if (facts.hardBreaks.has(dateStr)) {
         dayStatus = 'missed';
       } else if (activeSet.has(dateStr)) {
         dayStatus = 'active';
-      } else if (freezeSet.has(dateStr)) {
-        dayStatus = 'frozen';
       } else if (dateStr === todayStr) {
         dayStatus = 'future';
       } else if (facts.obligations.has(dateStr)) {

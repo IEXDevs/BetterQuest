@@ -525,6 +525,8 @@ export function createStreakPill(
 
   const hoverDelayMs = 150;
   let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+  let pointerInside = false;
+  let pressing = false;
 
   function clearHoverTimer() {
     if (hoverTimer !== null) {
@@ -541,6 +543,7 @@ export function createStreakPill(
   }
 
   function hidePopover() {
+    if (pointerInside || pressing) return;
     clearHoverTimer();
     container.classList.remove('is-open');
     badge.setAttribute('aria-expanded', 'false');
@@ -552,11 +555,30 @@ export function createStreakPill(
     hoverTimer = setTimeout(showPopover, hoverDelayMs);
   }
 
-  container.addEventListener('mouseenter', schedulePopover);
-  container.addEventListener('mouseleave', hidePopover);
+  function releasePress() {
+    if (!pressing) return;
+    pressing = false;
+    hidePopover();
+  }
+
+  container.addEventListener('mouseenter', () => {
+    pointerInside = true;
+    schedulePopover();
+  });
+  container.addEventListener('mouseleave', () => {
+    pointerInside = false;
+    hidePopover();
+  });
+  container.addEventListener('mousedown', () => {
+    pressing = true;
+    showPopover();
+  });
+  domDoc.addEventListener('mouseup', releasePress);
   container.addEventListener('focusin', showPopover);
   container.addEventListener('focusout', (e) => {
-    if (!container.contains(e.relatedTarget as Node)) hidePopover();
+    if (pointerInside || pressing) return;
+    if (container.contains(e.relatedTarget as Node)) return;
+    hidePopover();
   });
 
   // Initial render
@@ -567,6 +589,7 @@ export function createStreakPill(
     update,
     dispose() {
       clearHoverTimer();
+      domDoc.removeEventListener('mouseup', releasePress);
     },
   };
 }
