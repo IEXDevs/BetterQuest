@@ -109,10 +109,11 @@ function buildFacts(today: string, context?: StreakContext, brokenDates?: string
 
     // Data cannot be changed from the past:
     // If an assignment was overdue and its deadline was in the past (dueDay < today),
-    // and Quest observed it as incomplete (assignment.completion !== 'completed'),
+    // and it is still incomplete (including local completion overrides),
     // an overdue break occurred on that past day. Marking it done later cannot erase that past break.
+    // A past break already recorded in brokenDates is preserved via history even after completion.
     const isPastDue = dueDay !== null && dueDay < today && overdue;
-    if (isPastDue && assignment.completion !== 'completed') {
+    if (isPastDue && !finished(assignment, overrides)) {
       hardBreaks.add(dueDay);
     }
 
