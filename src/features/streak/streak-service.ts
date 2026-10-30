@@ -550,37 +550,24 @@ function calendarDayReason(
   todayStr: string,
   facts: StreakFacts,
 ): string {
-  if (status === 'active') return 'Streak kept: you answered a question';
-  if (status === 'frozen') return 'Streak kept: a freeze covered this day';
-  if (status === 'rest' || status === 'kept') return 'Streak kept: nothing was due';
+  if (status === 'active') return 'Answered';
+  if (status === 'frozen') return 'Freeze used';
+  if (status === 'rest' || status === 'kept') return 'Nothing due';
   if (status === 'missed') {
     return facts.hardBreaks.has(dateStr)
-      ? 'Streak canceled: an assignment was still unfinished after the due date'
-      : 'Streak canceled: homework was open and no question was answered';
+      ? 'Missed — unfinished after the due date'
+      : 'Missed — no answer while homework was open';
   }
-  if (status === 'before-start') return 'Before your streak started';
+  if (status === 'before-start') return 'Before you started';
   if (dateStr === todayStr) {
     return facts.obligations.has(dateStr)
-      ? 'Today is still open: answer a question to keep your streak'
-      : 'Today is still open: nothing is due';
+      ? 'Today — answer to keep it going'
+      : 'Today — nothing due';
   }
-  return 'Coming up';
+  return 'Upcoming';
 }
 
-/** Returns the display emoji/symbol for a calendar day status. */
-export function getCalendarDayIcon(status: CalendarDay['status']): string {
-  switch (status) {
-    case 'active':
-      return '🔥';
-    case 'frozen':
-      return '🧊';
-    case 'missed':
-      return '❌';
-    case 'kept':
-    case 'rest':
-    case 'before-start':
-    case 'future':
-    default:
-      return '—';
-  }
+/** Display marker for a calendar day status. Days are color-coded in CSS, so no icon glyph is needed. */
+export function getCalendarDayIcon(_status: CalendarDay['status']): string {
+  return '';
 }

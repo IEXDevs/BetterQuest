@@ -197,7 +197,7 @@ test('homepage displays daily streak badge with live count', async () => {
     assert.ok(streakBadge, 'Streak badge should be rendered');
     assert.ok(streakBadge.classList.contains('active'), 'Active streak should have active class');
     assert.equal(streakBadge.querySelector('span')?.textContent, '5 day streak');
-    assert.match(streakBadge.getAttribute('title') || '', /Current streak: 5 days/);
+    assert.match(streakBadge.getAttribute('title') || '', /5 day streak.*Best 10/);
   } finally {
     overview.dispose();
     dom.window.close();

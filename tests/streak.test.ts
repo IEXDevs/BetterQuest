@@ -115,10 +115,10 @@ test('rest days inside a streak count, and rest days after a miss do not until w
   assert.equal(status(18), 'rest');
   assert.equal(status(19), 'missed');
   assert.equal(status(20), 'active');
-  assert.equal(getCalendarDayIcon('active'), '🔥');
+  assert.equal(getCalendarDayIcon('active'), '');
   for (const day of [21, 24, 25]) {
     assert.equal(status(day), 'kept');
-    assert.equal(getCalendarDayIcon('kept'), '—');
+    assert.equal(getCalendarDayIcon('kept'), '');
   }
   assert.equal(status(22), 'active');
   assert.equal(status(23), 'active');
@@ -661,33 +661,33 @@ test('getStreakCalendar generates months starting from start date up to current 
   assert.equal(calendar[1].month, 8); // 8 is September
   assert.equal(calendar[2].month, 9); // 9 is October
 
-  // In August: Aug 1 to Aug 14 are before start (grey hyphen)
+  // In August: Aug 1 to Aug 14 are before start
   const aug1 = calendar[0].days.find(d => d.day === 1)!;
   assert.equal(aug1.status, 'before-start');
-  assert.equal(getCalendarDayIcon(aug1.status), '—');
+  assert.equal(getCalendarDayIcon(aug1.status), '');
 
   const aug14 = calendar[0].days.find(d => d.day === 14)!;
   assert.equal(aug14.status, 'before-start');
 
-  // Aug 15 was active -> fire 🔥
+  // Aug 15 was active
   const aug15 = calendar[0].days.find(d => d.day === 15)!;
   assert.equal(aug15.status, 'active');
-  assert.equal(getCalendarDayIcon(aug15.status), '🔥');
+  assert.equal(getCalendarDayIcon(aug15.status), '');
 
-  // In September: Sep 2 was frozen -> ice 🧊
+  // In September: Sep 2 was frozen
   const sep2 = calendar[1].days.find(d => d.day === 2)!;
   assert.equal(sep2.status, 'frozen');
-  assert.equal(getCalendarDayIcon(sep2.status), '🧊');
+  assert.equal(getCalendarDayIcon(sep2.status), '');
 
-  // Sep 3 had nothing due, so it still counts: green, with no fire
+  // Sep 3 had nothing due, so it still counts
   const sep3 = calendar[1].days.find(d => d.day === 3)!;
   assert.equal(sep3.status, 'kept');
-  assert.equal(getCalendarDayIcon(sep3.status), '—');
+  assert.equal(getCalendarDayIcon(sep3.status), '');
 
-  // In October: Oct 25 is future -> grey hyphen
+  // In October: Oct 25 is future
   const oct25 = calendar[2].days.find(d => d.day === 25)!;
   assert.equal(oct25.status, 'future');
-  assert.equal(getCalendarDayIcon(oct25.status), '—');
+  assert.equal(getCalendarDayIcon(oct25.status), '');
 
   const withHomework = getStreakCalendar(streak, '2026-10-19', {
     now: Date.parse('2026-10-19T18:00:00.000Z'),
@@ -698,8 +698,8 @@ test('getStreakCalendar generates months starting from start date up to current 
   });
   const oct16 = withHomework[2].days.find(d => d.day === 16)!;
   assert.equal(oct16.status, 'missed');
-  assert.equal(getCalendarDayIcon(oct16.status), '❌');
-  assert.equal(oct16.reason, 'Streak canceled: homework was open and no question was answered');
+  assert.equal(getCalendarDayIcon(oct16.status), '');
+  assert.equal(oct16.reason, 'Missed — no answer while homework was open');
 
   const overdue = getStreakCalendar(streak, '2026-10-19', {
     now: Date.parse('2026-10-19T18:00:00.000Z'),
@@ -710,10 +710,10 @@ test('getStreakCalendar generates months starting from start date up to current 
   });
   const dueDay = overdue[2].days.find(d => d.dateStr === '2026-10-17')!;
   assert.equal(dueDay.status, 'missed');
-  assert.equal(dueDay.reason, 'Streak canceled: an assignment was still unfinished after the due date');
+  assert.equal(dueDay.reason, 'Missed — unfinished after the due date');
 });
 
-test('createStreakPill renders active green badge with fire icon, freezes, and interactive calendar popover', () => {
+test('createStreakPill renders badge with freezes and interactive calendar popover', () => {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
   const doc = dom.window.document;
 
@@ -735,15 +735,14 @@ test('createStreakPill renders active green badge with fire icon, freezes, and i
   assert.ok(badge.classList.contains('active'), 'Badge should have active class');
   assert.equal(badge.getAttribute('data-state'), 'active');
   assert.equal(badge.querySelector('span')?.textContent, '66 day streak');
-  assert.equal(badge.querySelector('.streak-freeze-tag')?.textContent, '🧊25');
-  assert.equal(badge.querySelector('.streak-freeze-tag')?.getAttribute('title'), 'Get a 5 day streak for 2 freezes');
+  assert.equal(badge.querySelector('.streak-freeze-tag')?.textContent, '25 freezes');
+  assert.equal(badge.querySelector('.streak-freeze-tag')?.getAttribute('title'), '25 freezes');
 
   const popover = pill.element.querySelector('.streak-calendar-popover')!;
   assert.ok(popover);
   assert.match(popover.querySelector('.streak-cal-title')?.textContent || '', /October 2026/);
-  assert.match(popover.querySelector('.streak-stat-count')?.textContent || '', /66 day streak/);
-  assert.match(popover.querySelector('.streak-stat-freezes')?.textContent || '', /25 freezes left/);
-  assert.equal(popover.querySelector('.streak-stat-freezes')?.getAttribute('title'), 'Get a 5 day streak for 2 freezes');
+  assert.equal(popover.querySelector('.streak-cal-stats'), null);
+  assert.equal(popover.querySelector('.streak-cal-legend'), null);
 
   // Month navigation: Next button should be disabled because October is the current month
   const nextBtn = popover.querySelector<HTMLButtonElement>('.streak-cal-next')!;
@@ -761,14 +760,15 @@ test('createStreakPill renders active green badge with fire icon, freezes, and i
   const sep2Cell = popover.querySelector<HTMLElement>('.streak-cal-cell[data-date="2026-09-02"]')!;
   assert.ok(sep2Cell);
   assert.equal(sep2Cell.dataset.status, 'frozen');
-  assert.equal(sep2Cell.querySelector('.streak-cal-icon')?.textContent, '🧊');
+  assert.equal(sep2Cell.querySelector('.streak-cal-icon'), null);
+  assert.equal(sep2Cell.querySelector('.streak-cal-num')?.textContent, '2');
 
   const sep3Cell = popover.querySelector<HTMLElement>('.streak-cal-cell[data-date="2026-09-03"]')!;
   assert.equal(sep3Cell.dataset.status, 'kept');
-  assert.equal(sep3Cell.querySelector('.streak-cal-icon')?.textContent, '—');
+  assert.equal(sep3Cell.querySelector('.streak-cal-icon'), null);
   const sep3Tip = sep3Cell.querySelector('.streak-day-tip');
   assert.equal(sep3Tip?.tagName, 'DIV');
-  assert.equal(sep3Tip?.textContent, 'Streak kept: nothing was due');
+  assert.equal(sep3Tip?.textContent, 'Nothing due');
   sep3Cell.dispatchEvent(new dom.window.MouseEvent('mouseenter', { bubbles: true }));
   assert.ok(sep3Cell.classList.contains('is-hovered'), 'Hovering a day should reveal why the streak was kept');
   sep3Cell.dispatchEvent(new dom.window.MouseEvent('mouseleave', { bubbles: true }));
@@ -781,17 +781,18 @@ test('createStreakPill renders active green badge with fire icon, freezes, and i
   const prevBtn3 = popover.querySelector<HTMLButtonElement>('.streak-cal-prev')!;
   assert.ok(prevBtn3.disabled, 'Prev button should be disabled at start month');
 
-  // In August, day 1 is before-start (grey hyphen)
+  // In August, day 1 is before-start
   const aug1Cell = popover.querySelector<HTMLElement>('.streak-cal-cell[data-date="2026-08-01"]')!;
   assert.ok(aug1Cell);
   assert.equal(aug1Cell.dataset.status, 'before-start');
-  assert.equal(aug1Cell.querySelector('.streak-cal-icon')?.textContent, '—');
+  assert.equal(aug1Cell.querySelector('.streak-cal-icon'), null);
 
-  // In August, day 15 is active (fire 🔥)
+  // In August, day 15 is active
   const aug15Cell = popover.querySelector<HTMLElement>('.streak-cal-cell[data-date="2026-08-15"]')!;
   assert.ok(aug15Cell);
   assert.equal(aug15Cell.dataset.status, 'active');
-  assert.equal(aug15Cell.querySelector('.streak-cal-icon')?.textContent, '🔥');
+  assert.equal(aug15Cell.querySelector('.streak-cal-icon'), null);
+  assert.equal(aug15Cell.querySelector('.streak-cal-num')?.textContent, '15');
 
   dom.window.close();
 });
@@ -839,13 +840,13 @@ test('answering today shows the streak as kept instead of still open', () => {
   };
   const open = getStreakCalendar(undefined, today, context);
   const before = open.at(-1)!.days.find(day => day.dateStr === today)!;
-  assert.equal(before.reason, 'Today is still open: answer a question to keep your streak');
+  assert.equal(before.reason, 'Today — answer to keep it going');
 
   const streak = updateStreakData(null, today, context);
   const answered = getStreakCalendar(streak, today, context);
   const after = answered.at(-1)!.days.find(day => day.dateStr === today)!;
   assert.equal(after.status, 'active');
-  assert.equal(after.reason, 'Streak kept: you answered a question');
+  assert.equal(after.reason, 'Answered');
 });
 
 test('a streak credit lost in a reload is saved on the next page', async () => {

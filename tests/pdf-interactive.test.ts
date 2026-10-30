@@ -1187,14 +1187,64 @@ test('interactive PDF viewer mounts circular badges positioned directly on optio
     assert.equal(shadow.querySelector('.badge-popover'), null, 'Badge options popover panel must be removed');
 
     const css = shadow.querySelector('style')!.textContent!;
-    assert.match(css, /width:40px!important/);
-    assert.match(css, /height:40px!important/);
-    assert.match(css, /border-radius:18px!important/);
-    assert.match(css, /transform:translate\(5px,3px\)/);
+    assert.match(css, /width:calc\(40px \* var\(--bq-pdf-zoom, 1\)\)!important/);
+    assert.match(css, /height:calc\(40px \* var\(--bq-pdf-zoom, 1\)\)!important/);
+    assert.match(css, /border-radius:calc\(18px \* var\(--bq-pdf-zoom, 1\)\)!important/);
+    assert.match(css, /transform:translate\(calc\(5px \* var\(--bq-pdf-zoom, 1\)\),calc\(3px \* var\(--bq-pdf-zoom, 1\)\)\)/);
   } finally {
     viewer.dispose();
     dom.window.close();
   }
 });
 
+test('interactive PDF option badges and confirm buttons scale with zoom level in and out', async () => {
+  const module = await import('../src/features/assessment/pdf-viewer');
+  const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  const viewer = module.createInteractivePdfViewer(dom.window.document.querySelector<HTMLElement>('#mount')!, {
+    url: '/student/images/download_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, 2]]),
+    onChoose: () => {},
+    openDocument: async () => ({
+      pageCount: 1,
+      renderPage: async () => ({
+        width: 600, height: 800,
+        runs: [textRun('001', 50), textRun('1.', 130), textRun('2.', 190), textRun('002', 260)],
+      }),
+      destroy: () => {},
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    const shadow = viewer.element.shadowRoot!;
+    const host = viewer.element;
+    const page = shadow.querySelector<HTMLElement>('.page')!;
+    const zoomInBtn = shadow.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!;
+    const zoomOutBtn = shadow.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!;
 
+    // Initial scale is 1
+    assert.equal(host.style.getPropertyValue('--bq-pdf-zoom'), '1');
+    assert.equal(page.style.getPropertyValue('--bq-pdf-zoom'), '1');
+
+    // Zoom in: scale increases so badges get bigger with page
+    zoomInBtn.click();
+    const zoomedInScale = Number.parseFloat(host.style.getPropertyValue('--bq-pdf-zoom'));
+    assert.ok(zoomedInScale > 1, 'Zooming in must scale option badges up');
+    assert.equal(page.style.getPropertyValue('--bq-pdf-zoom'), String(zoomedInScale));
+
+    // Zoom out: scale decreases so badges get smaller when zooming out
+    zoomOutBtn.click();
+    zoomOutBtn.click();
+    const zoomedOutScale = Number.parseFloat(host.style.getPropertyValue('--bq-pdf-zoom'));
+    assert.ok(zoomedOutScale < 1, 'Zooming out must scale option badges down');
+    assert.equal(page.style.getPropertyValue('--bq-pdf-zoom'), String(zoomedOutScale));
+
+    // Confirm button positioned relative to active option hit respects zoom variable
+    viewer.setSelected(1, '1');
+    const submitBtn = shadow.querySelector<HTMLButtonElement>('.pdf-submit-btn');
+    assert.ok(submitBtn, 'Confirm button should be mounted');
+    assert.match(submitBtn.style.left, /34px \* var\(--bq-pdf-zoom, 1\)/);
+  } finally {
+    viewer.dispose();
+    dom.window.close();
+  }
+});

@@ -2,7 +2,6 @@ import type { StreakData } from '../../shared/models';
 import {
   getStreakBadgeStatus,
   getStreakCalendar,
-  getCalendarDayIcon,
   localDateString,
   reconcileStreak,
   type CalendarMonth,
@@ -29,9 +28,9 @@ export const streakPillStyles = `
     gap: 6px;
     padding: 5px 12px;
     border-radius: 999px;
-    background: color-mix(in srgb, #16a34a 12%, transparent);
-    border: 1px solid color-mix(in srgb, #16a34a 32%, transparent);
-    color: #16a34a;
+    background: #16a34a;
+    border: 1px solid #16a34a;
+    color: #ffffff;
     font: 700 12px/1 inherit;
     letter-spacing: .02em;
     cursor: pointer;
@@ -40,41 +39,45 @@ export const streakPillStyles = `
     white-space: nowrap;
   }
   .streak-badge:hover {
-    background: color-mix(in srgb, #16a34a 20%, transparent);
-    border-color: #16a34a;
+    background: #15803d;
+    border-color: #15803d;
+    color: #ffffff;
   }
   .streak-badge.active,
   .streak-badge[data-state="active"] {
-    background: color-mix(in srgb, #16a34a 12%, transparent);
-    border: 1px solid color-mix(in srgb, #16a34a 32%, transparent);
-    color: #16a34a;
+    background: #16a34a;
+    border: 1px solid #16a34a;
+    color: #ffffff;
   }
   .streak-badge.active:hover,
   .streak-badge[data-state="active"]:hover {
-    background: color-mix(in srgb, #16a34a 20%, transparent);
-    border-color: #16a34a;
+    background: #15803d;
+    border-color: #15803d;
+    color: #ffffff;
   }
   .streak-badge.frozen,
   .streak-badge[data-state="frozen"] {
-    background: color-mix(in srgb, #2563eb 12%, transparent);
-    border: 1px solid color-mix(in srgb, #2563eb 32%, transparent);
-    color: #2563eb;
+    background: #2563eb;
+    border: 1px solid #2563eb;
+    color: #ffffff;
   }
   .streak-badge.frozen:hover,
   .streak-badge[data-state="frozen"]:hover {
-    background: color-mix(in srgb, #2563eb 20%, transparent);
-    border-color: #2563eb;
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    color: #ffffff;
   }
   .streak-badge.broken,
   .streak-badge[data-state="broken"] {
-    background: color-mix(in srgb, #dc2626 12%, transparent);
-    border: 1px solid color-mix(in srgb, #dc2626 32%, transparent);
-    color: #dc2626;
+    background: #dc2626;
+    border: 1px solid #dc2626;
+    color: #ffffff;
   }
   .streak-badge.broken:hover,
   .streak-badge[data-state="broken"]:hover {
-    background: color-mix(in srgb, #dc2626 20%, transparent);
-    border-color: #dc2626;
+    background: #b91c1c;
+    border-color: #b91c1c;
+    color: #ffffff;
   }
   .streak-badge svg {
     width: 14px;
@@ -86,22 +89,22 @@ export const streakPillStyles = `
     display: inline-flex;
     align-items: center;
     margin-left: 2px;
-    padding: 1px 5px;
+    padding: 1px 6px;
     border-radius: 6px;
     font-size: 10px;
-    font-weight: 600;
-    background: color-mix(in srgb, #2563eb 15%, transparent);
-    color: #2563eb;
+    font-weight: 700;
+    background: #1d4ed8;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    color: #ffffff;
   }
   .streak-calendar-popover {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
     z-index: 1000;
-    min-width: 420px;
-    width: 450px;
+    width: 320px;
     max-width: calc(100vw - 32px);
-    padding: 16px;
+    padding: 12px;
     background: var(--bq-surface, #ffffff);
     color: var(--bq-text, #1e293b);
     border: 1px solid var(--bq-border, #e2e8f0);
@@ -134,87 +137,65 @@ export const streakPillStyles = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   .streak-cal-title {
-    font-weight: 800;
-    font-size: 16px;
+    font-weight: 600;
+    font-size: 13px;
     color: var(--bq-text, #1e293b);
   }
   .streak-cal-nav {
     background: none;
-    border: 1px solid var(--bq-border, #cbd5e1);
-    border-radius: 8px;
-    width: 30px;
-    height: 30px;
+    border: none;
+    border-radius: 6px;
+    width: 24px;
+    height: 24px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--bq-text, #334155);
+    font-size: 16px;
+    color: var(--bq-muted, #64748b);
     padding: 0;
     line-height: 1;
-    transition: background .15s ease, border-color .15s ease;
   }
   .streak-cal-nav:hover:not(:disabled) {
     background: var(--bq-raised, #f1f5f9);
-    border-color: var(--bq-accent, #3b82f6);
+    color: var(--bq-text, #1e293b);
   }
   .streak-cal-nav:disabled {
     opacity: 0.3;
     cursor: default;
   }
-  .streak-cal-stats {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 13px;
-    font-weight: 700;
-    padding: 7px 12px;
-    border-radius: 8px;
-    background: var(--bq-raised, #f8fafc);
-    margin-bottom: 12px;
-  }
-  .streak-stat-count {
-    color: #15803d;
-  }
-  .streak-stat-freezes {
-    color: #1d4ed8;
-    cursor: help;
-  }
   .streak-cal-dow-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     text-align: center;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--bq-muted, #64748b);
-    margin-bottom: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--bq-muted, #94a3b8);
+    margin-bottom: 4px;
   }
   .streak-cal-grid {
     position: relative;
     z-index: 2;
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
+    gap: 2px;
     text-align: center;
     overflow: visible;
   }
   .streak-cal-cell {
     position: relative;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 4px 2px;
-    min-height: 42px;
-    border-radius: 8px;
-    font-size: 14px;
+    min-height: 32px;
+    border-radius: 6px;
+    font-size: 13px;
     cursor: default;
     overflow: visible;
+    color: var(--bq-muted, #64748b);
   }
   .streak-cal-cell:hover:not(.streak-cal-empty),
   .streak-cal-cell.is-hovered:not(.streak-cal-empty) {
@@ -227,13 +208,13 @@ export const streakPillStyles = `
     z-index: 8;
     display: none;
     width: max-content;
-    max-width: 196px;
-    padding: 7px 9px;
+    max-width: 180px;
+    padding: 6px 8px;
     border-radius: 8px;
     background: #18253a;
     color: #fff;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 500;
     line-height: 1.35;
     text-align: center;
     white-space: normal;
@@ -256,58 +237,42 @@ export const streakPillStyles = `
     display: block;
   }
   .streak-cal-num {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--bq-muted, #64748b);
-    margin-bottom: 2px;
-  }
-  .streak-cal-icon {
-    font-size: 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: inherit;
     line-height: 1;
   }
   .streak-cal-day.status-active,
-  .streak-cal-day.status-kept {
+  .streak-cal-day.status-kept,
+  .streak-cal-day.status-rest {
     background: color-mix(in srgb, #16a34a 14%, transparent);
+    color: #15803d;
+    font-weight: 600;
   }
-  .streak-cal-day.status-kept .streak-cal-icon {
-    color: var(--bq-muted, #94a3b8);
+  .streak-cal-day.status-active .streak-cal-num,
+  .streak-cal-day.status-kept .streak-cal-num,
+  .streak-cal-day.status-rest .streak-cal-num {
+    font-weight: 700;
+    color: #15803d;
   }
   .streak-cal-day.status-frozen {
     background: color-mix(in srgb, #2563eb 14%, transparent);
+    color: #1d4ed8;
+    font-weight: 600;
   }
   .streak-cal-day.status-missed {
-    background: color-mix(in srgb, #dc2626 14%, transparent);
-  }
-  .streak-cal-day.status-missed .streak-cal-icon {
-    color: #dc2626;
-    font-weight: 800;
-  }
-  .streak-cal-day.status-before-start .streak-cal-icon,
-  .streak-cal-day.status-rest .streak-cal-icon,
-  .streak-cal-day.status-future .streak-cal-icon {
-    color: var(--bq-muted, #94a3b8);
-  }
-  .streak-cal-legend {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 12px;
+    background: color-mix(in srgb, #dc2626 12%, transparent);
+    color: #b91c1c;
     font-weight: 600;
-    color: var(--bq-muted, #64748b);
-    margin-top: 12px;
-    padding-top: 8px;
-    border-top: 1px solid var(--bq-border, #e2e8f0);
   }
-  .streak-cal-legend .legend-freeze {
-    cursor: help;
+  .streak-cal-day.is-today {
+    outline: 1px solid currentColor;
+    outline-offset: -1px;
   }
-  .streak-cal-legend .legend-missed {
-    color: #dc2626;
-  }
-  .streak-cal-legend .legend-none {
-    color: var(--bq-muted, #94a3b8);
+  .streak-cal-day.status-before-start,
+  .streak-cal-day.status-future {
+    color: var(--bq-muted, #cbd5e1);
+    opacity: 0.7;
   }
 `;
 
@@ -392,23 +357,6 @@ export function createStreakPill(
 
     header.append(prevBtn, title, nextBtn);
 
-    // Subheader stats (streak count & freezes available)
-    const statsRow = create('div');
-    statsRow.className = 'streak-cal-stats';
-
-    const streakItem = create('span');
-    streakItem.className = 'streak-stat-item streak-stat-count';
-    const streakCount = currentStreak?.current || 0;
-    streakItem.textContent = streakCount === 1 ? '🔥 1 day streak' : `🔥 ${streakCount} day streak`;
-
-    const freezeItem = create('span');
-    freezeItem.className = 'streak-stat-item streak-stat-freezes';
-    const freezes = currentStreak?.freezesAvailable || 0;
-    freezeItem.textContent = freezes === 1 ? '🧊 1 freeze left' : `🧊 ${freezes} freezes left`;
-    freezeItem.title = 'Get a 5 day streak for 2 freezes';
-
-    statsRow.append(streakItem, freezeItem);
-
     // Days of week header
     const dowGrid = create('div');
     dowGrid.className = 'streak-cal-dow-grid';
@@ -446,10 +394,6 @@ export function createStreakPill(
       num.className = 'streak-cal-num';
       num.textContent = String(d.day);
 
-      const icon = create('span');
-      icon.className = 'streak-cal-icon';
-      icon.textContent = getCalendarDayIcon(d.status);
-
       const tip = create('div');
       tip.className = 'streak-day-tip';
       tip.setAttribute('role', 'tooltip');
@@ -460,21 +404,11 @@ export function createStreakPill(
       cell.addEventListener('focus', () => cell.classList.add('is-hovered'));
       cell.addEventListener('blur', () => cell.classList.remove('is-hovered'));
 
-      cell.append(num, icon, tip);
+      cell.append(num, tip);
       daysGrid.append(cell);
     }
 
-    // Legend
-    const legend = create('div');
-    legend.className = 'streak-cal-legend';
-    legend.innerHTML = `
-      <span>🔥 Done</span>
-      <span class="legend-freeze" title="Get a 5 day streak for 2 freezes">🧊 Freeze</span>
-      <span class="legend-missed">❌ Missed</span>
-      <span class="legend-none">— Rest</span>
-    `;
-
-    popover.append(header, statsRow, dowGrid, daysGrid, legend);
+    popover.append(header, dowGrid, daysGrid);
   }
 
   function update(streak?: StreakData | null, todayStr?: string, context?: StreakContext) {
@@ -504,15 +438,16 @@ export function createStreakPill(
     }
 
     badge.innerHTML = `${iconSvg}<span>${label}</span>`;
-    badge.title = status === 'frozen'
-      ? (currentStreak?.longest ? `Current streak: ${count} days · Best: ${currentStreak.longest} days · Get a 5 day streak for 2 freezes` : 'Get a 5 day streak for 2 freezes')
-      : (currentStreak?.longest ? `Current streak: ${count} days · Best: ${currentStreak.longest} days` : 'Days with nothing due still count. Answer a question when you have homework.');
+    badge.title = currentStreak?.longest && currentStreak.longest !== count
+      ? `${label} · Best ${currentStreak.longest}`
+      : label;
 
     if (currentStreak?.freezesAvailable) {
       const freezeTag = create('span');
       freezeTag.className = 'streak-freeze-tag';
-      freezeTag.textContent = `🧊${currentStreak.freezesAvailable}`;
-      freezeTag.title = 'Get a 5 day streak for 2 freezes';
+      const freezeCount = currentStreak.freezesAvailable;
+      freezeTag.textContent = freezeCount === 1 ? '1 freeze' : `${freezeCount} freezes`;
+      freezeTag.title = freezeTag.textContent;
       badge.append(freezeTag);
     }
 

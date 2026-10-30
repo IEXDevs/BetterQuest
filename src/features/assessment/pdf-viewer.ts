@@ -230,6 +230,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       box-sizing:border-box!important;
       color-scheme:light dark;
       --bq-pdf-muted:color-mix(in srgb,var(--bq-muted,#748491) 70%,var(--bq-text,#18253a));
+      --bq-pdf-zoom:1;
     }
     :host([data-fullscreen="true"]),
     :host(:fullscreen){
@@ -314,23 +315,23 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       z-index:10;
       display:grid;
       place-items:center;
-      width:40px!important;
-      height:40px!important;
-      border-radius:18px!important;
-      border:2px solid #6366f1;
+      width:calc(40px * var(--bq-pdf-zoom, 1))!important;
+      height:calc(40px * var(--bq-pdf-zoom, 1))!important;
+      border-radius:calc(18px * var(--bq-pdf-zoom, 1))!important;
+      border:calc(2px * var(--bq-pdf-zoom, 1)) solid #6366f1;
       background:#ffffff;
       color:#4338ca;
-      font:800 15px/1 ui-rounded,"Avenir Next",system-ui,sans-serif;
-      box-shadow:0 1px 4px rgba(79,70,229,.25);
+      font:800 calc(15px * var(--bq-pdf-zoom, 1))/1 ui-rounded,"Avenir Next",system-ui,sans-serif;
+      box-shadow:0 calc(1px * var(--bq-pdf-zoom, 1)) calc(4px * var(--bq-pdf-zoom, 1)) rgba(79,70,229,.25);
       cursor:pointer;
       box-sizing:border-box;
-      transform:translate(5px,3px);
+      transform:translate(calc(5px * var(--bq-pdf-zoom, 1)),calc(3px * var(--bq-pdf-zoom, 1)));
       transition:transform .15s cubic-bezier(.16,1,.3,1),background .15s ease,border-color .15s ease,box-shadow .15s ease,color .15s ease;
     }
     .option-hit::before{
       content:'';
       position:absolute;
-      inset:-4px -8px;
+      inset:calc(-4px * var(--bq-pdf-zoom, 1)) calc(-8px * var(--bq-pdf-zoom, 1));
       border-radius:999px;
       pointer-events:auto;
     }
@@ -338,14 +339,14 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       background:#18253a;
       color:#e0e7ff;
       border-color:#818cf8;
-      box-shadow:0 1px 4px rgba(0,0,0,.45);
+      box-shadow:0 calc(1px * var(--bq-pdf-zoom, 1)) calc(4px * var(--bq-pdf-zoom, 1)) rgba(0,0,0,.45);
     }
     .option-hit:hover,.option-hit:focus-visible{
-      transform:translate(5px,5px) scale(1.08);
+      transform:translate(calc(5px * var(--bq-pdf-zoom, 1)),calc(5px * var(--bq-pdf-zoom, 1))) scale(1.08);
       border-color:#4338ca;
       background:#4f46e5;
       color:#fff;
-      box-shadow:0 3px 10px rgba(79,70,229,.45);
+      box-shadow:0 calc(3px * var(--bq-pdf-zoom, 1)) calc(10px * var(--bq-pdf-zoom, 1)) rgba(79,70,229,.45);
     }
     :host([data-dark-pages="true"]) .option-hit:hover,
     :host([data-dark-pages="true"]) .option-hit:focus-visible{
@@ -354,29 +355,29 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       color:#fff;
     }
     .option-hit:active{
-      transform:translate(5px,5px) scale(1.02);
+      transform:translate(calc(5px * var(--bq-pdf-zoom, 1)),calc(5px * var(--bq-pdf-zoom, 1))) scale(1.02);
     }
     .option-hit[hidden]{
       display:none!important;
     }
     .option-hit[aria-pressed="true"]{
-      border:2px solid #312e81;
+      border:calc(2px * var(--bq-pdf-zoom, 1)) solid #312e81;
       background:#4f46e5;
       color:#fff;
-      transform:translate(5px,5px) scale(1.06);
-      box-shadow:0 0 0 3px rgba(79,70,229,.35),0 3px 8px rgba(49,46,129,.5);
+      transform:translate(calc(5px * var(--bq-pdf-zoom, 1)),calc(5px * var(--bq-pdf-zoom, 1))) scale(1.06);
+      box-shadow:0 0 0 calc(3px * var(--bq-pdf-zoom, 1)) rgba(79,70,229,.35),0 calc(3px * var(--bq-pdf-zoom, 1)) calc(8px * var(--bq-pdf-zoom, 1)) rgba(49,46,129,.5);
     }
     :host([data-dark-pages="true"]) .option-hit[aria-pressed="true"]{
       border-color:#c7d2fe;
       background:#6366f1;
       color:#fff;
-      box-shadow:0 0 0 3px rgba(129,140,248,.4),0 3px 8px rgba(0,0,0,.5);
+      box-shadow:0 0 0 calc(3px * var(--bq-pdf-zoom, 1)) rgba(129,140,248,.4),0 calc(3px * var(--bq-pdf-zoom, 1)) calc(8px * var(--bq-pdf-zoom, 1)) rgba(0,0,0,.5);
     }
     .option-hit.is-wrong{
       border-color:#b91c1c;
       background:#dc2626;
       color:#fff;
-      box-shadow:0 2px 6px rgba(220,38,38,.45);
+      box-shadow:0 calc(2px * var(--bq-pdf-zoom, 1)) calc(6px * var(--bq-pdf-zoom, 1)) rgba(220,38,38,.45);
     }
     .option-hit.is-wrong::before{
       display:none;
@@ -389,21 +390,21 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       top:50%;
       display:grid;
       place-items:center;
-      width:22px;
-      height:22px;
+      width:calc(22px * var(--bq-pdf-zoom, 1));
+      height:calc(22px * var(--bq-pdf-zoom, 1));
       border-radius:50%;
       background:#dc2626;
       color:#fff;
-      font:800 12px/1 ui-rounded,"Avenir Next",sans-serif;
+      font:800 calc(12px * var(--bq-pdf-zoom, 1))/1 ui-rounded,"Avenir Next",sans-serif;
       transform:translateY(-50%);
-      box-shadow:0 2px 6px rgba(220,38,38,.45);
+      box-shadow:0 calc(2px * var(--bq-pdf-zoom, 1)) calc(6px * var(--bq-pdf-zoom, 1)) rgba(220,38,38,.45);
       pointer-events:none;
     }
     .option-hit.is-correct{
-      border:2px solid #15803d;
+      border:calc(2px * var(--bq-pdf-zoom, 1)) solid #15803d;
       background:#16a34a;
       color:#fff;
-      box-shadow:0 2px 8px rgba(22,163,74,.5);
+      box-shadow:0 calc(2px * var(--bq-pdf-zoom, 1)) calc(8px * var(--bq-pdf-zoom, 1)) rgba(22,163,74,.5);
       animation:bq-rainbow 2.4s linear infinite;
     }
     .option-hit.is-correct::before{
@@ -417,21 +418,21 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       top:50%;
       display:grid;
       place-items:center;
-      width:22px;
-      height:22px;
+      width:calc(22px * var(--bq-pdf-zoom, 1));
+      height:calc(22px * var(--bq-pdf-zoom, 1));
       border-radius:50%;
       background:#16a34a;
       color:#fff;
-      font:800 13px/1 ui-rounded,"Avenir Next",sans-serif;
+      font:800 calc(13px * var(--bq-pdf-zoom, 1))/1 ui-rounded,"Avenir Next",sans-serif;
       transform:translateY(-50%);
-      box-shadow:0 2px 8px rgba(22,163,74,.55);
+      box-shadow:0 calc(2px * var(--bq-pdf-zoom, 1)) calc(8px * var(--bq-pdf-zoom, 1)) rgba(22,163,74,.55);
       pointer-events:none;
     }
     @keyframes bq-rainbow{
-      0%,100%{box-shadow:0 0 0 3px rgba(245,158,11,.45),0 0 14px rgba(245,158,11,.5)}
-      25%{box-shadow:0 0 0 3px rgba(34,197,94,.5),0 0 14px rgba(34,197,94,.55)}
-      50%{box-shadow:0 0 0 3px rgba(59,130,246,.5),0 0 14px rgba(59,130,246,.55)}
-      75%{box-shadow:0 0 0 3px rgba(168,85,247,.5),0 0 14px rgba(168,85,247,.55)}
+      0%,100%{box-shadow:0 0 0 calc(3px * var(--bq-pdf-zoom, 1)) rgba(245,158,11,.45),0 0 calc(14px * var(--bq-pdf-zoom, 1)) rgba(245,158,11,.5)}
+      25%{box-shadow:0 0 0 calc(3px * var(--bq-pdf-zoom, 1)) rgba(34,197,94,.5),0 0 calc(14px * var(--bq-pdf-zoom, 1)) rgba(34,197,94,.55)}
+      50%{box-shadow:0 0 0 calc(3px * var(--bq-pdf-zoom, 1)) rgba(59,130,246,.5),0 0 calc(14px * var(--bq-pdf-zoom, 1)) rgba(59,130,246,.55)}
+      75%{box-shadow:0 0 0 calc(3px * var(--bq-pdf-zoom, 1)) rgba(168,85,247,.5),0 0 calc(14px * var(--bq-pdf-zoom, 1)) rgba(168,85,247,.55)}
     }
     @media(prefers-reduced-motion:reduce){.option-hit.is-correct{animation:none}.verdict-toast{animation:none}}
     .loading,.error{display:grid;place-items:center;min-height:280px;padding:28px;text-align:center;color:var(--bq-text,#18253a)}
@@ -441,23 +442,27 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       z-index:30;
       display:inline-flex;
       align-items:center;
-      gap:6px;
-      padding:6px 14px;
+      gap:calc(6px * var(--bq-pdf-zoom, 1));
+      padding:calc(6px * var(--bq-pdf-zoom, 1)) calc(14px * var(--bq-pdf-zoom, 1));
       border:0;
-      border-radius:6px;
+      border-radius:calc(6px * var(--bq-pdf-zoom, 1));
       background:linear-gradient(135deg,#6366f1,#4f46e5);
       color:#fff;
-      font:750 11px/1.2 ui-rounded,"Avenir Next",sans-serif;
+      font:750 calc(11px * var(--bq-pdf-zoom, 1))/1.2 ui-rounded,"Avenir Next",sans-serif;
       letter-spacing:.02em;
-      box-shadow:0 4px 14px rgba(99,102,241,.4),0 2px 4px rgba(0,0,0,.2);
+      box-shadow:0 calc(4px * var(--bq-pdf-zoom, 1)) calc(14px * var(--bq-pdf-zoom, 1)) rgba(99,102,241,.4),0 calc(2px * var(--bq-pdf-zoom, 1)) calc(4px * var(--bq-pdf-zoom, 1)) rgba(0,0,0,.2);
       cursor:pointer;
       white-space:nowrap;
       animation:pdf-pop-in .15s cubic-bezier(.16,1,.3,1);
-      transform:translate(5px,5px);
+      transform:translate(calc(5px * var(--bq-pdf-zoom, 1)),calc(5px * var(--bq-pdf-zoom, 1)));
       transition:transform .15s ease,box-shadow .15s ease,background .15s ease;
     }
-    .pdf-submit-btn:hover{background:linear-gradient(135deg,#4f46e5,#4338ca);transform:translate(5px,5px) translateY(-1px) scale(1.02);box-shadow:0 6px 18px rgba(99,102,241,.5),0 3px 6px rgba(0,0,0,.25)}
-    .pdf-submit-btn:active{transform:translate(5px,5px) scale(.98)}
+    .pdf-submit-btn svg{
+      width:calc(12px * var(--bq-pdf-zoom, 1));
+      height:calc(12px * var(--bq-pdf-zoom, 1));
+    }
+    .pdf-submit-btn:hover{background:linear-gradient(135deg,#4f46e5,#4338ca);transform:translate(calc(5px * var(--bq-pdf-zoom, 1)),calc(5px * var(--bq-pdf-zoom, 1))) translateY(-1px) scale(1.02);box-shadow:0 calc(6px * var(--bq-pdf-zoom, 1)) calc(18px * var(--bq-pdf-zoom, 1)) rgba(99,102,241,.5),0 calc(3px * var(--bq-pdf-zoom, 1)) calc(6px * var(--bq-pdf-zoom, 1)) rgba(0,0,0,.25)}
+    .pdf-submit-btn:active{transform:translate(calc(5px * var(--bq-pdf-zoom, 1)),calc(5px * var(--bq-pdf-zoom, 1))) scale(.98)}
     .pdf-submit-btn[disabled]{opacity:.75;cursor:not-allowed}
     .pdf-submit-btn[data-failed="true"]{background:linear-gradient(135deg,#b45309,#92400e)}
     .pdf-submit-btn[data-failed="true"]:hover{background:linear-gradient(135deg,#92400e,#78350a)}
@@ -604,6 +609,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     try { document.defaultView?.localStorage?.setItem(ZOOM_KEY, String(value)); } catch { /* zoom still applies for this session */ }
   };
   let zoomLevel = readZoom();
+  element.style.setProperty('--bq-pdf-zoom', String(zoomLevel));
   let fitScale = 1;
   let currentAnswered = new Set<number>(options.answeredQuestions ?? []);
   // The set of questions and their option counts can grow while the workspace
@@ -653,10 +659,12 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   function paintZoom() {
     zoomValue.textContent = `${Math.round(zoomLevel * 100)}%`;
     pages.classList.toggle('is-zoomed', zoomLevel > 1.001);
+    element.style.setProperty('--bq-pdf-zoom', String(zoomLevel));
     for (const { root, width } of pageElements.values()) {
       const targetWidth = Math.round(width * fitScale * zoomLevel * 100) / 100;
       root.style.setProperty('--bq-pdf-page-width', `${targetWidth}px`);
       root.style.width = `var(--bq-pdf-page-width, ${targetWidth}px)`;
+      root.style.setProperty('--bq-pdf-zoom', String(zoomLevel));
     }
   }
 
@@ -1083,11 +1091,11 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           const leftPct = Number.parseFloat(activeHit.style.left) || 0;
           const topPct = Number.parseFloat(activeHit.style.top) || 0;
           if (leftPct > 78) {
-            btn.style.right = '8px';
+            btn.style.right = 'calc(8px * var(--bq-pdf-zoom, 1))';
           } else {
-            btn.style.left = `calc(${leftPct}% + 34px)`;
+            btn.style.left = `calc(${leftPct}% + 34px * var(--bq-pdf-zoom, 1))`;
           }
-          btn.style.top = `calc(${topPct}% - 4px)`;
+          btn.style.top = `calc(${topPct}% - 4px * var(--bq-pdf-zoom, 1))`;
           btn.addEventListener('click', (event) => {
             event.stopPropagation();
             attemptSubmit(questionNumber);
