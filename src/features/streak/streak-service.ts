@@ -160,10 +160,12 @@ export interface AccountStreakResult {
 
 /**
  * Current streak counts question days, freezes, and days with nothing due.
- * A rest day counts once a streak is already going. It does not start a streak by itself,
- * and it does not break one. Today stays open until the day is over or a question is answered.
- * A missed question day, or an unfinished assignment past its due date, ends the streak
- * unless protected by an earned streak freeze.
+ * Answering even one question keeps that day, even when an assignment is left
+ * unfinished past its deadline. A rest day counts once a streak is already going.
+ * It does not start a streak by itself, and it does not break one. Today stays
+ * open until the day is over or a question is answered. A day with homework open
+ * and no answer, or an unfinished assignment past its due date with nothing
+ * answered that day, ends the streak unless protected by an earned streak freeze.
  */
 export function calculateStreak(
   activeDates: string[],
@@ -187,14 +189,20 @@ function accountStreak(
 ): AccountStreakResult {
   const active = new Set(activeDates.filter(validDate));
   const facts = buildFacts(todayStr, context, brokenDates);
-  const previouslyFrozen = new Set(existingFrozen.filter(validDate));
+  // An answered day is never a missed day: the student did work, so it keeps
+  // the streak without spending a freeze. Drop any freeze/break that was
+  // recorded for a day that now shows answers, and hand that freeze back once.
+  const previouslyFrozenAll = existingFrozen.filter(validDate);
+  const frozenButAnswered = previouslyFrozenAll.filter(day => active.has(day));
+  const previouslyFrozen = new Set(previouslyFrozenAll.filter(day => !active.has(day)));
+  const freezeRefunds = frozenButAnswered.length;
   const limit = earliestMark([...active, ...previouslyFrozen], todayStr);
 
   function simulate(extraBanked: number): AccountStreakResult {
     let run = 0;
     let alive = false;
     let milestonesInRun = 0;
-    let freezesInPocket = extraBanked;
+    let freezesInPocket = extraBanked + freezeRefunds;
     const frozenDates = new Set<string>(previouslyFrozen);
     const keptRest = new Set<string>();
     const recordedBreaks = new Set<string>();
@@ -208,7 +216,17 @@ function accountStreak(
       const isHardBreak = facts.hardBreaks.has(day);
       const isObligation = facts.obligations.has(day);
 
-      if (isPreviouslyFrozen) {
+      // Answers win over everything: one answered question keeps the day, even
+      // when an assignment went past its deadline unfinished that same day.
+      if (isActive) {
+        alive = true;
+        run += 1;
+        const currentMilestones = Math.floor(run / 5);
+        if (currentMilestones > milestonesInRun) {
+          freezesInPocket += (currentMilestones - milestonesInRun) * 2;
+          milestonesInRun = currentMilestones;
+        }
+      } else if (isPreviouslyFrozen) {
         alive = true;
         freezesInPocket = Math.max(0, freezesInPocket - 1);
         frozenDates.add(day);
@@ -235,14 +253,6 @@ function accountStreak(
           alive = false;
           milestonesInRun = 0;
           recordedBreaks.add(day);
-        }
-      } else if (isActive) {
-        alive = true;
-        run += 1;
-        const currentMilestones = Math.floor(run / 5);
-        if (currentMilestones > milestonesInRun) {
-          freezesInPocket += (currentMilestones - milestonesInRun) * 2;
-          milestonesInRun = currentMilestones;
         }
       } else if (isObligation) {
         if (isToday) {
@@ -293,7 +303,7 @@ function accountStreak(
     const longest = runs.reduce((best, len) => Math.max(best, len), current);
     const milestones = runs.reduce((tot, len) => tot + Math.floor(len / 5), 0);
     const finalBroken = [...new Set([...brokenDates, ...recordedBreaks])]
-      .filter(d => validDate(d) && !frozenDates.has(d))
+      .filter(d => validDate(d) && !frozenDates.has(d) && !active.has(d))
       .sort()
       .slice(-180);
 
@@ -511,12 +521,13 @@ export function getStreakCalendar(
         dayStatus = 'before-start';
       } else if (dateStr > todayStr) {
         dayStatus = 'future';
+      } else if (activeSet.has(dateStr)) {
+        // Answers always win over a freeze or a past-due break for the same day.
+        dayStatus = 'active';
       } else if (freezeSet.has(dateStr)) {
         dayStatus = 'frozen';
       } else if (facts.hardBreaks.has(dateStr)) {
         dayStatus = 'missed';
-      } else if (activeSet.has(dateStr)) {
-        dayStatus = 'active';
       } else if (dateStr === todayStr) {
         dayStatus = 'future';
       } else if (facts.obligations.has(dateStr)) {

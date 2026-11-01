@@ -25,6 +25,7 @@ Every user-facing string, label, caption, and status message exists **to communi
 - Product messaging should highlight streak/tracker value and Google Calendar sync for due dates when relevant.
 - On homework pages, keep only the BetterQuest purple Slides/Classic control; do not leave Quest's native blue Slides button visible beside it (duplicate controls flicker).
 - Dark mode applies on main Quest pages and the PDF viewer only. Slides view and extra homework pages keep Quest's normal appearance.
+- Answering at least one question keeps that day's streak, even if the assignment is left unfinished past its due date. Such a day shows as answered, never as "Freeze used".
 - Grades, assignments, review, and the home page open at the top. The PDF view keeps its own place on the page.
 - In the PDF viewer, pinch and Ctrl+scroll zoom smoothly while the pointer is over the PDF. The + and − buttons snap to the nearest 10% and then move in 10% steps.
 

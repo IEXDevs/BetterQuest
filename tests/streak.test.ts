@@ -141,7 +141,7 @@ test('calculateStreak breaks when homework was open and no question was answered
   assert.equal(result.longest, 4);
 });
 
-test('calculateStreak breaks when an assignment is unfinished after its due date', () => {
+test('an unanswered due day breaks the streak, but answering on it keeps the day', () => {
   const today = '2026-10-19';
   const context: StreakContext = {
     now: Date.parse('2026-10-19T18:00:00.000Z'),
@@ -150,10 +150,74 @@ test('calculateStreak breaks when an assignment is unfinished after its due date
       deadline: { iso: '2026-10-19T04:59:00.000Z', label: 'Oct 18, 11:59 PM CDT', timeZone: 'America/Chicago' },
     })],
   };
+  // Answered Oct 17, then let the Oct 18 due date pass without answering anything.
+  const skippedDueDay = calculateStreak(['2026-10-17'], today, [], context);
+  assert.equal(skippedDueDay.current, 0);
+
+  // Answering on the due day keeps that day, even if the assignment is finished late.
   const answeredOnTheDueDay = calculateStreak(['2026-10-17', '2026-10-18'], today, [], context);
-  assert.equal(answeredOnTheDueDay.current, 0);
+  assert.equal(answeredOnTheDueDay.current, 2);
   const continuedAfter = calculateStreak(['2026-10-17', '2026-10-18', '2026-10-19'], today, [], context);
-  assert.equal(continuedAfter.current, 1);
+  assert.equal(continuedAfter.current, 3);
+});
+
+test('a due day with answers shows as answered, not as a used freeze', () => {
+  const today = '2026-10-30';
+  const context: StreakContext = {
+    now: Date.parse('2026-10-30T18:00:00.000Z'),
+    assignments: [homework({
+      start: { iso: '2026-10-28T05:00:00.000Z', label: 'Oct 28', timeZone: 'America/Chicago' },
+      deadline: { iso: '2026-10-30T04:59:00.000Z', label: 'Oct 29, 11:59 PM CDT', timeZone: 'America/Chicago' },
+    })],
+  };
+  const streak = {
+    current: 2,
+    longest: 2,
+    lastActiveDate: '2026-10-29',
+    activeDates: ['2026-10-28', '2026-10-29'],
+    freezesAvailable: 2,
+    frozenDates: [],
+    startDate: '2026-10-28',
+  };
+
+  const reconciled = reconcileStreak(streak, today, context);
+  assert.equal(reconciled.current, 2, 'Answering on the due day keeps the streak');
+  assert.deepEqual(reconciled.frozenDates, [], 'No freeze is spent on a day with answers');
+  assert.equal(reconciled.freezesAvailable, 2);
+
+  const october = getStreakCalendar(reconciled, today, context).at(-1)!;
+  const dueDay = october.days.find(day => day.dateStr === '2026-10-29')!;
+  assert.equal(dueDay.status, 'active');
+  assert.equal(dueDay.reason, 'Answered');
+});
+
+test('a freeze spent on a day that turns out answered is handed back', () => {
+  const today = '2026-10-30';
+  const context: StreakContext = {
+    now: Date.parse('2026-10-30T18:00:00.000Z'),
+    assignments: [homework({
+      start: { iso: '2026-10-28T05:00:00.000Z', label: 'Oct 28', timeZone: 'America/Chicago' },
+      deadline: { iso: '2026-10-30T04:59:00.000Z', label: 'Oct 29, 11:59 PM CDT', timeZone: 'America/Chicago' },
+    })],
+  };
+  const streak = {
+    current: 2,
+    longest: 2,
+    lastActiveDate: '2026-10-29',
+    activeDates: ['2026-10-28', '2026-10-29'],
+    freezesAvailable: 1,
+    frozenDates: ['2026-10-29'],
+    startDate: '2026-10-28',
+  };
+
+  const reconciled = reconcileStreak(streak, today, context);
+  assert.equal(reconciled.current, 2);
+  assert.deepEqual(reconciled.frozenDates, []);
+  assert.equal(reconciled.freezesAvailable, 2, 'The freeze taken for an answered day comes back');
+
+  const rerun = reconcileStreak(reconciled, today, context);
+  assert.equal(rerun.freezesAvailable, 2, 'Reconciling again does not hand the freeze back twice');
+  assert.deepEqual(rerun.frozenDates, []);
 });
 
 test('recordActiveDate adds date uniquely and keeps sorted', () => {
@@ -635,7 +699,21 @@ test('getStreakBadgeStatus reflects active, frozen, and broken states with prope
     start: { iso: '2026-10-06T05:00:00.000Z', label: 'Oct 6', timeZone: 'America/Chicago' },
     deadline: { iso: '2026-10-11T04:59:00.000Z', label: 'Oct 10, 11:59 PM CDT', timeZone: 'America/Chicago' },
   });
-  const statusBroken = getStreakBadgeStatus(restedStreak, '2026-10-19', {
+  // Oct 10 (the due day) was answered, so the streak stays alive even though the
+  // assignment was left unfinished.
+  const statusAnsweredDueDay = getStreakBadgeStatus(restedStreak, '2026-10-19', {
+    now: Date.parse('2026-10-19T18:00:00.000Z'),
+    assignments: [overdue],
+  });
+  assert.equal(statusAnsweredDueDay.status, 'active');
+  assert.equal(statusAnsweredDueDay.count, 13);
+
+  // Nothing answered on the due day: the streak breaks there.
+  const statusBroken = getStreakBadgeStatus({
+    ...restedStreak,
+    lastActiveDate: '2026-10-09',
+    activeDates: ['2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09'],
+  }, '2026-10-19', {
     now: Date.parse('2026-10-19T18:00:00.000Z'),
     assignments: [overdue],
   });
@@ -709,8 +787,13 @@ test('getStreakCalendar generates months starting from start date up to current 
     })],
   });
   const dueDay = overdue[2].days.find(d => d.dateStr === '2026-10-17')!;
-  assert.equal(dueDay.status, 'missed');
-  assert.equal(dueDay.reason, 'Missed — unfinished after the due date');
+  // Oct 17 was answered, so it reads as answered even though the assignment
+  // went past its deadline unfinished.
+  assert.equal(dueDay.status, 'active');
+  assert.equal(dueDay.reason, 'Answered');
+  const openDay = overdue[2].days.find(d => d.dateStr === '2026-10-16')!;
+  assert.equal(openDay.status, 'missed');
+  assert.equal(openDay.reason, 'Missed — no answer while homework was open');
 });
 
 test('createStreakPill renders badge with freezes and interactive calendar popover', () => {
