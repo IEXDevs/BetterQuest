@@ -22,6 +22,9 @@ export class LocalRepository {
   execute(command: Command): Promise<LocalState> {
     const job = this.tail.then(async () => {
       const current = decodeState(await this.backend.read());
+      // decodeState already provides an isolated, validated copy. Reads neither
+      // reduce nor write state, so two additional whole-state clones buy nothing.
+      if (command.kind === 'state:read') return current;
       const next = applyCommand(current, command);
       if (command.kind !== 'state:read') {
         if (!isLocalState(next)) throw new Error('Could not update settings.');
@@ -30,7 +33,8 @@ export class LocalRepository {
       }
       return structuredClone(next);
     });
-    this.tail = job.catch(() => undefined);
+    // The queue only needs completion, not a permanent reference to the response.
+    this.tail = job.then(() => undefined, () => undefined);
     return job;
   }
 }

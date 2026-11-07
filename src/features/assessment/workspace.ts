@@ -874,8 +874,18 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   };
   document.addEventListener('keydown', handleKeydown);
 
+  const suspendedPdfSources = new Map<HTMLIFrameElement, string>();
+  function restoreNativePdfSources() {
+    for (const [frame, src] of suspendedPdfSources) {
+      // Never reload a detached Quest page or overwrite a URL Quest has changed.
+      if (frame.isConnected && !frame.hasAttribute('src')) frame.setAttribute('src', src);
+    }
+    suspendedPdfSources.clear();
+  }
   function syncPdfVisibility(active: boolean) {
-    const elements = findPdfAssessment(document); if (!elements) return;
+    if (!active) restoreNativePdfSources();
+    if (!root.isConnected) return;
+    const elements = findPdfAssessment(document); if (!elements || elements.root !== root) return;
     const mode = active ? 'betterquest' : 'basic';
     root.dataset.betterquestPdfMode = mode;
     document.documentElement.dataset.betterquestPdfMode = mode;
@@ -905,6 +915,11 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       ];
       if (elements.iframe) iframes.push(elements.iframe);
       for (const ifr of new Set(iframes)) {
+        const src = ifr.getAttribute('src');
+        if (src && (ifr === elements.iframe || ifr.matches('#presentation-pdf-frame iframe, iframe[title="Assignment PDF"], iframe[src*="download_pdf"], iframe[src*="problem_pdf"]'))) {
+          suspendedPdfSources.set(ifr, src);
+          ifr.removeAttribute('src'); // Hidden alone leaves Chrome's PDF renderer alive.
+        }
         if (!ifr.hidden) ifr.hidden = true;
         ifr.style.setProperty('display', 'none', 'important');
         ifr.style.setProperty('visibility', 'hidden', 'important');
@@ -1844,7 +1859,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   win?.addEventListener('hashchange', onHashChange);
 
   return { reconcile: render, dispose() {
-    disposed = true; const elements = findPdfAssessment(document);
+    if (disposed) return;
+    disposed = true; const elements = root.isConnected ? findPdfAssessment(document) : null;
     win?.removeEventListener('hashchange', onHashChange);
     clearPendingSubmit();
     removeResizeGrip();
@@ -1881,6 +1897,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     if (elements) elements.iframe.hidden = false;
     if (elements?.pdfFrame.dataset.betterquestSynthesized === 'true') elements.pdfFrame.remove();
     pdfViewer?.dispose(); pdfViewer = undefined; host.remove(); style.remove();
+    lastBindings = [];
+    knownByNumber.clear(); knownAnswered.clear(); questionPoints.clear();
+    markedCorrect.clear(); wrongMarks.clear();
   } };
 }
 

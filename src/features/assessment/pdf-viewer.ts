@@ -1075,6 +1075,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     element,
     ready,
     setSelected(questionNumber: number, optionValue: string) {
+      if (disposed) return;
       if (currentAnswered.has(questionNumber)) return;
       for (const button of shadow.querySelectorAll<HTMLButtonElement>('.option-hit')) {
         const q = Number(button.dataset.question);
@@ -1173,6 +1174,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       fitPagesToViewer();
     },
     setAnsweredQuestions(answered: ReadonlySet<number>) {
+      if (disposed) return;
       currentAnswered = new Set(answered);
       if (isBetterQuestDebug(element.ownerDocument)) {
         const list = [...currentAnswered].sort((a, b) => a - b);
@@ -1199,7 +1201,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       // map grows so every question gets its answer boxes. Nothing is applied
       // until the pages are painted, so the workspace re-feeds the map from its
       // ready handler.
-      if (!pdfRuns.length) return false;
+      if (disposed || !pdfRuns.length) return false;
       let grew = false;
       for (const [qNum, max] of next) {
         if ((optionMaximums.get(qNum) ?? 0) < max) { optionMaximums.set(qNum, max); grew = true; }
@@ -1214,6 +1216,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       return true;
     },
     scrollToQuestion(questionNumber: number): boolean {
+      if (disposed) return false;
       const anchor = shadow.querySelector<HTMLElement>(`.question-anchor[data-question="${questionNumber}"]`);
       if (anchor) {
         const pageEl = anchor.closest<HTMLElement>('.page');
@@ -1284,6 +1287,10 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       resizeObserver?.disconnect();
       abort.abort();
       source?.destroy();
+      source = undefined;
+      pdfRuns = [];
+      paintChoices = () => {};
+      optionMaximums.clear(); currentAnswered.clear(); keptCorrect.clear();
       for (const page of pageElements.values()) {
         const canvas = page.root.querySelector('canvas');
         if (canvas) { canvas.width = 0; canvas.height = 0; }
