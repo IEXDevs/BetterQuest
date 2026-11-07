@@ -50,12 +50,6 @@ just visible Scroller rows. All PDF pages are rendered to support current
 question mapping/navigation, and enabled course art animates. These still carry
 DOM/canvas/CPU costs; none were disabled or virtualized in this patch.
 
-Reload the unpacked extension and refresh Quest before comparing measurements.
-Repeat the same course/homework navigation sequence, with the same PDF, course
-effects, and viewport. Compare settled CPU and heap after GC, retained detached
-trees, document/worker counts, and DOM-node peaks in Chrome Performance Monitor
-and heap snapshots. Real Chrome improvements remain unmeasured until that run.
-
 Focused regression coverage lives in `tests/performance.test.ts`, alongside the
 existing integration, bookmark, course-hero, foundations, facelift, and interactive
 PDF suites. It covers allocation stability, canceled PDF loads/renders, detached
