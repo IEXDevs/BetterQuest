@@ -5,6 +5,34 @@ import { startIntegration } from '../src/content/integration';
 import { QUEST_DARK_STYLES } from '../src/adapters/quest/theme';
 import { LocalRepository } from '../src/storage/repository';
 import type { LocalState } from '../src/shared/models';
+import { emptyState } from '../src/shared/models';
+import { BookmarkService } from '../src/features/bookmarks/service';
+import { createSavedQuestionsView } from '../src/features/bookmarks/saved-view';
+
+test('Saved Questions sits slightly left of center beneath its icon and clamps to viewport edges', () => {
+  const dom = new JSDOM('<nav><button class="bq-toolbar-saved"></button></nav>');
+  const doc = dom.window.document;
+  Object.defineProperty(dom.window, 'innerWidth', { configurable: true, value: 1200 });
+  let x = 650;
+  const button = doc.querySelector('button')!;
+  button.getBoundingClientRect = () => new dom.window.DOMRect(x, 20, 40, 42);
+  const popup = createSavedQuestionsView(doc, new BookmarkService(async () => emptyState()), () => () => {}, () => {}, () => false);
+  try {
+    const navbar = doc.querySelector('nav')!;
+    popup.position(navbar);
+    const host = doc.querySelector<HTMLElement>('[data-betterquest="saved-questions"]')!;
+    assert.equal(host.style.top, '70px');
+    assert.equal(host.style.left, '481px');
+    assert.equal(host.style.right, '');
+    x = 1180; popup.position(navbar);
+    assert.equal(host.style.left, '858px');
+    x = 0; popup.position(navbar);
+    assert.equal(host.style.left, '12px');
+    Object.defineProperty(dom.window, 'innerWidth', { configurable: true, value: 320 });
+    x = 280; popup.position(navbar);
+    assert.equal(host.style.left, '12px');
+  } finally { popup.dispose(); dom.window.close(); }
+});
 
 test('Saved Questions opening and closing leaves assessment header, spacers and scroll unchanged', async () => {
   const dom = new JSDOM(`<body id="body-id" class="mdb-skin">

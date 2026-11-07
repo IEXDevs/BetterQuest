@@ -9,30 +9,30 @@ export function createSavedQuestionsView(document: Document, service: BookmarkSe
   shadow.addEventListener('click', event => event.stopPropagation());
   const style = document.createElement('style');
   style.textContent = `
-    :host{display:block;position:fixed;z-index:10000;width:min(480px,calc(100vw - 24px));margin:0;color:var(--bq-text,#26384a);font-family:inherit;overflow-x:hidden}
+    :host{display:block;position:fixed;z-index:10000;width:min(330px,calc(100vw - 24px));margin:0;color:var(--bq-text,#26384a);font-family:inherit;overflow:visible}
     :host([hidden]){display:none}
-    section{background:var(--bq-surface,#fff);border:1px solid var(--bq-border,#e1e7ed);border-radius:10px;padding:14px 16px;font:inherit;font-size:14px;line-height:1.5;max-height:calc(100dvh - var(--bq-saved-top,80px) - 12px);box-sizing:border-box;overflow:auto;box-shadow:0 16px 48px #08131f40;animation:bq-saved-in .26s cubic-bezier(0.16,1,0.3,1) both}
+    section{background:color-mix(in srgb,var(--bq-surface,#fff) 94%,transparent);color:var(--bq-text,#edf3fb);border:1px solid var(--bq-border,#e1e7ed);border-radius:11px;padding:16px;font:13px/1.45 ui-rounded,'Avenir Next',-apple-system,sans-serif;text-align:left;max-height:calc(100dvh - var(--bq-saved-top,80px) - 12px);box-sizing:border-box;overflow:auto;box-shadow:0 28px 70px -10px #000000b8,0 0 0 1px #ffffff14,inset 0 1px #ffffff29;backdrop-filter:blur(28px) saturate(190%);animation:bq-saved-in .28s cubic-bezier(0.16,1,0.3,1) both}
     @keyframes bq-saved-in{0%{opacity:0;transform:translateY(-8px)}100%{opacity:1;transform:translateY(0)}}
     @media(prefers-reduced-motion:reduce){section{animation:none!important}}
     header{display:flex;align-items:center;justify-content:space-between;gap:15px}
-    h2{font:inherit;font-size:17px;font-weight:600;margin:0}h2:focus-visible{outline:2px solid #2563eb;outline-offset:4px}
+    h2{font:800 17px/1.2 ui-rounded,'Avenir Next',sans-serif;letter-spacing:-.02em;margin:0}h2:focus-visible{outline:2px solid #2563eb;outline-offset:4px}
     .actions{display:flex;gap:8px;align-items:center}button{font:inherit;cursor:pointer;background:transparent;color:var(--bq-accent,#227ab0);border:0;border-radius:4px;padding:5px 7px}
     button:hover{background:var(--bq-raised,#eff6ff)}button:disabled{opacity:.5;cursor:wait}
     button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--bq-accent,#2563eb);outline-offset:2px}
     .empty{color:var(--bq-muted,#71808c);font-size:12px;margin:8px 0}.error{color:var(--bq-warning,#a3453c)}
     .groups{max-height:420px;overflow-y:auto;overflow-x:hidden;margin-top:12px}
-    details{border-top:1px solid var(--bq-border,#edf1f4);padding:10px 0;transition:background .22s cubic-bezier(0.16,1,0.3,1),border-radius .22s ease}
-    details[open]{background:color-mix(in srgb,var(--bq-surface,#fff) 94%,var(--bq-raised,#eff6ff));border-radius:7px;padding:10px 10px}
+    details{border-bottom:1px solid var(--bq-border,#edf1f4);border-radius:7px;padding:2px 0;transition:background .22s cubic-bezier(0.16,1,0.3,1)}
+    details[open]{background:color-mix(in srgb,var(--bq-surface,#fff) 94%,var(--bq-raised,#eff6ff));padding-bottom:8px}
     details[open]>*:not(summary){animation:details-fluid-slide .24s cubic-bezier(0.16,1,0.3,1) both}
     @keyframes details-fluid-slide{0%{opacity:0;transform:translateY(-6px)}100%{opacity:1;transform:translateY(0)}}
-    summary{cursor:pointer;font-weight:650;display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:5px;transition:background .2s cubic-bezier(0.16,1,0.3,1),transform .2s cubic-bezier(0.16,1,0.3,1),color .18s ease;user-select:none;-webkit-user-select:none;list-style:none}
+    summary{cursor:pointer;font-weight:650;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:7px;transition:background .2s cubic-bezier(0.16,1,0.3,1),transform .2s cubic-bezier(0.16,1,0.3,1),color .18s ease;user-select:none;-webkit-user-select:none;list-style:none}
     summary::-webkit-details-marker{display:none}
     summary:hover{background:var(--bq-raised,#eff6ff);color:var(--bq-accent,#227ab0);transform:translateX(3px)}
     summary::after{content:'›';font-size:19px;line-height:1;display:inline-block;transition:transform .3s cubic-bezier(0.34,1.56,0.64,1);transform:rotate(90deg)}
     details[open] summary::after{transform:rotate(-90deg);color:var(--bq-accent,#818cf8)}
-    h3{font:inherit;font-size:13px;font-weight:600;margin:12px 0 6px}ul{padding:0;margin:0;list-style:none}
-    li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0;min-width:0}a{color:var(--bq-accent,#227ab0);text-decoration:none}a:hover{text-decoration:underline}
-    .question-note{display:block;color:var(--bq-muted,#71808c);font-size:11px}.remove{font-size:11px}
+    h3{font-family:inherit;font-size:12px;font-weight:700;line-height:1.4;color:var(--bq-muted,#71808c);margin:12px 10px 2px}ul{padding:0;margin:0;list-style:none}
+    li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 10px;min-width:0;border-radius:7px}li:hover{background:var(--bq-raised,#eff6ff)}a{color:var(--bq-accent,#227ab0);text-decoration:none}a:hover{text-decoration:underline}
+    .question-note{display:block;color:var(--bq-muted,#71808c);font-size:12px}.remove{font-size:12px;color:var(--bq-muted,#71808c)}.remove:hover{color:var(--bq-accent,#227ab0)}
   `;
   const section = document.createElement('section'); section.setAttribute('aria-labelledby', 'bq-saved-title'); section.setAttribute('role', 'dialog');
   const header = document.createElement('header');
@@ -57,9 +57,11 @@ export function createSavedQuestionsView(document: Document, service: BookmarkSe
     const button = navbar.querySelector<HTMLElement>('.bq-toolbar-saved');
     const rect = (button || navbar).getBoundingClientRect();
     const top = Math.max(8, rect.bottom + 8);
-    const width = Math.min(480, view.innerWidth - 24);
+    const width = Math.min(330, view.innerWidth - 24);
+    const left = Math.max(12, Math.min((rect.left + rect.right - width) / 2 - 24, view.innerWidth - width - 12));
     host.style.top = `${top}px`;
-    host.style.right = `${Math.max(12, Math.min(view.innerWidth - rect.right, view.innerWidth - width - 12))}px`;
+    host.style.left = `${left}px`;
+    host.style.removeProperty('right');
     host.style.setProperty('--bq-saved-top', `${top}px`);
   }
   const reposition = () => { if (!host.hidden && anchor) position(anchor); };
