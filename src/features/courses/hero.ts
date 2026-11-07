@@ -18,6 +18,15 @@ const STYLE_SELECTOR = '[data-betterquest="course-hero-style"]';
 const observers = new WeakMap<HTMLElement, MutationObserver>();
 const fxInstances = new WeakMap<HTMLElement, EffectInstance>();
 const heroRunners = new WeakMap<HTMLElement, Execute>();
+const ownedHeroes = new WeakMap<Document, Set<HTMLElement>>();
+
+function releaseHero(host: HTMLElement): void {
+  destroyFx(host);
+  observers.get(host)?.disconnect(); observers.delete(host);
+  heroRunners.delete(host);
+  ownedHeroes.get(host.ownerDocument)?.delete(host);
+  host.remove();
+}
 
 function animationsDisabled(document: Document): boolean {
   return document.documentElement.dataset.betterquestAnimations === 'disabled';
@@ -323,6 +332,9 @@ async function cycleHeroEffect(host: HTMLElement, document: Document, artKey: st
 /** Mounts/refreshes the hero banner for the course card under `root`. */
 export function enhanceCourseHero(root: HTMLElement, run?: Execute): void {
   const document = root.ownerDocument;
+  const tracked = ownedHeroes.get(document) || new Set<HTMLElement>();
+  ownedHeroes.set(document, tracked);
+  for (const host of tracked) if (!host.isConnected) releaseHero(host);
   const infoHeader = root.querySelector<HTMLElement>('#student-course-info-header') ||
     (root.id === 'student-course-info-header' ? root : null);
   if (!infoHeader) { removeHero(document); return; }
@@ -348,6 +360,7 @@ export function enhanceCourseHero(root: HTMLElement, run?: Execute): void {
   let host = anchor.querySelector<HTMLElement>(HOST_SELECTOR);
   if (!host) {
     host = document.createElement('div');
+    tracked.add(host);
     host.setAttribute('data-betterquest', 'course-hero');
     host.setAttribute('role', 'img');
     anchor.prepend(host);
@@ -373,14 +386,9 @@ export function enhanceCourseHero(root: HTMLElement, run?: Execute): void {
 }
 
 function removeHero(document: Document): void {
+  for (const host of ownedHeroes.get(document) || []) releaseHero(host);
   const host = document.querySelector<HTMLElement>(HOST_SELECTOR);
-  if (host) {
-    destroyFx(host);
-    observers.get(host)?.disconnect();
-    observers.delete(host);
-    heroRunners.delete(host);
-    host.remove();
-  }
+  if (host) releaseHero(host);
   syncToggleChrome(document, false);
 }
 

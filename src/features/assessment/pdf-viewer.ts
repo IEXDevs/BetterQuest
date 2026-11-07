@@ -32,6 +32,11 @@ function extensionUrl(path: string): string {
 
 async function openPdfDocument(url: string, signal: AbortSignal): Promise<InteractivePdfDocument> {
   const pdfjs = await import('pdfjs-dist');
+  signal.throwIfAborted();
+  let workerObjectUrl: string | undefined;
+  const releaseWorkerUrl = () => {
+    if (workerObjectUrl) { URL.revokeObjectURL(workerObjectUrl); workerObjectUrl = undefined; }
+  };
   try {
     const workerUrl = extensionUrl('pdf.worker.min.mjs');
     if (typeof chrome !== 'undefined' && typeof chrome.runtime?.getURL === 'function') {
@@ -39,7 +44,8 @@ async function openPdfDocument(url: string, signal: AbortSignal): Promise<Intera
         const resp = await fetch(workerUrl);
         const scriptText = await resp.text();
         const blob = new Blob([scriptText], { type: 'application/javascript' });
-        pdfjs.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+        workerObjectUrl = URL.createObjectURL(blob);
+        pdfjs.GlobalWorkerOptions.workerSrc = workerObjectUrl;
       } catch {
         pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
       }
@@ -50,14 +56,18 @@ async function openPdfDocument(url: string, signal: AbortSignal): Promise<Intera
     pdfjs.GlobalWorkerOptions.workerSrc = extensionUrl('pdf.worker.min.mjs');
   }
 
-  const task = pdfjs.getDocument({
+  let task: ReturnType<typeof pdfjs.getDocument>;
+  try { task = pdfjs.getDocument({
     url,
     withCredentials: true,
     wasmUrl: extensionUrl('pdfjs/wasm/'),
     standardFontDataUrl: extensionUrl('pdfjs/standard_fonts/'),
-  });
-  const abort = () => { void task.destroy(); };
+  }); } catch (error) { releaseWorkerUrl(); throw error; }
+  let destruction: Promise<void> | undefined;
+  const destroy = () => { destruction ??= task.destroy().catch(() => {}).finally(releaseWorkerUrl); };
+  const abort = destroy;
   signal.addEventListener('abort', abort, { once: true });
+  if (signal.aborted) destroy();
   try {
     const document = await task.promise;
     return {
@@ -97,10 +107,11 @@ async function openPdfDocument(url: string, signal: AbortSignal): Promise<Intera
         page.cleanup();
         return { width: viewport.width, height: viewport.height, runs };
       },
-      destroy() { signal.removeEventListener('abort', abort); void task.destroy(); },
+      destroy() { signal.removeEventListener('abort', abort); destroy(); },
     };
   } catch (error) {
     signal.removeEventListener('abort', abort);
+    releaseWorkerUrl();
     throw error;
   }
 }
@@ -742,7 +753,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   const ready = (async () => {
     try {
       source = await (options.openDocument || openPdfDocument)(new URL(options.url, document.URL).href, abort.signal);
-      if (disposed || abort.signal.aborted) return false;
+      if (disposed || abort.signal.aborted) { source.destroy(); source = undefined; return false; }
       const runs: PdfTextRun[] = [];
       pages.replaceChildren();
       for (let pageNumber = 1; pageNumber <= source.pageCount; pageNumber++) {
@@ -750,6 +761,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         const root = document.createElement('article'); root.className = 'page'; root.setAttribute('aria-label', `PDF page ${pageNumber}`);
         const canvas = document.createElement('canvas'); canvas.setAttribute('aria-hidden', 'true'); root.append(canvas); pages.append(root);
         const page = await source.renderPage(pageNumber, canvas);
+        if (disposed || abort.signal.aborted) { canvas.width = 0; canvas.height = 0; return false; }
         root.style.aspectRatio = `${page.width} / ${page.height}`;
         pageElements.set(pageNumber, { root, width: page.width, height: page.height, runs: page.runs }); runs.push(...page.runs);
       }
@@ -1272,6 +1284,11 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       resizeObserver?.disconnect();
       abort.abort();
       source?.destroy();
+      for (const page of pageElements.values()) {
+        const canvas = page.root.querySelector('canvas');
+        if (canvas) { canvas.width = 0; canvas.height = 0; }
+      }
+      pageElements.clear();
       for (const btn of submitButtons.values()) btn.remove();
       submitButtons.clear();
       element.remove();

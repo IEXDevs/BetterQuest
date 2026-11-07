@@ -22,9 +22,6 @@ export function startIntegration(document: Document, window: Window, options: { 
   let navShell: { navbar: HTMLElement; dispose: () => void } | undefined;
   let lastUrl = window.location.href;
   const bookmarkService = new BookmarkService(options.run || execute);
-  let savedDismissed = false;
-  let lastBookmarkCount = 0;
-  let checkInFlight = false;
   const features = startPageFeatures(document, window, options.run || execute, options.subscribe || subscribeLocal);
   void flushPendingStreakCredit(document, options.run || execute);
 
@@ -32,50 +29,28 @@ export function startIntegration(document: Document, window: Window, options: { 
   document.querySelectorAll('[data-betterquest="navigation"], [data-betterquest="panel"], [data-betterquest="saved-questions"]').forEach(node => node.remove());
   function unmount() {
     settings?.dispose(); settings = undefined;
-    savedView?.close(false);
+    savedView?.dispose(); savedView = undefined;
     navigation?.host.remove();
     navigation = null;
     navShell?.dispose(); navShell = undefined;
   }
 
-  const openSaved = (userInitiated = true) => {
+  const openSaved = () => {
     const navbar = findSavedQuestionsNavbar(document);
     if (!navbar) return;
-    if (userInitiated) savedDismissed = false;
+    settings?.close(false);
     if (!savedView) {
       savedView = createSavedQuestionsView(
         document, bookmarkService, options.subscribe || subscribeLocal,
         restoreFocus => {
-          savedDismissed = true;
-          if (restoreFocus && navigation?.host.isConnected) navigation.button.focus();
+          navigation?.savedButton.setAttribute('aria-expanded', 'false');
+          if (restoreFocus && navigation?.host.isConnected) navigation.savedButton.focus();
         },
         () => features.focusAssignments(),
       );
     }
-    savedView.open(navbar, features.hasAssignmentSection(), { focus: userInitiated, scroll: userInitiated });
-  };
-
-  const maybeAutoOpenSaved = () => {
-    if (disposed || (savedView && savedView.isOpen())) return;
-    if (/^#question-\d+/i.test(window.location.hash)) return;
-    const navbar = findSavedQuestionsNavbar(document);
-    if (!navbar) return;
-    if (checkInFlight) return;
-    checkInFlight = true;
-    void bookmarkService.list().then(bookmarks => {
-      checkInFlight = false;
-      if (disposed || (savedView && savedView.isOpen())) return;
-      const previousCount = lastBookmarkCount;
-      lastBookmarkCount = bookmarks.length;
-      if (bookmarks.length > previousCount && savedDismissed) {
-        savedDismissed = false;
-      }
-      if (bookmarks.length > 0 && !savedDismissed) {
-        openSaved(false);
-      }
-    }).catch(() => {
-      checkInFlight = false;
-    });
+    savedView.open(navbar, features.hasAssignmentSection(), { scroll: false });
+    navigation?.savedButton.setAttribute('aria-expanded', 'true');
   };
 
   function reconcile() {
@@ -85,11 +60,7 @@ export function startIntegration(document: Document, window: Window, options: { 
     if (nextUrl !== lastUrl) {
       settings?.close(false);
       savedView?.close(false);
-      const isAnchorOnly = nextUrl.split('#')[0] === lastUrl.split('#')[0];
       lastUrl = nextUrl;
-      if (!isAnchorOnly) {
-        savedDismissed = false;
-      }
     }
     if (!isStudentPage(nextUrl)) { unmount(); return; }
     const target = findNavigation(document);
@@ -100,9 +71,13 @@ export function startIntegration(document: Document, window: Window, options: { 
     }
 
     if (!navigation) {
-      navigation = createNavigationButton(document, true, view => { settings?.toggle(view); });
+      navigation = createNavigationButton(document, true, view => { savedView?.close(false); settings?.toggle(view); });
+      navigation.savedButton.addEventListener('click', event => {
+        event.preventDefault(); event.stopPropagation();
+        if (savedView?.isOpen()) savedView.close(false); else openSaved();
+      });
       settings = createSettingsMenu(navigation.host, navigation.button, options.run || execute, options.subscribe || subscribeLocal,
-        { saved: () => openSaved(true), upcoming: () => features.focusAssignments(), hasUpcoming: () => features.hasAssignmentSection(), darkAvailable: features.darkAvailable,
+        { saved: openSaved, upcoming: () => features.focusAssignments(), hasUpcoming: () => features.hasAssignmentSection(), darkAvailable: features.darkAvailable,
           questLinks: () => questNavigationLinks(document) }, navigation.questButton);
     }
     const items = target.before;
@@ -112,15 +87,13 @@ export function startIntegration(document: Document, window: Window, options: { 
     }
     const navbar = findSavedQuestionsNavbar(document);
     navigation.button.disabled = !navbar;
+    navigation.savedButton.disabled = !navbar;
     navigation.button.title = 'BetterQuest settings';
     if (navigation.questButton) {
       navigation.questButton.disabled = !navbar;
       navigation.questButton.title = 'Quest settings';
     }
     if (navbar && savedView?.isOpen()) savedView.position(navbar);
-    if (navbar && !savedDismissed && (!savedView || !savedView.isOpen())) {
-      maybeAutoOpenSaved();
-    }
   }
 
   function schedule() {
@@ -150,16 +123,12 @@ export function startIntegration(document: Document, window: Window, options: { 
   window.addEventListener('pageshow', schedule);
   const browserNavigation = (window as Window & { navigation?: EventTarget }).navigation;
   browserNavigation?.addEventListener('navigatesuccess', schedule);
-  const unsubscribeState = (options.subscribe || subscribeLocal)(() => {
-    maybeAutoOpenSaved();
-  });
   reconcile();
 
   return {
     reconcile,
     dispose() {
       disposed = true;
-      unsubscribeState();
       observer.disconnect();
       features.dispose();
       settings?.dispose(); settings = undefined;

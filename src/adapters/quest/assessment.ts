@@ -440,6 +440,18 @@ export function readAssessmentResponses(table: HTMLTableElement): AssessmentResp
 
 // Remembers the last parsed summary so debug logs fire only when it changes.
 let lastResponseSummary = '';
+// Weak keys let removed/recycled Quest rows be collected. Unchanged reads must
+// not manufacture a fresh select and option subtree for every static answer.
+const staticResponseControls = new WeakMap<HTMLTableRowElement, { select: HTMLSelectElement; optionCount: number }>();
+const missingSubmitControls = new WeakMap<HTMLTableRowElement, HTMLButtonElement>();
+function missingSubmit(row: HTMLTableRowElement): HTMLButtonElement {
+  let button = missingSubmitControls.get(row);
+  if (!button) {
+    button = row.ownerDocument.createElement('button'); button.disabled = true; button.hidden = true;
+    missingSubmitControls.set(row, button);
+  }
+  return button;
+}
 
 function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResponseBinding[] {
   const rows: AssessmentResponseBinding[] = [];
@@ -522,7 +534,7 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
         id,
         number: clean(cells[0]?.textContent).replace(/\.$/, '') || String(rows.length + 1),
         select,
-        submit: submit || row.ownerDocument.createElement('button'),
+        submit: submit || missingSubmit(row),
         options,
         attempts,
         answered: isAnswered,
@@ -538,19 +550,21 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
     // without any clickable boxes. It must simply not be reported as answered.
     const optionCount = Math.max(val ? Number(val) : 1, maxTries, 5);
     const options = Array.from({ length: optionCount }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
-    const syntheticSelect = row.ownerDocument.createElement('select');
-    syntheticSelect.disabled = true;
-    for (const optItem of options) {
-      const opt = row.ownerDocument.createElement('option');
-      opt.value = optItem.value;
-      opt.textContent = optItem.label;
-      if (optItem.value === val) opt.selected = true;
-      syntheticSelect.append(opt);
+    let controls = staticResponseControls.get(row);
+    if (!controls || controls.optionCount !== optionCount) {
+      const select = row.ownerDocument.createElement('select'); select.disabled = true;
+      for (const optItem of options) {
+        const opt = row.ownerDocument.createElement('option');
+        opt.value = optItem.value; opt.textContent = optItem.label;
+        select.append(opt);
+      }
+      controls = { select, optionCount }; staticResponseControls.set(row, controls);
     }
-    if (val) syntheticSelect.value = val;
-    const effectiveSubmit = submit || row.ownerDocument.createElement('button');
-    effectiveSubmit.disabled = true;
-    effectiveSubmit.hidden = true;
+    const syntheticSelect = controls.select;
+    syntheticSelect.value = val || '1';
+    const effectiveSubmit = submit || missingSubmit(row);
+    if (!effectiveSubmit.disabled) effectiveSubmit.disabled = true;
+    if (!effectiveSubmit.hidden) effectiveSubmit.hidden = true;
     rows.push({
       id,
       number: clean(cells[0]?.textContent).replace(/\.$/, '') || String(rows.length + 1),
