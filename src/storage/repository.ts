@@ -26,11 +26,9 @@ export class LocalRepository {
       // reduce nor write state, so two additional whole-state clones buy nothing.
       if (command.kind === 'state:read') return current;
       const next = applyCommand(current, command);
-      if (command.kind !== 'state:read') {
-        if (!isLocalState(next)) throw new Error('Could not update settings.');
-        if (new TextEncoder().encode(JSON.stringify(next)).length > 7_000_000) throw new Error('Storage limit reached on this device.');
-        await this.backend.write(next);
-      }
+      if (!isLocalState(next)) throw new Error('Could not update settings.');
+      if (new TextEncoder().encode(JSON.stringify(next)).length > 7_000_000) throw new Error('Storage limit reached on this device.');
+      await this.backend.write(next);
       return structuredClone(next);
     });
     // The queue only needs completion, not a permanent reference to the response.

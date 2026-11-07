@@ -916,7 +916,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       if (elements.iframe) iframes.push(elements.iframe);
       for (const ifr of new Set(iframes)) {
         const src = ifr.getAttribute('src');
-        if (src && (ifr === elements.iframe || ifr.matches('#presentation-pdf-frame iframe, iframe[title="Assignment PDF"], iframe[src*="download_pdf"], iframe[src*="problem_pdf"]'))) {
+        if (pdfViewer && src && (ifr === elements.iframe || ifr.matches('#presentation-pdf-frame iframe, iframe[title="Assignment PDF"], iframe[src*="download_pdf"], iframe[src*="problem_pdf"]'))) {
           suspendedPdfSources.set(ifr, src);
           ifr.removeAttribute('src'); // Hidden alone leaves Chrome's PDF renderer alive.
         }
