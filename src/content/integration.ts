@@ -44,7 +44,7 @@ export function startIntegration(document: Document, window: Window, options: { 
         document, bookmarkService, options.subscribe || subscribeLocal,
         restoreFocus => {
           navigation?.savedButton.setAttribute('aria-expanded', 'false');
-          if (restoreFocus && navigation?.host.isConnected) navigation.savedButton.focus();
+          if (restoreFocus && navigation?.host.isConnected) navigation.savedButton.focus({ preventScroll: true });
         },
         () => features.focusAssignments(),
       );
