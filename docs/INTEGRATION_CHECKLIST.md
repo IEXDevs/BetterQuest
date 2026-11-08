@@ -97,6 +97,9 @@ table wrapper; its assignment/question identifiers are not live Quest records.
   session-storage marker or extension storage.
 - [x] Use PDF text geometry for a field below the prompt and before the following
   question. If no sufficiently large gap/boundary is available, use the desk.
+- [x] Use visual text bounds rather than text-stream ordering; wide single-column
+  prompts are not treated as multiple columns. Fit a compact 24–36-unit control
+  into short gaps, retaining clearance before the next question header.
 - [ ] Check actual Chrome placement against PDF separator lines and diagrams.
   Text runs do not describe vector rules or images, so placement is best-effort;
   scanned PDFs or ambiguous/tight layouts fall back to the response desk.
