@@ -275,10 +275,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     [data-betterquest="view-toggle"]>a[data-betterquest-view-active="true"]{background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;box-shadow:0 1px 4px #00000024}
     [data-betterquest="view-toggle"]>a:focus-visible{outline:2px solid #7c3aed;outline-offset:1px}
     .tool-btn:focus-visible,.zoom button:focus-visible,.option-hit:focus-visible,.pdf-submit-btn:focus-visible,.submit-pill:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
-    .submit-pill{border:0;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;white-space:nowrap}
-    .submit-pill:hover{background:linear-gradient(135deg,#4f46e5,#4338ca)}
-    .submit-pill[hidden]{display:none}
-    .submit-pill[data-failed="true"]{background:linear-gradient(135deg,#b45309,#92400e)}
     .zoom{display:flex;align-items:center;gap:6px}
     .zoom button{width:32px;height:32px;border:1px solid var(--bq-border,#d7e2f0);border-radius:6px;background:var(--bq-raised,#eef3f6);color:var(--bq-text,#18253a);font:800 16px/1 inherit;cursor:pointer}
     .pages{
@@ -568,35 +564,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   const zoomOut = document.createElement('button'); zoomOut.type = 'button'; zoomOut.textContent = '−'; zoomOut.setAttribute('aria-label', 'Zoom out');
   const zoomIn = document.createElement('button'); zoomIn.type = 'button'; zoomIn.textContent = '+'; zoomIn.setAttribute('aria-label', 'Zoom in');
   const zoomValue = document.createElement('output'); zoomValue.setAttribute('aria-label', 'PDF zoom');
-  // Always-visible submit for the selected question: the floating Confirm can
-  // sit off-screen or under folds, especially in fullscreen.
-  const submitPill = document.createElement('button');
-  submitPill.type = 'button';
-  submitPill.className = 'tool-btn submit-pill';
-  submitPill.hidden = true;
-  let pillQn: number | null = null;
-  function paintPill(state: 'ask' | 'sending' | 'failed' | null) {
-    if (state === null || pillQn === null) {
-      pillQn = null;
-      submitPill.hidden = true;
-      return;
-    }
-    submitPill.hidden = false;
-    submitPill.disabled = state === 'sending';
-    delete submitPill.dataset.failed;
-    if (state === 'ask') submitPill.textContent = `Submit Q${pillQn}`;
-    else if (state === 'sending') submitPill.textContent = `Submitting Q${pillQn}…`;
-    else {
-      submitPill.textContent = `Retry Q${pillQn}`;
-      submitPill.dataset.failed = 'true';
-    }
-    submitPill.setAttribute('aria-label', state === 'failed'
-      ? `Submit question ${pillQn} did not reach Quest. Activate to try again.`
-      : `Submit question ${pillQn}`);
-  }
-  submitPill.addEventListener('click', () => { if (pillQn !== null) attemptSubmit(pillQn); });
-
-  zoom.append(zoomOut, zoomValue, zoomIn); toolbarActions.append(submitPill, viewSlot, darkPagesBtn, fullscreenBtn, zoom); toolbar.append(copy, toolbarActions);
+  zoom.append(zoomOut, zoomValue, zoomIn); toolbarActions.append(viewSlot, darkPagesBtn, fullscreenBtn, zoom); toolbar.append(copy, toolbarActions);
   const pages = document.createElement('div'); pages.className = 'pages';
   const loading = document.createElement('div'); loading.className = 'loading'; loading.textContent = 'Loading clickable choices…'; pages.append(loading);
   shell.append(toolbar, pages); shadow.append(style, shell); container.append(element);
@@ -634,7 +602,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       btn.remove();
       submitButtons.delete(qNum);
     }
-    paintPill(null);
   }
 
   const handleGlobalClick = (event: MouseEvent) => {
@@ -1039,7 +1006,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
 
   function attemptSubmit(questionNumber: number) {
     const btn = submitButtons.get(questionNumber);
-    if (pillQn === questionNumber) paintPill('sending');
     if (btn) {
       btn.disabled = true;
       btn.textContent = 'Submitting…';
@@ -1060,7 +1026,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg> Try again`;
         btn.setAttribute('aria-label', `Submit question ${questionNumber} did not reach Quest. Activate to try again, or answer from the sidebar.`);
       }
-      if (pillQn === questionNumber) paintPill('failed');
     }
   }
 
@@ -1089,7 +1054,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         btn.remove();
         submitButtons.delete(qNum);
       }
-      paintPill(null);
       if (optionValue) {
         const activeHit = shadow.querySelector<HTMLButtonElement>(
           `.option-hit[data-question="${questionNumber}"][data-option="${optionValue}"]`
@@ -1115,8 +1079,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           });
           activeHit.parentElement.append(btn);
           submitButtons.set(questionNumber, btn);
-          pillQn = questionNumber;
-          paintPill('ask');
         }
       }
     },
@@ -1161,7 +1123,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       const confirm = submitButtons.get(questionNumber);
       confirm?.remove();
       submitButtons.delete(questionNumber);
-      if (pillQn === questionNumber) paintPill(null);
       refreshMeta();
     },
     setFullscreen(active: boolean) {
@@ -1190,7 +1151,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         if (currentAnswered.has(qNum)) {
           btn.remove();
           submitButtons.delete(qNum);
-          if (pillQn === qNum) paintPill(null);
         }
       }
       refreshMeta();

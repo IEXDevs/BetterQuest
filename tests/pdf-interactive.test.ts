@@ -235,7 +235,7 @@ test('interactive PDF failed submit restores the confirm control for retry', asy
   }
 });
 
-test('interactive PDF toolbar pill submits the selected question', async () => {
+test('interactive PDF keeps question-local Confirm without a redundant toolbar submit', async () => {
   const module = await import('../src/features/assessment/pdf-viewer');
   const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
   const submitted: number[] = [];
@@ -255,14 +255,14 @@ test('interactive PDF toolbar pill submits the selected question', async () => {
   });
   try {
     assert.equal(await viewer.ready, true);
-    const pill = viewer.element.shadowRoot!.querySelector<HTMLButtonElement>('.submit-pill')!;
-    assert.equal(pill.hidden, true, 'No pill before a selection');
+    assert.equal(viewer.element.shadowRoot!.querySelector('.submit-pill'), null);
     viewer.setSelected(1, '2');
-    assert.equal(pill.hidden, false, 'Pill appears with the selection in every view mode');
-    assert.match(pill.textContent || '', /Q1/);
-    pill.click();
-    assert.deepEqual(submitted, [1], 'Toolbar pill submits the selected question');
-    assert.equal(pill.disabled, true);
+    const confirm = viewer.element.shadowRoot!.querySelector<HTMLButtonElement>('.pdf-submit-btn')!;
+    assert.ok(confirm);
+    assert.equal(viewer.element.shadowRoot!.querySelector('.submit-pill'), null);
+    confirm.click();
+    assert.deepEqual(submitted, [1]);
+    assert.equal(confirm.disabled, true);
   } finally {
     viewer.dispose();
     dom.window.close();
@@ -298,14 +298,7 @@ test('interactive PDF marks wrong answers and celebrates correct ones', async ()
     assert.ok(boxes[0].classList.contains('is-correct'), 'Correct answer is highlighted green');
     assert.ok(!boxes[0].classList.contains('is-wrong'));
     const party = dom.window.document.body.querySelector<HTMLElement>('.bq-celebration');
-    assert.ok(party, 'Correct answer lights up the whole screen');
-    assert.equal(party!.style.position, 'fixed', 'The backdrop covers the viewport with inline styles');
-    assert.match(party!.textContent || '', /✓/, 'A full wall of checkmarks covers the screen');
-    assert.ok(party!.querySelectorAll('.bq-verdict-tile').length >= 24, 'The wall is made of individual popping tiles');
-    const badge = party!.querySelector<HTMLElement>('.bq-badge');
-    assert.ok(badge, 'A mascot badge sits in the center');
-    assert.match(badge!.querySelector('.bq-badge-face')!.textContent || '', /😄/, 'The smiley shows right away');
-    assert.equal(badge!.querySelector('img'), null, 'No image yet — it waits for the animation');
+    assert.equal(party, null, 'Default feedback stays on the question without a full-screen overlay');
     assert.match(viewer.element.shadowRoot!.querySelector('.meta')!.textContent!, /1 answer choice/, 'Kept correct answer stays counted');
   } finally {
     viewer.dispose();
@@ -347,7 +340,7 @@ test('a fresh verdict reveals a suppressed answer box and still celebrates', asy
     viewer.celebrate(1, '2', true);
     assert.ok(!target.hidden, 'The celebrated box comes back for the verdict');
     assert.ok(target.classList.contains('is-correct'), 'And is highlighted green');
-    assert.ok(dom.window.document.body.querySelector('.bq-celebration'), 'The green celebration shows even after the suppression');
+    assert.equal(dom.window.document.body.querySelector('.bq-celebration'), null, 'Whimsy remains off by default');
     const css = [...viewer.element.shadowRoot!.querySelectorAll('style')].map(s => s.textContent).join('\n');
     assert.match(css, /\.option-hit\.is-correct::after\{[^}]*left:calc\(100% \+ 6px\)/, 'Checkmark sits to the right of the box, clear of the text');
   } finally {
@@ -356,7 +349,7 @@ test('a fresh verdict reveals a suppressed answer box and still celebrates', asy
   }
 });
 
-test('the green celebration still shows when the system asks for reduced motion', async () => {
+test('reduced motion keeps inline verdict feedback without enabling whimsy', async () => {
   const module = await import('../src/features/assessment/pdf-viewer');
   const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1' });
   Object.defineProperty(dom.window, 'matchMedia', {
@@ -389,16 +382,15 @@ test('the green celebration still shows when the system asks for reduced motion'
     assert.equal(await viewer.ready, true);
     viewer.celebrate(1, '2', true);
     const layer = dom.window.document.body.querySelector<HTMLElement>('.bq-celebration');
-    assert.ok(layer, 'The verdict never gets skipped for reduced motion');
-    assert.equal(layer!.style.position, 'fixed', 'Covering the screen needs no motion to be seen');
-    assert.match(layer!.textContent || '', /✓/, 'The checkmark rides along');
+    assert.equal(layer, null, 'Reduced motion does not opt the user into whimsy');
+    assert.ok(viewer.element.shadowRoot!.querySelector('.option-hit.is-correct'));
   } finally {
     viewer.dispose();
     dom.window.close();
   }
 });
 
-test('the mascot image waits for the entry animation and then replaces the emoji', async () => {
+test('opt-in whimsy displays a picture without creating any verdict wall tiles', async () => {
   const module = await import('../src/features/assessment/pdf-viewer');
   const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1' });
   (globalThis as { chrome?: { runtime?: { getURL?: (path: string) => string } } }).chrome = {
@@ -419,15 +411,13 @@ test('the mascot image waits for the entry animation and then replaces the emoji
   });
   try {
     assert.equal(await viewer.ready, true);
+    dom.window.document.documentElement.dataset.betterquestWhimsy = 'enabled';
     viewer.celebrate(1, '2', true);
     const badge = dom.window.document.body.querySelector<HTMLElement>('.bq-badge')!;
-    assert.match(badge.querySelector('.bq-badge-face')!.textContent || '', /😄/, 'The emoji mascot is instant');
-    assert.equal(badge.querySelector('img'), null, 'The packaged image waits until the entry animation is done');
-    await new Promise(resolve => setTimeout(resolve, 900));
     const img = badge.querySelector('img');
-    assert.ok(img, 'The mascot image loads after the animation');
-    assert.equal(img!.getAttribute('src'), 'chrome-extension://test/assets/verdict-happy.png', 'It points at the packaged asset');
-    assert.ok(badge.querySelector('.bq-badge-face'), 'The emoji stays until the image itself finishes loading');
+    assert.ok(img, 'The opt-in whimsy picture is present');
+    assert.match(img!.getAttribute('src')!, /^chrome-extension:\/\/test\/correct/);
+    assert.equal(dom.window.document.querySelector('.bq-verdict-tile'), null);
   } finally {
     delete (globalThis as { chrome?: unknown }).chrome;
     viewer.dispose();
@@ -460,14 +450,15 @@ test('celebrations can be turned off in settings', async () => {
     assert.equal(dom.window.document.body.querySelector('.bq-screen-flash'), null, 'No sad face wall either');
     dom.window.document.documentElement.dataset.betterquestWhimsy = 'enabled';
     dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
-    assert.ok(dom.window.document.body.querySelector('.bq-celebration'), 'The wall comes back as soon as whimsy is on');
+    assert.ok(dom.window.document.body.querySelector('.bq-celebration'), 'Opt-in whimsy can show its picture');
+    assert.equal(dom.window.document.querySelector('.bq-verdict-tile'), null);
   } finally {
     viewer.dispose();
     dom.window.close();
   }
 });
 
-test('the verdict wall really animates where the Web Animations API exists', async () => {
+test('only opt-in whimsy animates its picture and backdrop, never a verdict wall', async () => {
   const module = await import('../src/features/assessment/pdf-viewer');
   const dom = new JSDOM('<body><div id="mount"></div></body>', { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1' });
   const calls: { keyframes: unknown; options: { delay?: number } }[] = [];
@@ -492,7 +483,10 @@ test('the verdict wall really animates where the Web Animations API exists', asy
   try {
     assert.equal(await viewer.ready, true);
     viewer.celebrate(1, '2', true);
-    assert.ok(calls.length >= 24, 'The backdrop, every wall tile, and the badge animate');
+    assert.equal(calls.length, 0, 'No full-screen animation without explicit whimsy opt-in');
+    dom.window.document.documentElement.dataset.betterquestWhimsy = 'enabled';
+    dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
+    assert.equal(calls.length, 2, 'Only the whimsy picture and its backdrop animate');
     assert.ok(calls.some(call => (call.options?.delay ?? 0) > 0), 'Tiles ripple out from the center with staggered delays');
     assert.ok(calls.some(call => Array.isArray(call.keyframes) && call.keyframes.length === 3), 'The pop-in overshoots before it settles');
   } finally {
@@ -519,6 +513,9 @@ test('the console party trigger shows the green celebration and the red flash on
   });
   try {
     assert.equal(await viewer.ready, true);
+    dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
+    assert.equal(dom.window.document.body.querySelector('.bq-celebration'), null);
+    dom.window.document.documentElement.dataset.betterquestWhimsy = 'enabled';
     dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
     assert.ok(dom.window.document.body.querySelector('.bq-celebration'), 'Console event shows the green celebration');
     dom.window.document.dispatchEvent(new dom.window.CustomEvent('betterquest:party', { detail: 'wrong' }));
@@ -585,10 +582,7 @@ test('whimsy mode replaces the default emoji mascot with a randomized picture fr
     delete dom.window.document.documentElement.dataset.betterquestWhimsy;
     dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
     const offParty = dom.window.document.body.querySelector<HTMLElement>('.bq-celebration');
-    assert.ok(offParty, 'Party shows with whimsy disabled');
-    const offBadge = offParty!.querySelector<HTMLElement>('.bq-badge');
-    assert.ok(offBadge!.querySelector('.bq-badge-face'), 'Smiley face shows when whimsy is disabled');
-    assert.equal(offBadge!.querySelector('img'), null, 'No whimsy image when whimsy is disabled');
+    assert.equal(offParty, null, 'Disabling whimsy removes full-screen feedback');
   } finally {
     delete (globalThis as { chrome?: unknown }).chrome;
     viewer.dispose();
@@ -632,7 +626,7 @@ test('when animations are disabled and whimsy is enabled, whimsy overtakes and a
 
     dom.window.document.dispatchEvent(new dom.window.Event('betterquest:party'));
     // Whimsy overtakes: wall animates with the images (duration: 430)
-    const springCalls = calls.filter(c => c.options?.duration === 430);
+    const springCalls = calls.filter(c => c.options?.duration === 520);
     assert.ok(springCalls.length > 0, 'Whimsy overtakes disabled animations and animates with images');
     const party = dom.window.document.body.querySelector<HTMLElement>('.bq-celebration');
     assert.ok(party, 'Celebration wall shows');
@@ -673,7 +667,7 @@ test('interactive PDF verdict toast tells the user correct or wrong', async () =
     assert.ok(toast);
     assert.equal(toast.getAttribute('role'), 'status');
     assert.match(toast.textContent || '', /incorrect/);
-    assert.ok(dom.window.document.querySelector('.bq-screen-flash'), 'Wrong answers flash the whole screen red');
+    assert.equal(dom.window.document.querySelector('.bq-screen-flash'), null, 'Default wrong-answer feedback stays inline');
     viewer.announce(1, 'correct');
     assert.equal(viewer.element.shadowRoot!.querySelectorAll('.verdict-toast').length, 1, 'Only one verdict shows at a time');
     assert.match(viewer.element.shadowRoot!.querySelector('.verdict-toast')!.textContent || '', /correct/);
