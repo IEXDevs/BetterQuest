@@ -3,7 +3,9 @@ import { betterQuestDebugLog } from '../../shared/debug';
 export interface AssessmentResponseBinding {
   id: string;
   number: string;
-  select: HTMLSelectElement;
+  /** Native response control; retained name preserves existing choice callers. */
+  select: HTMLSelectElement | HTMLInputElement;
+  kind?: 'choice' | 'numeric';
   submit: HTMLButtonElement;
   options: { value: string; label: string }[];
   attempts: number;
@@ -469,6 +471,7 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
     if (!revealing && !isElementVisible(row)) continue;
 
     const select = row.querySelector<HTMLSelectElement>('select[name="response"], select[aria-label="Select your response"], select');
+    const numeric = select ? null : cells[1]?.querySelector<HTMLInputElement>('input[type="text"][name="response"]');
     // Never match per-row history toggles or other non-submit buttons: only
     // explicit submit controls qualify, and anything history-related is out.
     const submitCandidates = [...row.querySelectorAll<HTMLButtonElement>(
@@ -484,6 +487,8 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
     let val = '';
     if (select) {
       val = select.value;
+    } else if (numeric) {
+      val = numeric.value;
     } else {
       const answerText = clean(cells[1]?.textContent);
       const answerMatch = answerText.match(/^([1-9])\b/);
@@ -515,6 +520,13 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
       continue;
     }
 
+    if (numeric) {
+      rows.push({ id, number: clean(cells[0]?.textContent).replace(/\.$/, '') || String(rows.length + 1),
+        select: numeric, kind: 'numeric', submit: submit || missingSubmit(row), options: [], attempts,
+        answered: isCorrect || triesExhausted || ((numeric.disabled || numeric.readOnly) && Boolean(val)) || Boolean(!isSubmitAvailable && val && recorded),
+      });
+      continue;
+    }
     if (select) {
       let options = [...select.options]
         .filter(isResponseOptionAvailable)

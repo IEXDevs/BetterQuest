@@ -1,6 +1,8 @@
 import { mapPdfOptionLabels, parseQuestionBoundary, extractQuestionPoints, clean, type PdfOptionTarget, type PdfTextRun } from '../../adapters/quest/assessment';
 import { celebrateScreen, flashScreen } from './celebration';
 import { isBetterQuestDebug } from '../../shared/debug';
+import { createNumericResponse, NUMERIC_RESPONSE_STYLES, type NumericResponse } from './numeric-response';
+import { numericResponsePlacement } from './numeric-placement';
 
 export interface InteractivePdfPage {
   width: number;
@@ -19,6 +21,9 @@ export type OpenInteractivePdf = (url: string, signal: AbortSignal) => Promise<I
 export interface InteractivePdfOptions {
   url: string;
   optionMaximums: ReadonlyMap<number, number>;
+  numericResponses?: ReadonlyMap<number, NumericResponse>;
+  onNumericInput?: (questionNumber: number, value: string) => boolean;
+  onNumericSubmit?: (questionNumber: number, value: string) => boolean;
   answeredQuestions?: ReadonlySet<number>;
   onChoose: (questionNumber: number, optionValue: number) => void;
   onSubmit?: (questionNumber: number) => boolean;
@@ -225,6 +230,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   const shadow = element.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = `
+    ${NUMERIC_RESPONSE_STYLES}
+    .pdf-numeric-response{position:absolute;z-index:3;background:var(--bq-surface,#fff);border-radius:5px}
+    .pdf-numeric-response input,.pdf-numeric-response button{min-height:0;height:100%;padding:2px 6px;font-size:clamp(10px,calc(12px * var(--bq-pdf-zoom,1)),18px)}
     :host{
       display:block!important;
       width:100%!important;
@@ -594,6 +602,8 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   // The set of questions and their option counts can grow while the workspace
   // reads Quest's lazily-rendered response table, so it is kept mutable.
   let optionMaximums = new Map<number, number>(options.optionMaximums);
+  let numericResponses = new Map(options.numericResponses || []);
+  const numericInputs = new Map<number, ReturnType<typeof createNumericResponse>>();
   let pdfRuns: PdfTextRun[] = [];
   let paintChoices: () => void = () => { };
 
@@ -737,6 +747,8 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       paintChoices = () => {
         const doc = source;
         if (!doc) return;
+        for (const input of numericInputs.values()) input.element.remove();
+        numericInputs.clear();
         // Rebuild from scratch: this runs again when the question map grows.
         for (const { root: pageRoot } of pageElements.values()) {
           pageRoot.querySelectorAll('.question-anchor, .option-hit').forEach(node => node.remove());
@@ -801,6 +813,25 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           }
         }
 
+        for (const [question, response] of numericResponses) {
+          const area = numericResponsePlacement(pdfRuns, question, pageElements);
+          if (!area) continue;
+          const page = pageElements.get(area.page)!;
+          const numeric = createNumericResponse(document, question, response,
+            value => options.onNumericInput?.(question, value) ?? false,
+            value => options.onNumericSubmit?.(question, value) ?? false);
+          numeric.element.classList.add('pdf-numeric-response');
+          numeric.element.style.left = `${area.left}%`; numeric.element.style.top = `${area.top}%`;
+          numeric.element.style.width = `${area.width}%`; numeric.element.style.height = `${area.height}%`;
+          numeric.element.hidden = currentAnswered.has(question);
+          page.root.append(numeric.element); numericInputs.set(question, numeric);
+        }
+
+        // A zero count is an explicit numeric response, never a guessed choice count.
+        if ([...optionMaximums.values()].every(max => max === 0) && numericResponses.size) {
+          meta.textContent = `${doc.pageCount} pages · Numeric answers${numericInputs.size < numericResponses.size ? ' in response desk' : ''}`;
+          return;
+        }
         // Ensure boxes for ALL answers possible for every unanswered question
         for (const [qNum, max] of optionMaximums.entries()) {
           if (currentAnswered.has(qNum)) continue;
@@ -997,10 +1028,15 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
 
   function refreshMeta() {
     const activeHits = shadow.querySelectorAll<HTMLButtonElement>('.option-hit:not([hidden])');
+    const numericPending = [...numericResponses.keys()].filter(question => !currentAnswered.has(question));
     const pageLabel = `${pageElements.size} ${pageElements.size === 1 ? 'page' : 'pages'}`;
-    const choiceLabel = activeHits.length > 0
+    let choiceLabel = activeHits.length > 0
       ? `${activeHits.length} answer ${activeHits.length === 1 ? 'choice' : 'choices'}`
       : 'All questions completed';
+    if (numericPending.length) {
+      const label = `${numericPending.length} numeric ${numericPending.length === 1 ? 'answer' : 'answers'}${numericPending.some(question => !numericInputs.has(question)) ? ' in response desk' : ''}`;
+      choiceLabel = activeHits.length ? `${choiceLabel} · ${label}` : label;
+    }
     meta.textContent = `${pageLabel} · ${choiceLabel}`;
   }
 
@@ -1041,6 +1077,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     ready,
     setSelected(questionNumber: number, optionValue: string) {
       if (disposed) return;
+      if (numericResponses.has(questionNumber)) { numericInputs.get(questionNumber)?.setValue(optionValue); return; }
       if (currentAnswered.has(questionNumber)) return;
       for (const button of shadow.querySelectorAll<HTMLButtonElement>('.option-hit')) {
         const q = Number(button.dataset.question);
@@ -1083,6 +1120,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       }
     },
     markWrong(questionNumber: number, optionValue: string) {
+      if (numericResponses.has(questionNumber)) { numericInputs.get(questionNumber)?.input.setAttribute('aria-invalid', 'true'); return; }
       if (currentAnswered.has(questionNumber) || keptCorrect.has(questionNumber)) return;
       const box = shadow.querySelector<HTMLElement>(
         `.option-hit[data-question="${questionNumber}"][data-option="${optionValue}"]`
@@ -1137,6 +1175,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     setAnsweredQuestions(answered: ReadonlySet<number>) {
       if (disposed) return;
       currentAnswered = new Set(answered);
+      for (const [question, input] of numericInputs) input.element.hidden = currentAnswered.has(question);
       if (isBetterQuestDebug(element.ownerDocument)) {
         const list = [...currentAnswered].sort((a, b) => a - b);
         console.info(`[BetterQuest debug] PDF treats these questions as completed (boxes hidden): ${list.length ? list.join(', ') : '(none)'}`);
@@ -1164,7 +1203,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       if (disposed || !pdfRuns.length) return false;
       let grew = false;
       for (const [qNum, max] of next) {
-        if ((optionMaximums.get(qNum) ?? 0) < max) { optionMaximums.set(qNum, max); grew = true; }
+        if (!optionMaximums.has(qNum) || (optionMaximums.get(qNum) ?? 0) < max) { optionMaximums.set(qNum, max); grew = true; }
       }
       if (!grew) return false;
       paintChoices();
@@ -1174,6 +1213,23 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       }
       refreshMeta();
       return true;
+    },
+    setNumericValue(questionNumber: number, value: string) {
+      if (disposed) return;
+      const response = numericResponses.get(questionNumber);
+      if (response) numericResponses.set(questionNumber, { ...response, value });
+      numericInputs.get(questionNumber)?.setValue(value);
+    },
+    setNumericResponses(next: ReadonlyMap<number, NumericResponse>) {
+      if (disposed) return;
+      let changed = numericResponses.size !== next.size;
+      for (const [question, response] of next) {
+        if (!numericResponses.has(question) || optionMaximums.get(question) !== 0) changed = true;
+        optionMaximums.set(question, 0);
+        numericInputs.get(question)?.update(response);
+      }
+      numericResponses = new Map(next);
+      if (changed && pdfRuns.length) paintChoices();
     },
     scrollToQuestion(questionNumber: number): boolean {
       if (disposed) return false;
@@ -1251,6 +1307,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       pdfRuns = [];
       paintChoices = () => {};
       optionMaximums.clear(); currentAnswered.clear(); keptCorrect.clear();
+      numericInputs.clear(); numericResponses.clear();
       for (const page of pageElements.values()) {
         const canvas = page.root.querySelector('canvas');
         if (canvas) { canvas.width = 0; canvas.height = 0; }

@@ -80,6 +80,29 @@ The settings switch and scoped CSS now target verified `#main-content`, `#quest-
 - [ ] Both light/dark contrast checks on the same component; ensure focus and grading/status indicators remain readable.
 - [ ] Test stored light/dark/system preferences, system-theme change events, and cleanup when the component/route is replaced.
 
+## Numeric free response
+
+The supplied Quest fragment verifies `input[type="text"][name="response"]`,
+its numeric/scientific-notation help text, placeholder, and 255-character limit.
+The regression fixture combines that fragment with a synthetic mixed-response
+table wrapper; its assignment/question identifiers are not live Quest records.
+
+- [x] Recognize numeric text inputs separately from `select[name="response"]`;
+  never infer numeric choice buttons from the number of attempts.
+- [x] Share the native input value between the response desk and PDF field;
+  mirror input/change events and activate the existing native Submit once.
+- [x] Preserve native input constraints, disabled/read-only behavior, dropdown
+  behavior, and number strings (including signs, decimals, and scientific notation).
+- [x] Keep numeric answers transient; do not put them into the fresh-answer
+  session-storage marker or extension storage.
+- [x] Use PDF text geometry for a field below the prompt and before the following
+  question. If no sufficiently large gap/boundary is available, use the desk.
+- [ ] Check actual Chrome placement against PDF separator lines and diagrams.
+  Text runs do not describe vector rules or images, so placement is best-effort;
+  scanned PDFs or ambiguous/tight layouts fall back to the response desk.
+- [ ] Verify live Quest validation, redraws, and completed numeric rows. Only the
+  supplied native input was verified; no authenticated browser testing was done.
+
 ## Shared release checks
 
 - [ ] Reload: confirm the native-size BetterQuest item lives in `.qh-nav` and opens only its compact settings menu.
