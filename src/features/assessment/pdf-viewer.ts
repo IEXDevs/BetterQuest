@@ -1,8 +1,8 @@
 import { mapPdfOptionLabels, parseQuestionBoundary, extractQuestionPoints, clean, type PdfOptionTarget, type PdfTextRun } from '../../adapters/quest/assessment';
 import { celebrateScreen, flashScreen } from './celebration';
 import { isBetterQuestDebug } from '../../shared/debug';
-import { createNumericResponse, NUMERIC_RESPONSE_STYLES, type NumericResponse } from './numeric-response';
-import { numericResponsePlacement } from './numeric-placement';
+import { createFreeResponse, createNumericResponse, NUMERIC_RESPONSE_STYLES, type FreeResponse, type NumericResponse } from './numeric-response';
+import { freeResponsePlacement, numericResponsePlacement } from './numeric-placement';
 
 export interface InteractivePdfPage {
   width: number;
@@ -22,8 +22,11 @@ export interface InteractivePdfOptions {
   url: string;
   optionMaximums: ReadonlyMap<number, number>;
   numericResponses?: ReadonlyMap<number, NumericResponse>;
+  freeResponses?: ReadonlyMap<number, FreeResponse>;
   onNumericInput?: (questionNumber: number, value: string) => boolean;
   onNumericSubmit?: (questionNumber: number, value: string) => boolean;
+  onFreeInput?: (questionNumber: number, value: string) => boolean;
+  onFreeSubmit?: (questionNumber: number, value: string) => boolean;
   answeredQuestions?: ReadonlySet<number>;
   onChoose: (questionNumber: number, optionValue: number) => void;
   onSubmit?: (questionNumber: number) => boolean;
@@ -233,6 +236,23 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     ${NUMERIC_RESPONSE_STYLES}
     .pdf-numeric-response{position:absolute;z-index:3;background:var(--bq-surface,#fff);border-radius:5px}
     .pdf-numeric-response input,.pdf-numeric-response button{min-height:0;height:100%;padding:2px 6px;font-size:clamp(10px,calc(12px * var(--bq-pdf-zoom,1)),18px)}
+    .pdf-free-response{position:absolute;z-index:3;display:flex;flex-direction:column;gap:calc(6px * var(--bq-pdf-zoom,1));padding:calc(10px * var(--bq-pdf-zoom,1));border:1px solid #c7d2fe;border-radius:calc(10px * var(--bq-pdf-zoom,1));background:linear-gradient(180deg,#ffffff 0%,#f5f3ff 100%);box-shadow:0 calc(4px * var(--bq-pdf-zoom,1)) calc(14px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.22)}
+    .pdf-free-response[data-correct="true"]{border-color:#16a34a;background:linear-gradient(180deg,#f0fdf4 0%,#ecfdf5 100%);box-shadow:0 calc(4px * var(--bq-pdf-zoom,1)) calc(14px * var(--bq-pdf-zoom,1)) rgba(22,163,74,.25)}
+    .pdf-free-response[data-invalid="true"] textarea{border-color:#dc2626;box-shadow:0 0 0 calc(2px * var(--bq-pdf-zoom,1)) rgba(220,38,38,.25)}
+    .pdf-free-head{display:flex;align-items:center;gap:calc(6px * var(--bq-pdf-zoom,1));font:750 calc(11px * var(--bq-pdf-zoom,1))/1.2 ui-rounded,"Avenir Next",sans-serif;color:#4338ca;letter-spacing:.02em}
+    .pdf-free-head .pdf-free-badge{display:grid;place-items:center;min-width:calc(20px * var(--bq-pdf-zoom,1));height:calc(20px * var(--bq-pdf-zoom,1));padding:0 calc(6px * var(--bq-pdf-zoom,1));border-radius:999px;background:#4f46e5;color:#fff;font-size:calc(11px * var(--bq-pdf-zoom,1))}
+    .pdf-free-response[data-correct="true"] .pdf-free-head{color:#15803d}
+    .pdf-free-response[data-correct="true"] .pdf-free-head .pdf-free-badge{background:#16a34a}
+    .pdf-free-response textarea{box-sizing:border-box;width:100%;min-height:calc(56px * var(--bq-pdf-zoom,1));padding:calc(8px * var(--bq-pdf-zoom,1));border:1px solid #cbd5e1;border-radius:calc(8px * var(--bq-pdf-zoom,1));background:#fff;color:#0f172a;font:400 calc(12px * var(--bq-pdf-zoom,1))/1.5 ui-rounded,"Avenir Next",sans-serif;resize:vertical}
+    .pdf-free-response textarea:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 calc(2px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.3)}
+    .pdf-free-foot{display:flex;align-items:center;gap:calc(8px * var(--bq-pdf-zoom,1))}
+    .pdf-free-foot .pdf-free-count{margin-left:auto;font-size:calc(10px * var(--bq-pdf-zoom,1));color:#64748b;font-variant-numeric:tabular-nums}
+    .pdf-free-foot button{display:inline-flex;align-items:center;gap:calc(6px * var(--bq-pdf-zoom,1));padding:calc(6px * var(--bq-pdf-zoom,1)) calc(14px * var(--bq-pdf-zoom,1));border:0;border-radius:calc(8px * var(--bq-pdf-zoom,1));background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font:750 calc(11px * var(--bq-pdf-zoom,1))/1.2 ui-rounded,"Avenir Next",sans-serif;cursor:pointer;box-shadow:0 calc(3px * var(--bq-pdf-zoom,1)) calc(10px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.35)}
+    .pdf-free-foot button:hover:not(:disabled){background:linear-gradient(135deg,#4f46e5,#4338ca)}
+    .pdf-free-foot button:disabled{opacity:.55;cursor:not-allowed}
+    :host([data-dark-pages="true"]) .pdf-free-response{background:linear-gradient(180deg,#1e1b4b 0%,#312e81 100%);border-color:#818cf8}
+    :host([data-dark-pages="true"]) .pdf-free-head{color:#e0e7ff}
+    :host([data-dark-pages="true"]) .pdf-free-response textarea{background:#0f172a;color:#e2e8f0;border-color:#475569}
     :host{
       display:block!important;
       width:100%!important;
@@ -603,7 +623,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   // reads Quest's lazily-rendered response table, so it is kept mutable.
   let optionMaximums = new Map<number, number>(options.optionMaximums);
   let numericResponses = new Map(options.numericResponses || []);
+  let freeResponses = new Map(options.freeResponses || []);
   const numericInputs = new Map<number, ReturnType<typeof createNumericResponse>>();
+  const freeInputs = new Map<number, ReturnType<typeof createFreeResponse>>();
   let pdfRuns: PdfTextRun[] = [];
   let paintChoices: () => void = () => { };
 
@@ -749,9 +771,11 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         if (!doc) return;
         for (const input of numericInputs.values()) input.element.remove();
         numericInputs.clear();
+        for (const input of freeInputs.values()) input.element.remove();
+        freeInputs.clear();
         // Rebuild from scratch: this runs again when the question map grows.
         for (const { root: pageRoot } of pageElements.values()) {
-          pageRoot.querySelectorAll('.question-anchor, .option-hit').forEach(node => node.remove());
+          pageRoot.querySelectorAll('.question-anchor, .option-hit, .pdf-free-response, .pdf-numeric-response').forEach(node => node.remove());
         }
         const targets = mapPdfOptionLabels(pdfRuns, optionMaximums);
         if (isBetterQuestDebug(document)) {
@@ -770,26 +794,46 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
 
         // Build persistent question anchors for every question on the PDF so that jump
         // navigation can scroll directly to any question even when all questions are complete.
+        // Single pass over the runs: index the first boundary run per question and
+        // the first target per question so anchor placement is O(Q + N), not O(Q * N).
         const allQuestionNumbers = new Set<number>();
         for (const qNum of optionMaximums.keys()) allQuestionNumbers.add(qNum);
+        for (const qNum of numericResponses.keys()) allQuestionNumbers.add(qNum);
+        for (const qNum of freeResponses.keys()) allQuestionNumbers.add(qNum);
         for (const t of targets) allQuestionNumbers.add(t.questionNumber);
+        const firstBoundaryRun = new Map<number, PdfTextRun>();
+        const paddedRun = new Map<string, PdfTextRun>();
+        const firstTargetByQuestion = new Map<number, PdfOptionTarget>();
         for (const r of pdfRuns) {
-          const b = parseQuestionBoundary(clean(r.text));
-          if (b !== null && b > 0) allQuestionNumbers.add(b);
+          const cleaned = clean(r.text);
+          const b = parseQuestionBoundary(cleaned);
+          if (b !== null && b > 0) {
+            allQuestionNumbers.add(b);
+            if (!firstBoundaryRun.has(b)) firstBoundaryRun.set(b, r);
+          }
+          if (!paddedRun.has(cleaned) && /^\d{3}$/.test(cleaned)) paddedRun.set(cleaned, r);
+          if (b === null) {
+            // Cheap heuristic anchors are resolved below via the target index.
+          }
+        }
+        for (const t of targets) {
+          if (!firstTargetByQuestion.has(t.questionNumber)) firstTargetByQuestion.set(t.questionNumber, t);
         }
 
         for (const qNum of [...allQuestionNumbers].sort((a, b) => a - b)) {
           if (!Number.isInteger(qNum) || qNum <= 0) continue;
-          const qBoundaryRun = pdfRuns.find(r => parseQuestionBoundary(clean(r.text)) === qNum) ||
-            pdfRuns.find(r => clean(r.text) === String(qNum).padStart(3, '0')) ||
-            pdfRuns.find(r => new RegExp(`^0*${qNum}(?:\\b|[:.)\\s])`).test(clean(r.text)));
+          const qBoundaryRun = firstBoundaryRun.get(qNum) ||
+            paddedRun.get(String(qNum).padStart(3, '0')) ||
+            firstTargetByQuestion.get(qNum);
           let targetPage = 1;
           let topPercent = 0;
           if (qBoundaryRun) {
             targetPage = qBoundaryRun.page;
             const pageInfo = pageElements.get(targetPage);
             const height = pageInfo?.height || 800;
-            topPercent = Math.max(0, Math.min(100, ((qBoundaryRun.top - 12) / height) * 100));
+            const isRealBoundary = firstBoundaryRun.has(qNum) || paddedRun.has(String(qNum).padStart(3, '0'));
+            const offset = isRealBoundary ? 12 : 40;
+            topPercent = Math.max(0, Math.min(100, ((qBoundaryRun.top - offset) / height) * 100));
           } else {
             const qTarget = targets.find(t => t.questionNumber === qNum);
             if (qTarget) {
@@ -827,16 +871,94 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           page.root.append(numeric.element); numericInputs.set(question, numeric);
         }
 
-        // A zero count is an explicit numeric response, never a guessed choice count.
-        if ([...optionMaximums.values()].every(max => max === 0) && numericResponses.size) {
-          meta.textContent = `${doc.pageCount} pages · Numeric answers${numericInputs.size < numericResponses.size ? ' in response desk' : ''}`;
+        for (const [question, response] of freeResponses) {
+          if (currentAnswered.has(question)) {
+            // Answered free responses stay in the desk; the PDF keeps only the anchor.
+            continue;
+          }
+          const area = freeResponsePlacement(pdfRuns, question, pageElements);
+          if (!area) continue;
+          const page = pageElements.get(area.page);
+          if (!page) continue;
+          const free = createFreeResponse(document, question, response,
+            value => options.onFreeInput?.(question, value) ?? false,
+            value => options.onFreeSubmit?.(question, value) ?? false);
+          const card = free.element;
+          card.classList.add('pdf-free-response');
+          card.style.left = `${area.left}%`; card.style.top = `${area.top}%`;
+          card.style.width = `${area.width}%`; card.style.minHeight = `${area.height}%`;
+          const head = document.createElement('div'); head.className = 'pdf-free-head';
+          const badge = document.createElement('span'); badge.className = 'pdf-free-badge'; badge.textContent = `Q${question}`;
+          const label = document.createElement('span'); label.textContent = 'Your answer';
+          head.append(badge, label);
+          card.prepend(head);
+          const foot = card.querySelector('.free-row');
+          if (foot) foot.classList.add('pdf-free-foot');
+          card.hidden = currentAnswered.has(question);
+          page.root.append(card); freeInputs.set(question, free);
+        }
+
+        // A zero/negative count is an explicit text response, never a guessed choice count.
+        if ([...optionMaximums.values()].every(max => max <= 0) && (numericResponses.size || freeResponses.size)) {
+          const parts: string[] = [];
+          if (numericInputs.size < numericResponses.size) parts.push('in response desk');
+          const unplacedFree = [...freeResponses.keys()].filter(q => !freeInputs.has(q) && !currentAnswered.has(q));
+          const placedFree = [...freeResponses.keys()].filter(q => freeInputs.has(q) && !currentAnswered.has(q));
+          let freeLabel = '';
+          if (placedFree.length) freeLabel = `${placedFree.length} free ${placedFree.length === 1 ? 'answer' : 'answers'}`;
+          if (unplacedFree.length) freeLabel += `${freeLabel ? ' · ' : ''}${unplacedFree.length} free ${unplacedFree.length === 1 ? 'answer' : 'answers'} in response desk`;
+          const numericLabel = numericResponses.size ? `Numeric answers${parts.length ? ` ${parts.join(' ')}` : ''}` : '';
+          const combined = [numericLabel, freeLabel].filter(Boolean).join(' · ');
+          meta.textContent = `${doc.pageCount} pages · ${combined || 'Text answers'}`;
           return;
         }
-        // Ensure boxes for ALL answers possible for every unanswered question
+        // Ensure boxes for ALL answers possible for every unanswered question.
+        // Indexed lookups keep this linear: targets are grouped once, column
+        // layout is memoized per page, and boundary runs are pre-sorted so the
+        // next-question search walks only one page instead of the whole document.
+        const targetsByQuestion = new Map<number, PdfOptionTarget[]>();
+        for (const t of targets) {
+          const list = targetsByQuestion.get(t.questionNumber);
+          if (list) list.push(t);
+          else targetsByQuestion.set(t.questionNumber, [t]);
+        }
+        const twoColByPage = new Map<number, boolean>();
+        for (const [pageNumber, info] of pageElements) {
+          let left = false, right = false;
+          for (const r of info.runs) {
+            if (r.top <= 30) continue;
+            if (r.left < info.width * 0.5) left = true;
+            else if (r.left >= info.width * 0.45) right = true;
+            if (left && right) break;
+          }
+          twoColByPage.set(pageNumber, left && right);
+        }
+        const boundaryRunsByPage = new Map<number, PdfTextRun[]>();
+        for (const r of firstBoundaryRun.values()) {
+          const list = boundaryRunsByPage.get(r.page);
+          if (list) list.push(r);
+          else boundaryRunsByPage.set(r.page, [r]);
+        }
+        for (const list of boundaryRunsByPage.values()) list.sort((a, b) => a.top - b.top);
+        const nextBoundaryInColumn = (pageNumber: number, afterTop: number, exclude: number, isLeft: boolean, isTwoCol: boolean): PdfTextRun | undefined => {
+          const list = boundaryRunsByPage.get(pageNumber);
+          if (!list) return undefined;
+          for (const r of list) {
+            if (r.top <= afterTop) continue;
+            const b = parseQuestionBoundary(clean(r.text));
+            if (b === null || b === exclude) continue;
+            if (isTwoCol) {
+              if (isLeft && r.left >= (pageElements.get(pageNumber)?.width ?? 600) * 0.5) continue;
+              if (!isLeft && r.left < (pageElements.get(pageNumber)?.width ?? 600) * 0.45) continue;
+            }
+            return r;
+          }
+          return undefined;
+        };
         for (const [qNum, max] of optionMaximums.entries()) {
           if (currentAnswered.has(qNum)) continue;
           if (max < 1 || max > 9) continue;
-          const qTargets = targets.filter(t => t.questionNumber === qNum);
+          const qTargets = targetsByQuestion.get(qNum) ?? [];
           if (qTargets.length > 0 && qTargets.length < max) {
             const existingValues = new Set(qTargets.map(t => t.optionValue));
             const sorted = [...qTargets].sort((a, b) => a.optionValue - b.optionValue);
@@ -845,18 +967,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
             const pageH = pageInfo?.height || 800;
             const pageW = pageInfo?.width || 600;
             const isLeft = last.left < pageW * 0.5;
-            const isTwoCol = pdfRuns.some(r => r.left >= pageW * 0.45 && r.top > 30);
+            const isTwoCol = twoColByPage.get(last.page) ?? false;
 
-            const nextQRun = pdfRuns.find(r => {
-              if (r.page !== last.page || r.top <= last.top + 20) return false;
-              const b = parseQuestionBoundary(clean(r.text));
-              if (b === null || b === qNum) return false;
-              if (isTwoCol) {
-                if (isLeft && r.left >= pageW * 0.5) return false;
-                if (!isLeft && r.left < pageW * 0.45) return false;
-              }
-              return true;
-            });
+            const nextQRun = nextBoundaryInColumn(last.page, last.top + 20, qNum, isLeft, isTwoCol);
             const nextQBottom = nextQRun ? nextQRun.top - 12 : pageH - 40;
 
             const missingBelow = max - last.optionValue;
@@ -886,28 +999,17 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
               }
             }
           } else if (qTargets.length === 0) {
-            const qBoundaryRun = pdfRuns.find(r => parseQuestionBoundary(clean(r.text)) === qNum) ||
-              pdfRuns.find(r => clean(r.text) === String(qNum).padStart(3, '0')) ||
-              pdfRuns.find(r => new RegExp(`^0*${qNum}(?:\\b|[:.)\\s])`).test(clean(r.text)));
+            const qBoundaryRun = firstBoundaryRun.get(qNum) || paddedRun.get(String(qNum).padStart(3, '0'));
             if (qBoundaryRun) {
               const pageInfo = pageElements.get(qBoundaryRun.page);
               const pageH = pageInfo?.height || 800;
               const pageW = pageInfo?.width || 600;
               const isLeft = qBoundaryRun.left < pageW * 0.5;
-              const isTwoCol = pdfRuns.some(r => r.left >= pageW * 0.45 && r.top > 30);
+              const isTwoCol = twoColByPage.get(qBoundaryRun.page) ?? false;
               const colLeft = (isTwoCol && !isLeft) ? pageW * 0.5 : 40;
 
               // Find where the next question begins on this page & column
-              const nextQRun = pdfRuns.find(r => {
-                if (r.page !== qBoundaryRun.page || r.top <= qBoundaryRun.top + 20) return false;
-                const b = parseQuestionBoundary(clean(r.text));
-                if (b === null || b === qNum) return false;
-                if (isTwoCol) {
-                  if (isLeft && r.left >= pageW * 0.5) return false;
-                  if (!isLeft && r.left < pageW * 0.45) return false;
-                }
-                return true;
-              });
+              const nextQRun = nextBoundaryInColumn(qBoundaryRun.page, qBoundaryRun.top + 20, qNum, isLeft, isTwoCol);
               const nextQBottom = nextQRun ? nextQRun.top - 12 : pageH - 40;
 
               const minOptionH = 28;
@@ -1009,9 +1111,13 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         }
         const activeTargets = targets.filter(t => !currentAnswered.has(t.questionNumber));
         const pageLabel = `${doc.pageCount} ${doc.pageCount === 1 ? 'page' : 'pages'}`;
-        const choiceLabel = activeTargets.length > 0
-          ? `${activeTargets.length} answer ${activeTargets.length === 1 ? 'choice' : 'choices'}`
-          : 'All questions completed';
+        const pendingFree = [...freeResponses.keys()].filter(q => !currentAnswered.has(q));
+        const pendingNumeric = [...numericResponses.keys()].filter(q => !currentAnswered.has(q));
+        const segments: string[] = [];
+        if (activeTargets.length > 0) segments.push(`${activeTargets.length} answer ${activeTargets.length === 1 ? 'choice' : 'choices'}`);
+        if (pendingNumeric.length) segments.push(`${pendingNumeric.length} numeric ${pendingNumeric.length === 1 ? 'answer' : 'answers'}`);
+        if (pendingFree.length) segments.push(`${pendingFree.length} free ${pendingFree.length === 1 ? 'answer' : 'answers'}`);
+        const choiceLabel = segments.length ? segments.join(' · ') : 'All questions completed';
         meta.textContent = `${pageLabel} · ${choiceLabel}`;
       };
       paintChoices();
@@ -1029,14 +1135,20 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   function refreshMeta() {
     const activeHits = shadow.querySelectorAll<HTMLButtonElement>('.option-hit:not([hidden])');
     const numericPending = [...numericResponses.keys()].filter(question => !currentAnswered.has(question));
+    const freePending = [...freeResponses.keys()].filter(question => !currentAnswered.has(question));
     const pageLabel = `${pageElements.size} ${pageElements.size === 1 ? 'page' : 'pages'}`;
-    let choiceLabel = activeHits.length > 0
-      ? `${activeHits.length} answer ${activeHits.length === 1 ? 'choice' : 'choices'}`
-      : 'All questions completed';
+    const segments: string[] = [];
+    if (activeHits.length > 0) segments.push(`${activeHits.length} answer ${activeHits.length === 1 ? 'choice' : 'choices'}`);
     if (numericPending.length) {
       const label = `${numericPending.length} numeric ${numericPending.length === 1 ? 'answer' : 'answers'}${numericPending.some(question => !numericInputs.has(question)) ? ' in response desk' : ''}`;
-      choiceLabel = activeHits.length ? `${choiceLabel} · ${label}` : label;
+      segments.push(label);
     }
+    if (freePending.length) {
+      const unplaced = freePending.filter(question => !freeInputs.has(question));
+      const label = `${freePending.length} free ${freePending.length === 1 ? 'answer' : 'answers'}${unplaced.length ? ' in response desk' : ''}`;
+      segments.push(label);
+    }
+    const choiceLabel = segments.length ? segments.join(' · ') : 'All questions completed';
     meta.textContent = `${pageLabel} · ${choiceLabel}`;
   }
 
@@ -1078,6 +1190,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     setSelected(questionNumber: number, optionValue: string) {
       if (disposed) return;
       if (numericResponses.has(questionNumber)) { numericInputs.get(questionNumber)?.setValue(optionValue); return; }
+      if (freeResponses.has(questionNumber)) { freeInputs.get(questionNumber)?.setValue(optionValue); return; }
       if (currentAnswered.has(questionNumber)) return;
       for (const button of shadow.querySelectorAll<HTMLButtonElement>('.option-hit')) {
         const q = Number(button.dataset.question);
@@ -1121,6 +1234,12 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     },
     markWrong(questionNumber: number, optionValue: string) {
       if (numericResponses.has(questionNumber)) { numericInputs.get(questionNumber)?.input.setAttribute('aria-invalid', 'true'); return; }
+      if (freeResponses.has(questionNumber)) {
+        const card = freeInputs.get(questionNumber)?.element;
+        card?.setAttribute('data-invalid', 'true');
+        freeInputs.get(questionNumber)?.input.setAttribute('aria-invalid', 'true');
+        return;
+      }
       if (currentAnswered.has(questionNumber) || keptCorrect.has(questionNumber)) return;
       const box = shadow.querySelector<HTMLElement>(
         `.option-hit[data-question="${questionNumber}"][data-option="${optionValue}"]`
@@ -1141,6 +1260,21 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       if (verdict === 'wrong') flashScreen(screenLayerHost());
     },
     celebrate(questionNumber: number, optionValue: string, party: boolean) {
+      const free = freeInputs.get(questionNumber);
+      if (free && freeResponses.has(questionNumber)) {
+        if (free.element.hidden && !party) return;
+        keptCorrect.add(questionNumber);
+        free.element.hidden = false;
+        free.element.dataset.correct = 'true';
+        free.element.removeAttribute('data-invalid');
+        free.input.setAttribute('aria-label', `Question ${questionNumber} is correct`);
+        if (party) celebrateScreen(screenLayerHost());
+        const confirm = submitButtons.get(questionNumber);
+        confirm?.remove();
+        submitButtons.delete(questionNumber);
+        refreshMeta();
+        return;
+      }
       const boxes = [...shadow.querySelectorAll<HTMLElement>(`.option-hit[data-question="${questionNumber}"]`)];
       const target = boxes.find(box => box.dataset.option === optionValue);
       if (!target) return;
@@ -1176,6 +1310,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       if (disposed) return;
       currentAnswered = new Set(answered);
       for (const [question, input] of numericInputs) input.element.hidden = currentAnswered.has(question);
+      for (const [question, input] of freeInputs) input.element.hidden = currentAnswered.has(question);
       if (isBetterQuestDebug(element.ownerDocument)) {
         const list = [...currentAnswered].sort((a, b) => a - b);
         console.info(`[BetterQuest debug] PDF treats these questions as completed (boxes hidden): ${list.length ? list.join(', ') : '(none)'}`);
@@ -1203,7 +1338,11 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       if (disposed || !pdfRuns.length) return false;
       let grew = false;
       for (const [qNum, max] of next) {
-        if (!optionMaximums.has(qNum) || (optionMaximums.get(qNum) ?? 0) < max) { optionMaximums.set(qNum, max); grew = true; }
+        const current = optionMaximums.get(qNum);
+        if (current === undefined) { optionMaximums.set(qNum, max); grew = true; continue; }
+        // Text answers use 0 (numeric) / -1 (free) markers that must win over an
+        // earlier half-rendered guess, and choice counts only ever grow.
+        if (max <= 0 ? current !== max : current < max) { optionMaximums.set(qNum, max); grew = true; }
       }
       if (!grew) return false;
       paintChoices();
@@ -1219,6 +1358,23 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       const response = numericResponses.get(questionNumber);
       if (response) numericResponses.set(questionNumber, { ...response, value });
       numericInputs.get(questionNumber)?.setValue(value);
+    },
+    setFreeValue(questionNumber: number, value: string) {
+      if (disposed) return;
+      const response = freeResponses.get(questionNumber);
+      if (response) freeResponses.set(questionNumber, { ...response, value });
+      freeInputs.get(questionNumber)?.setValue(value);
+    },
+    setFreeResponses(next: ReadonlyMap<number, FreeResponse>) {
+      if (disposed) return;
+      let changed = freeResponses.size !== next.size;
+      for (const [question, response] of next) {
+        if (!freeResponses.has(question) || optionMaximums.get(question) !== -1) changed = true;
+        optionMaximums.set(question, -1);
+        freeInputs.get(question)?.update(response);
+      }
+      freeResponses = new Map(next);
+      if (changed && pdfRuns.length) paintChoices();
     },
     setNumericResponses(next: ReadonlyMap<number, NumericResponse>) {
       if (disposed) return;
@@ -1308,6 +1464,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       paintChoices = () => {};
       optionMaximums.clear(); currentAnswered.clear(); keptCorrect.clear();
       numericInputs.clear(); numericResponses.clear();
+      freeInputs.clear(); freeResponses.clear();
       for (const page of pageElements.values()) {
         const canvas = page.root.querySelector('canvas');
         if (canvas) { canvas.width = 0; canvas.height = 0; }

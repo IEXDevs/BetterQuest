@@ -9,7 +9,7 @@ import {
   type PdfAssessmentElements,
 } from '../../adapters/quest/assessment';
 import { createInteractivePdfViewer } from './pdf-viewer';
-import { createNumericResponse, NUMERIC_RESPONSE_STYLES, type NumericResponse } from './numeric-response';
+import { createNumericResponse, NUMERIC_RESPONSE_STYLES, createFreeResponse, type FreeResponse, type NumericResponse } from './numeric-response';
 import { celebrateScreen, flashScreen } from './celebration';
 import { isBetterQuestDebug } from '../../shared/debug';
 import { execute, type Execute } from '../../shared/client';
@@ -993,6 +993,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   const knownByNumber = new Map<number, ReturnType<typeof readAssessmentResponses>[number]>();
   const knownAnswered = new Set<number>();
   const numericInputs = new Map<number, ReturnType<typeof createNumericResponse>>();
+  const freeInputs = new Map<number, ReturnType<typeof createFreeResponse>>();
 
   function numericResponses(bindings: ReturnType<typeof readAssessmentResponses>) {
     const responses = new Map<number, NumericResponse>();
@@ -1004,9 +1005,24 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     return responses;
   }
 
+  function freeResponses(bindings: ReturnType<typeof readAssessmentResponses>) {
+    const responses = new Map<number, FreeResponse>();
+    for (const binding of bindings) if (binding.kind === 'free' && binding.select.tagName === 'TEXTAREA') {
+      const area = binding.select as HTMLTextAreaElement;
+      responses.set(Number(binding.number), { value: area.value, placeholder: area.placeholder, title: area.title,
+        maxLength: area.maxLength, disabled: binding.answered || area.readOnly || !isNativeControlAvailable(area) });
+    }
+    return responses;
+  }
+
   function syncNumericValue(questionNumber: number, value: string) {
     numericInputs.get(questionNumber)?.setValue(value);
     pdfViewer?.setNumericValue?.(questionNumber, value);
+  }
+
+  function syncFreeValue(questionNumber: number, value: string) {
+    freeInputs.get(questionNumber)?.setValue(value);
+    (pdfViewer as unknown as { setFreeValue?: (q: number, v: string) => void })?.setFreeValue?.(questionNumber, value);
   }
 
   function writeNumericNative(questionNumber: number, value: string, commit = false): boolean {
@@ -1027,6 +1043,24 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     });
   }
 
+  function writeFreeNative(questionNumber: number, value: string, commit = false): boolean {
+    const elements = findPdfAssessment(document);
+    if (!elements || disposed) return false;
+    return withNativeResponsesVisible(elements, () => {
+      const binding = readAssessmentResponses(elements.table).find(item => Number(item.number) === questionNumber);
+      if (!binding || binding.kind !== 'free' || binding.answered || binding.select.tagName !== 'TEXTAREA') return false;
+      const area = binding.select as HTMLTextAreaElement;
+      if (!isNativeControlAvailable(area) || area.readOnly || (area.maxLength >= 0 && value.length > area.maxLength)) return false;
+      if (area.value !== value) {
+        area.value = value;
+        area.dispatchEvent(new document.defaultView!.Event('input', { bubbles: true }));
+      }
+      if (commit) area.dispatchEvent(new document.defaultView!.Event('change', { bubbles: true }));
+      syncFreeValue(questionNumber, area.value);
+      return true;
+    });
+  }
+
   const onNativeNumericInput = (event: Event) => {
     const input = event.target as HTMLInputElement | null;
     if (input?.tagName !== 'INPUT' || input.name !== 'response' || input.type !== 'text') return;
@@ -1036,6 +1070,16 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   };
   root.addEventListener('input', onNativeNumericInput);
   root.addEventListener('change', onNativeNumericInput);
+
+  const onNativeFreeInput = (event: Event) => {
+    const area = event.target as HTMLTextAreaElement | null;
+    if (area?.tagName !== 'TEXTAREA' || area.name !== 'response') return;
+    const row = area.closest('tr');
+    const questionNumber = Number(clean(row?.cells[0]?.textContent).replace(/\.$/, ''));
+    if (Number.isInteger(questionNumber) && questionNumber > 0) syncFreeValue(questionNumber, area.value);
+  };
+  root.addEventListener('input', onNativeFreeInput);
+  root.addEventListener('change', onNativeFreeInput);
 
   function mergeBindings(bindings: ReturnType<typeof readAssessmentResponses>) {
     const live = new Map<number, ReturnType<typeof readAssessmentResponses>[number]>();
@@ -1150,11 +1194,16 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       if (!binding) { submitWarn(questionNumber, 'No response row found.'); return false; }
       const available = isNativeControlAvailable(binding.select) && isNativeControlAvailable(binding.submit);
       const numeric = binding.kind === 'numeric';
+      const free = binding.kind === 'free';
       const selectedOption = 'options' in binding.select ? binding.select.selectedOptions[0] ||
         [...binding.select.options].find(opt => opt.value === binding.select.value) : undefined;
-      const hasAnswer = numeric ? Boolean(binding.select.value.trim()) && binding.select.checkValidity()
+      const textControl = binding.select as HTMLInputElement | HTMLTextAreaElement;
+      const textValue = (numeric || free) ? textControl.value.trim() : '';
+      const hasAnswer = numeric || free
+        ? Boolean(textValue) && (typeof textControl.checkValidity !== 'function' || textControl.checkValidity())
         : Boolean(selectedOption && isResponseOptionAvailable(selectedOption));
-      if (!available || binding.answered || !hasAnswer || (numeric && 'readOnly' in binding.select && binding.select.readOnly)) {
+      const readOnly = numeric || free ? (textControl as HTMLInputElement).readOnly : false;
+      if (!available || binding.answered || !hasAnswer || readOnly) {
         submitWarn(questionNumber, !hasAnswer ? 'No valid answer entered.' : 'Submit control unavailable.');
         return false;
       }
@@ -1169,10 +1218,11 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       const view = document.defaultView;
       const pageX = view?.scrollX ?? 0;
       const pageY = view?.scrollY ?? 0;
-      const optionValue = binding.select.value;
+      const optionValue = free ? binding.select.value.slice(0, 500) : binding.select.value;
       const attempts = binding.attempts;
       recordStreakSafe();
-      if (!numeric) recordFreshSubmit(document, questionNumber, optionValue, attempts);
+      // Text answers can be long prose — never persist the value, only the streak.
+      if (!numeric && !free) recordFreshSubmit(document, questionNumber, optionValue, attempts);
       binding.submit.click();
       // The submit button lives in Quest's hidden response table, so its own
       // handler can drag the page down to reveal it. Undo any jump it makes.
@@ -1190,7 +1240,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         const target = current.find(item => Number(item.number) === questionNumber);
         if (target && !target.answered && target.attempts === attempts) {
           submitWarn(questionNumber, 'No result appeared.');
-          pdfViewer?.setSelected(questionNumber, optionValue);
+          // Never mirror truncated prose back into a text box — that would
+          // corrupt a free response. Choice selections are safe to restore.
+          if (target.kind !== 'free' && target.kind !== 'numeric') pdfViewer?.setSelected(questionNumber, optionValue);
         }
         if (pendingSubmit?.questionNumber === questionNumber) clearPendingSubmit();
       }, 10000);
@@ -1236,6 +1288,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     const optionMaximums = new Map<number, number>();
     const getBindingMax = (binding: (typeof bindings)[number]): number => {
       if (binding.kind === 'numeric') return 0;
+      if (binding.kind === 'free') return -1;
       const selectOptions = 'options' in binding.select ? [...binding.select.options] : [];
       const fromSelect = Math.max(0, ...selectOptions.map(opt => Number(opt.value)).filter(v => Number.isInteger(v) && v >= 1 && v <= 9));
       const fromBinding = Math.max(0, ...binding.options.map(opt => Number(opt.value)).filter(v => Number.isInteger(v) && v >= 1 && v <= 9));
@@ -1251,6 +1304,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
 
     for (const binding of bindings) {
       const questionNumber = Number(binding.number);
+      if (binding.kind === 'free' && Number.isInteger(questionNumber) && questionNumber > 0) { optionMaximums.set(questionNumber, -1); continue; }
       if (binding.kind === 'numeric' && Number.isInteger(questionNumber) && questionNumber > 0) { optionMaximums.set(questionNumber, 0); continue; }
       let maximum = getBindingMax(binding);
       if (!maximum || maximum <= 1) maximum = fallbackMax;
@@ -1264,7 +1318,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   function ensurePdfViewer(elements: PdfAssessmentElements, bindings: ReturnType<typeof readAssessmentResponses>) {
     if (!viewerFactory || pdfViewerStarted || !bindings.length) return;
     const optionMaximums = computeOptionMaximums(bindings);
-    if (!optionMaximums.size) return;
+    const numericMap = numericResponses(bindings);
+    const freeMap = freeResponses(bindings);
+    if (!optionMaximums.size && !numericMap.size && !freeMap.size) return;
     if (isBetterQuestDebug(root.ownerDocument)) {
       const map = [...optionMaximums.entries()].sort((a, b) => a[0] - b[0]).map(([q, m]) => `Q${q}:${m}`);
       const done = bindings.filter(b => b.answered).map(b => b.number);
@@ -1278,9 +1334,12 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     pdfViewer = viewerFactory(elements.pdfFrame, {
       url: elements.iframe.src,
       optionMaximums,
-      numericResponses: numericResponses(bindings),
+      numericResponses: numericMap,
+      freeResponses: freeMap,
       onNumericInput: (questionNumber, value) => writeNumericNative(questionNumber, value),
       onNumericSubmit: (questionNumber, value) => writeNumericNative(questionNumber, value, true) && submitNative(questionNumber),
+      onFreeInput: (questionNumber, value) => writeFreeNative(questionNumber, value),
+      onFreeSubmit: (questionNumber, value) => writeFreeNative(questionNumber, value, true) && submitNative(questionNumber),
       answeredQuestions,
       onChoose: (questionNumber, optionValue) => { chooseNative(questionNumber, optionValue); },
       onSubmit: (questionNumber) => submitNative(questionNumber),
@@ -1656,6 +1715,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     // question ends up with its answer boxes.
     if (pdfViewerStarted) {
       pdfViewer?.setNumericResponses?.(numericResponses(bindings));
+      (pdfViewer as unknown as { setFreeResponses?: (m: Map<number, FreeResponse>) => void })?.setFreeResponses?.(freeResponses(bindings));
       pdfViewer?.setOptionMaximums?.(computeOptionMaximums(bindings));
     }
     // Use the accumulated set — Scroller may only expose a window of rows now.
@@ -1711,14 +1771,19 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     syncPdfVisibility(pdfViewerReady !== false);
     // Native presentation changes can trigger refreshes without changing answers.
     // Keep live buttons in place so hover, focus and pointer clicks are not interrupted.
+    // Free-response values can be long prose — hash only a prefix so the
+    // signature stays small and reconcile stays cheap.
     const signature = JSON.stringify(bindings.map(binding => [
-      binding.id, binding.number, binding.kind, binding.select.value, binding.options,
+      binding.id, binding.number, binding.kind,
+      binding.kind === 'free' ? binding.select.value.slice(0, 120) : binding.select.value,
+      binding.kind === 'free' ? binding.select.value.length : binding.options,
       binding.attempts, binding.answered, isNativeControlAvailable(binding.select),
       isNativeControlAvailable(binding.submit),
     ]));
     if (signature === responseSignature) return;
     responseSignature = signature;
     numericInputs.clear();
+    freeInputs.clear();
     questions.replaceChildren();
     qnav.replaceChildren();
 
@@ -1840,12 +1905,17 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         if (tries) {
           selected.textContent = `${tries.used}/${tries.max}`;
           selected.setAttribute('aria-label', `${tries.used} of ${tries.max} tries used`);
+        } else if (binding.kind === 'free') {
+          const snippet = binding.select.value.trim().slice(0, 80);
+          selected.textContent = snippet ? `Free response submitted` : 'Completed';
         } else {
           selected.textContent = binding.select.value ? `Answer ${binding.select.value} submitted` : 'Completed';
         }
         const submittedTag = document.createElement('span');
         submittedTag.className = 'submitted-tag';
-        submittedTag.textContent = binding.select.value ? `Submitted: Answer ${binding.select.value}` : 'Submitted';
+        submittedTag.textContent = binding.kind === 'free'
+          ? (binding.select.value.trim() ? `Submitted: ${binding.select.value.trim().slice(0, 80)}${binding.select.value.trim().length > 80 ? '…' : ''}` : 'Submitted')
+          : (binding.select.value ? `Submitted: Answer ${binding.select.value}` : 'Submitted');
         const outcome = readOutcome(elements.table, binding);
         const cardQn = Number(binding.number);
         const retriedWrong = outcome === 'incorrect' && Number.isInteger(cardQn) && (wrongMarks.get(cardQn)?.size ?? 0) > 0;
@@ -1877,9 +1947,20 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       }
 
       selected.textContent = binding.select.value
-        ? `Answer ${binding.select.value} ${binding.kind === 'numeric' ? 'entered' : 'selected'}`
+        ? (binding.kind === 'free' ? 'Free response drafted' : `Answer ${binding.select.value} ${binding.kind === 'numeric' ? 'entered' : 'selected'}`)
         : 'Not answered';
       const choices = document.createElement('div'); choices.className = 'choices'; choices.setAttribute('role', 'group'); choices.setAttribute('aria-label', `Question ${binding.number} response`);
+      if (binding.kind === 'free') {
+        const questionNumber = Number(binding.number);
+        const response = freeResponses([binding]).get(questionNumber)!;
+        const free = createFreeResponse(document, questionNumber, response,
+          value => writeFreeNative(questionNumber, value),
+          value => writeFreeNative(questionNumber, value, true) && submitNative(questionNumber));
+        freeInputs.set(questionNumber, free);
+        topActions.append(bookmarkBtn); cardTop.append(meta, topActions);
+        card.append(cardTop, free.element); questions.append(card);
+        continue;
+      }
       if (binding.kind === 'numeric') {
         const questionNumber = Number(binding.number);
         const response = numericResponses([binding]).get(questionNumber)!;
@@ -1946,7 +2027,10 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     root.removeEventListener('submit', onNativeQuestionSubmit, true);
     root.removeEventListener('input', onNativeNumericInput);
     root.removeEventListener('change', onNativeNumericInput);
+    root.removeEventListener('input', onNativeFreeInput);
+    root.removeEventListener('change', onNativeFreeInput);
     numericInputs.clear();
+    freeInputs.clear();
     if (originalWorkspaceHeight) root.style.setProperty('--bq-pdf-workspace-height', originalWorkspaceHeight, originalWorkspaceHeightPriority);
     else root.style.removeProperty('--bq-pdf-workspace-height');
     root.removeAttribute('data-betterquest-rail');

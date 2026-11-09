@@ -4,6 +4,19 @@ import { parseQuestionBoundary, type PdfTextRun } from '../../adapters/quest/ass
  * for scanned PDFs or cover a following question; the response desk is fallback. */
 export function numericResponsePlacement(runs: PdfTextRun[], question: number,
   pages: ReadonlyMap<number, { width: number; height: number }>) {
+  return textResponsePlacement(runs, question, pages, { minHeight: 24, maxHeight: 36, minWidth: 180 });
+}
+
+/** Taller multi-line variant for free responses. Shares the same measured-gap
+ * rule: no blank gap, no overlay — the response desk stays the fallback. */
+export function freeResponsePlacement(runs: PdfTextRun[], question: number,
+  pages: ReadonlyMap<number, { width: number; height: number }>) {
+  return textResponsePlacement(runs, question, pages, { minHeight: 56, maxHeight: 132, minWidth: 220 });
+}
+
+function textResponsePlacement(runs: PdfTextRun[], question: number,
+  pages: ReadonlyMap<number, { width: number; height: number }>,
+  limits: { minHeight: number; maxHeight: number; minWidth: number }) {
   const start = runs.findIndex(run => parseQuestionBoundary(run.text) === question);
   if (start < 0) return null;
   let end = start + 1;
@@ -34,11 +47,11 @@ export function numericResponsePlacement(runs: PdfTextRun[], question: number,
   const bottom = next ? next.top - 24 : page.height - 24;
   // The previous 48-unit control plus 8/24-unit margins required an 80-unit
   // blank gap. A compact field can safely use the smaller gap below a fraction.
-  const height = Math.min(36, bottom - top);
-  if (height < 24) return null;
+  const height = Math.min(limits.maxHeight, bottom - top);
+  if (height < limits.minHeight) return null;
   const columnRight = twoColumns && !rightColumn ? page.width / 2 : page.width;
   const width = Math.min(300, columnRight - left - 24);
-  if (width < 180) return null;
+  if (width < limits.minWidth) return null;
   return { page: pageNumber, left: left / page.width * 100, top: top / page.height * 100,
     width: width / page.width * 100, height: height / page.height * 100 };
 }
