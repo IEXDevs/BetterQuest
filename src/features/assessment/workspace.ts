@@ -1009,7 +1009,11 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     const responses = new Map<number, FreeResponse>();
     for (const binding of bindings) if (binding.kind === 'free' && binding.select.tagName === 'TEXTAREA') {
       const area = binding.select as HTMLTextAreaElement;
-      responses.set(Number(binding.number), { value: area.value, placeholder: area.placeholder, title: area.title,
+      // Quest essay fields carry no placeholder/title of their own — fall back
+      // to a prompt so the desk and PDF card never render a bare empty box.
+      responses.set(Number(binding.number), { value: area.value,
+        placeholder: area.placeholder || 'Type your answer…',
+        title: area.title || 'Type your full answer, then Submit.',
         maxLength: area.maxLength, disabled: binding.answered || area.readOnly || !isNativeControlAvailable(area) });
     }
     return responses;
