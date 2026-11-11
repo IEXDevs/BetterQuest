@@ -118,3 +118,41 @@ test('sidebar free-response mirrors the native field and submits exactly once', 
     assert.ok(submissions <= 1);
   } finally { workspace.dispose(); dom.window.close(); }
 });
+
+test('tightly-packed PDF still gets an in-flow free-response card below the page', async () => {
+  const dom = new JSDOM('<div></div>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
+  let answer = '', submits = 0;
+  const viewer = createInteractivePdfViewer(dom.window.document.querySelector('div')!, {
+    url: '/student/images/problem_pdf?instance=courseuserassignment_1',
+    optionMaximums: new Map([[1, -1]]),
+    freeResponses: new Map([[1, { value: '', placeholder: 'Type your answer', title: 'Free response', maxLength: -1, disabled: false }]]),
+    onChoose() {},
+    onFreeInput(_q, value) { answer = value; return true; },
+    onFreeSubmit(_q, value) { answer = value; submits++; return true; },
+    openDocument: async () => ({
+      pageCount: 1, destroy() {},
+      // No blank gap anywhere: prompt runs straight into the next header.
+      async renderPage() { return { width: 600, height: 800, runs: [run('001', 80), run('Explain the process in detail', 140), run('002', 200)] }; },
+    }),
+  });
+  try {
+    assert.equal(await viewer.ready, true);
+    const shadow = viewer.element.shadowRoot!;
+    const card = shadow.querySelector<HTMLElement>('.pdf-free-response[data-question="1"]');
+    assert.ok(card, 'FRQ always gets a spot on the PDF, even with no overlay gap');
+    assert.ok(card.classList.contains('pdf-free-flow'), 'fallback card flows below the page instead of covering text');
+    const page = shadow.querySelector<HTMLElement>('[aria-label="PDF page 1"]')!;
+    assert.equal(card.parentElement, page, 'flow card is appended to its question page');
+    assert.ok(card.querySelector('.pdf-free-head .pdf-free-badge'), 'flow card keeps the Q badge header');
+    const area = card.querySelector('textarea')!;
+    area.value = 'My detailed explanation';
+    area.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    assert.equal(answer, 'My detailed explanation');
+    assert.equal(submits, 0);
+    card.querySelector('button')!.click();
+    assert.equal(submits, 1);
+    viewer.setAnsweredQuestions(new Set([1]));
+    assert.equal(card.hidden, true, 'answered flow card hides');
+    assert.match(shadow.querySelector('.meta')!.textContent!, /All questions completed/);
+  } finally { viewer.dispose(); dom.window.close(); }
+});

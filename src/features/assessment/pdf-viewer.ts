@@ -245,6 +245,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     .pdf-free-response[data-correct="true"] .pdf-free-head .pdf-free-badge{background:#16a34a}
     .pdf-free-response textarea{box-sizing:border-box;width:100%;min-height:calc(56px * var(--bq-pdf-zoom,1));padding:calc(8px * var(--bq-pdf-zoom,1));border:1px solid #cbd5e1;border-radius:calc(8px * var(--bq-pdf-zoom,1));background:#fff;color:#0f172a;font:400 calc(12px * var(--bq-pdf-zoom,1))/1.5 ui-rounded,"Avenir Next",sans-serif;resize:vertical}
     .pdf-free-response textarea:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 calc(2px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.3)}
+    /* In-flow fallback: appended below the rendered page when the PDF has no
+       blank gap to overlay. Static layout, full page width, never covers text. */
+    .pdf-free-response.pdf-free-flow{position:static;width:auto;margin:calc(8px * var(--bq-pdf-zoom,1)) calc(12px * var(--bq-pdf-zoom,1)) calc(12px * var(--bq-pdf-zoom,1))}
     .pdf-free-foot{display:flex;align-items:center;gap:calc(8px * var(--bq-pdf-zoom,1))}
     .pdf-free-foot .pdf-free-count{margin-left:auto;font-size:calc(10px * var(--bq-pdf-zoom,1));color:#64748b;font-variant-numeric:tabular-nums}
     .pdf-free-foot button{display:inline-flex;align-items:center;gap:calc(6px * var(--bq-pdf-zoom,1));padding:calc(6px * var(--bq-pdf-zoom,1)) calc(14px * var(--bq-pdf-zoom,1));border:0;border-radius:calc(8px * var(--bq-pdf-zoom,1));background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font:750 calc(11px * var(--bq-pdf-zoom,1))/1.2 ui-rounded,"Avenir Next",sans-serif;cursor:pointer;box-shadow:0 calc(3px * var(--bq-pdf-zoom,1)) calc(10px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.35)}
@@ -871,22 +874,12 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           page.root.append(numeric.element); numericInputs.set(question, numeric);
         }
 
-        for (const [question, response] of freeResponses) {
-          if (currentAnswered.has(question)) {
-            // Answered free responses stay in the desk; the PDF keeps only the anchor.
-            continue;
-          }
-          const area = freeResponsePlacement(pdfRuns, question, pageElements);
-          if (!area) continue;
-          const page = pageElements.get(area.page);
-          if (!page) continue;
+        const mountFreeCard = (question: number, response: FreeResponse) => {
           const free = createFreeResponse(document, question, response,
             value => options.onFreeInput?.(question, value) ?? false,
             value => options.onFreeSubmit?.(question, value) ?? false);
           const card = free.element;
           card.classList.add('pdf-free-response');
-          card.style.left = `${area.left}%`; card.style.top = `${area.top}%`;
-          card.style.width = `${area.width}%`; card.style.minHeight = `${area.height}%`;
           const head = document.createElement('div'); head.className = 'pdf-free-head';
           const badge = document.createElement('span'); badge.className = 'pdf-free-badge'; badge.textContent = `Q${question}`;
           const label = document.createElement('span'); label.textContent = 'Your answer';
@@ -895,7 +888,40 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           const foot = card.querySelector('.free-row');
           if (foot) foot.classList.add('pdf-free-foot');
           card.hidden = currentAnswered.has(question);
-          page.root.append(card); freeInputs.set(question, free);
+          freeInputs.set(question, free);
+          return free;
+        };
+
+        for (const [question, response] of freeResponses) {
+          if (currentAnswered.has(question)) {
+            // Answered free responses stay in the desk; the PDF keeps only the anchor.
+            continue;
+          }
+          const area = freeResponsePlacement(pdfRuns, question, pageElements);
+          if (area) {
+            const page = pageElements.get(area.page);
+            if (page) {
+              const card = mountFreeCard(question, response).element;
+              card.style.left = `${area.left}%`; card.style.top = `${area.top}%`;
+              card.style.width = `${area.width}%`; card.style.minHeight = `${area.height}%`;
+              page.root.append(card);
+              continue;
+            }
+          }
+          // Guaranteed spot: no blank gap on this PDF, so append an in-flow
+          // answer card below the rendered page where the question starts.
+          // It lives under the canvas (never over question text) and is always
+          // present, even on tightly-packed PDFs.
+          const boundary = firstBoundaryRun.get(question);
+          const flowPage = (boundary && pageElements.get(boundary.page)) || pageElements.get(1);
+          if (!flowPage) continue;
+          const card = mountFreeCard(question, response).element;
+          card.classList.add('pdf-free-flow');
+          // The page root pins an aspect ratio for the canvas; release it so
+          // the in-flow card extends the page instead of overflowing it. The
+          // canvas keeps width:100%/height:auto, so the image ratio is kept.
+          flowPage.root.style.aspectRatio = '';
+          flowPage.root.append(card);
         }
 
         // A zero/negative count is an explicit text response, never a guessed choice count.
