@@ -555,8 +555,16 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg> Full screen`;
   };
   const handleFsChange = () => {
+    // Entering/exiting fullscreen resizes the page list, so an unchanged
+    // scrollTop would land on a different question. Snapshot the question at
+    // the viewport center first, refit, then put that same question back in
+    // the center.
+    const pending = pendingFsQuestion;
+    pendingFsQuestion = null;
+    const center = pending ?? currentCenterQuestion();
     syncFs();
     fitPagesToViewer();
+    if (center !== null && center !== undefined) centerOnQuestion(center);
     const boxes = shadow.querySelectorAll('.option-hit').length;
     console.info(`[BetterQuest] Fullscreen changed. Answer boxes on PDF: ${boxes}.`);
   };
@@ -564,6 +572,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   syncFs();
 
   fullscreenBtn.addEventListener('click', () => {
+    pendingFsQuestion = currentCenterQuestion();
     const isFs = Boolean(document.fullscreenElement) || element.dataset.fullscreen === 'true';
     const root = container.closest<HTMLElement>('#target') || container;
     if (isFs) {
@@ -589,7 +598,15 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       }
     }
     // The fallback attribute path fires no fullscreenchange, so refit here.
+    // The real fullscreen path refits in handleFsChange; centering twice is
+    // harmless and covers browsers that fire the event before layout settles.
     fitPagesToViewer();
+    if (pendingFsQuestion !== null && pendingFsQuestion !== undefined) {
+      const restore = pendingFsQuestion;
+      // Keep the snapshot for handleFsChange when native fullscreen fires.
+      centerOnQuestion(restore);
+      document.defaultView?.requestAnimationFrame?.(() => centerOnQuestion(restore));
+    }
   });
   const zoom = document.createElement('div'); zoom.className = 'zoom';
   const zoomOut = document.createElement('button'); zoomOut.type = 'button'; zoomOut.textContent = '−'; zoomOut.setAttribute('aria-label', 'Zoom out');
@@ -730,6 +747,69 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       ? availableWidth / widestPage
       : 1;
     paintZoom();
+  }
+
+  /** Snapshot for an in-flight fullscreen toggle (click fires before the event). */
+  let pendingFsQuestion: number | null = null;
+
+  function anchorAbsoluteTop(questionNumber: number): number | null {
+    const anchor = shadow.querySelector<HTMLElement>(`.question-anchor[data-question="${questionNumber}"]`);
+    if (!anchor) return null;
+    const pageEl = anchor.closest<HTMLElement>('.page');
+    if (!pageEl) return null;
+    const topPct = Number.parseFloat(anchor.style.top) || 0;
+    const pageH = pageEl.offsetHeight || pageEl.clientHeight || 0;
+    if (pageH > 0) return pageEl.offsetTop + (topPct / 100) * pageH;
+    try {
+      const anchorRect = anchor.getBoundingClientRect?.();
+      const pagesRect = pages.getBoundingClientRect?.();
+      if (anchorRect && pagesRect && (pagesRect.height !== 0 || anchorRect.top !== 0)) {
+        return (anchorRect.top - pagesRect.top) + pages.scrollTop;
+      }
+    } catch { /* JSDOM without layout: fall through */ }
+    return null;
+  }
+
+  /** Which question sits at the vertical center of the PDF viewport. */
+  function currentCenterQuestion(): number | null {
+    try {
+      const anchors = [...shadow.querySelectorAll<HTMLElement>('.question-anchor[data-question]')];
+      if (!anchors.length || !pages.clientHeight) {
+        // Layout-free environments (tests): fall back to the first anchor.
+        const first = anchors[0]?.dataset.question;
+        const parsed = first !== undefined ? Number(first) : NaN;
+        return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+      }
+      const centerY = pages.scrollTop + pages.clientHeight / 2;
+      let best: number | null = null;
+      let bestDist = Infinity;
+      for (const anchor of anchors) {
+        const q = Number(anchor.dataset.question);
+        if (!Number.isInteger(q) || q <= 0) continue;
+        const top = anchorAbsoluteTop(q);
+        if (top === null) continue;
+        const dist = Math.abs(top - centerY);
+        if (dist < bestDist) { bestDist = dist; best = q; }
+      }
+      return best;
+    } catch { return null; }
+  }
+
+  /** Scroll so the question header sits centered in the PDF viewport. */
+  function centerOnQuestion(questionNumber: number, behavior: ScrollBehavior = 'auto') {
+    try {
+      const top = anchorAbsoluteTop(questionNumber);
+      if (top === null || !pages.clientHeight) {
+        // No measurable layout (or missing anchor): keep the question visible
+        // with a centered jump instead of dropping the restore entirely.
+        const anchor = shadow.querySelector<HTMLElement>(`.question-anchor[data-question="${questionNumber}"]`);
+        anchor?.scrollIntoView?.({ block: 'center', behavior });
+        return;
+      }
+      // Header slightly above exact center so the question body reads centered.
+      const targetY = Math.max(0, top - pages.clientHeight / 2 + 40);
+      pages.scrollTo?.({ top: targetY, behavior });
+    } catch { /* centering is best-effort; never break fullscreen */ }
   }
 
   zoomOut.addEventListener('click', () => stepZoom(-1));
@@ -1324,6 +1404,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       refreshMeta();
     },
     setFullscreen(active: boolean) {
+      const center = currentCenterQuestion();
       if (active) {
         element.dataset.fullscreen = 'true';
       } else {
@@ -1331,6 +1412,10 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       }
       syncFs();
       fitPagesToViewer();
+      if (center !== null) {
+        centerOnQuestion(center);
+        document.defaultView?.requestAnimationFrame?.(() => { if (!disposed) centerOnQuestion(center); });
+      }
     },
     setAnsweredQuestions(answered: ReadonlySet<number>) {
       if (disposed) return;
