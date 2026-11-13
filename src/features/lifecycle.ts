@@ -38,7 +38,7 @@ export function observeScoped(root: Element, callback: () => void, attributeFilt
 }
 
 export function createFeatureRuntime(document: Document, definitions: FeatureDefinition[] = []) {
-  const active = new Map<string, { root: Element; feature: MountedFeature; abort: AbortController; stop: () => void }>();
+  const active = new Map<string, { root: Element; feature: MountedFeature; abort: AbortController; stop: () => void; running: boolean; dirty: boolean }>();
   const errors = new Map<string, string>();
   let url = document.URL;
   let disposed = false;
@@ -56,11 +56,17 @@ export function createFeatureRuntime(document: Document, definitions: FeatureDef
   function refresh(name: string) {
     const entry = active.get(name);
     if (!entry) return;
+    if (entry.running) { entry.dirty = true; return; }
+    entry.running = true;
+    entry.dirty = false;
     const context: PageContext = { url: document.URL, observedAt: new Date().toISOString(), signal: entry.abort.signal };
     void Promise.resolve().then(() => {
       if (!context.signal.aborted) return entry.feature.refresh(context);
     }).then(() => { if (!context.signal.aborted) errors.delete(name); }).catch(error => {
       if (!context.signal.aborted) errors.set(name, error instanceof Error ? error.message : 'Feature refresh failed.');
+    }).finally(() => {
+      entry.running = false;
+      if (!disposed && !entry.abort.signal.aborted && active.get(name) === entry && entry.dirty) refresh(name);
     });
   }
 
@@ -87,7 +93,7 @@ export function createFeatureRuntime(document: Document, definitions: FeatureDef
         try {
           const feature = definition.mount(root);
           const abort = new AbortController();
-          active.set(definition.name, { root, feature, abort, stop: observeScoped(root, () => refresh(definition.name), definition.attributeFilter, definition.observeOwnedRemovals) });
+          active.set(definition.name, { root, feature, abort, running: false, dirty: false, stop: observeScoped(root, () => refresh(definition.name), definition.attributeFilter, definition.observeOwnedRemovals) });
           refresh(definition.name);
         } catch (error) { errors.set(definition.name, error instanceof Error ? error.message : 'Feature mount failed.'); }
       }

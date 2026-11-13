@@ -1,6 +1,8 @@
 import { mapPdfOptionLabels, parseQuestionBoundary, extractQuestionPoints, clean, type PdfOptionTarget, type PdfTextRun } from '../../adapters/quest/assessment';
 import { celebrateScreen, flashScreen } from './celebration';
 import { isBetterQuestDebug } from '../../shared/debug';
+import { createFreeResponse, createNumericResponse, NUMERIC_RESPONSE_STYLES, type FreeResponse, type NumericResponse } from './numeric-response';
+import { freeResponsePlacement, numericResponsePlacement } from './numeric-placement';
 
 export interface InteractivePdfPage {
   width: number;
@@ -19,6 +21,12 @@ export type OpenInteractivePdf = (url: string, signal: AbortSignal) => Promise<I
 export interface InteractivePdfOptions {
   url: string;
   optionMaximums: ReadonlyMap<number, number>;
+  numericResponses?: ReadonlyMap<number, NumericResponse>;
+  freeResponses?: ReadonlyMap<number, FreeResponse>;
+  onNumericInput?: (questionNumber: number, value: string) => boolean;
+  onNumericSubmit?: (questionNumber: number, value: string) => boolean;
+  onFreeInput?: (questionNumber: number, value: string) => boolean;
+  onFreeSubmit?: (questionNumber: number, value: string) => boolean;
   answeredQuestions?: ReadonlySet<number>;
   onChoose: (questionNumber: number, optionValue: number) => void;
   onSubmit?: (questionNumber: number) => boolean;
@@ -32,6 +40,11 @@ function extensionUrl(path: string): string {
 
 async function openPdfDocument(url: string, signal: AbortSignal): Promise<InteractivePdfDocument> {
   const pdfjs = await import('pdfjs-dist');
+  signal.throwIfAborted();
+  let workerObjectUrl: string | undefined;
+  const releaseWorkerUrl = () => {
+    if (workerObjectUrl) { URL.revokeObjectURL(workerObjectUrl); workerObjectUrl = undefined; }
+  };
   try {
     const workerUrl = extensionUrl('pdf.worker.min.mjs');
     if (typeof chrome !== 'undefined' && typeof chrome.runtime?.getURL === 'function') {
@@ -39,7 +52,8 @@ async function openPdfDocument(url: string, signal: AbortSignal): Promise<Intera
         const resp = await fetch(workerUrl);
         const scriptText = await resp.text();
         const blob = new Blob([scriptText], { type: 'application/javascript' });
-        pdfjs.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+        workerObjectUrl = URL.createObjectURL(blob);
+        pdfjs.GlobalWorkerOptions.workerSrc = workerObjectUrl;
       } catch {
         pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
       }
@@ -50,14 +64,18 @@ async function openPdfDocument(url: string, signal: AbortSignal): Promise<Intera
     pdfjs.GlobalWorkerOptions.workerSrc = extensionUrl('pdf.worker.min.mjs');
   }
 
-  const task = pdfjs.getDocument({
+  let task: ReturnType<typeof pdfjs.getDocument>;
+  try { task = pdfjs.getDocument({
     url,
     withCredentials: true,
     wasmUrl: extensionUrl('pdfjs/wasm/'),
     standardFontDataUrl: extensionUrl('pdfjs/standard_fonts/'),
-  });
-  const abort = () => { void task.destroy(); };
+  }); } catch (error) { releaseWorkerUrl(); throw error; }
+  let destruction: Promise<void> | undefined;
+  const destroy = () => { destruction ??= task.destroy().catch(() => {}).finally(releaseWorkerUrl); };
+  const abort = destroy;
   signal.addEventListener('abort', abort, { once: true });
+  if (signal.aborted) destroy();
   try {
     const document = await task.promise;
     return {
@@ -97,10 +115,11 @@ async function openPdfDocument(url: string, signal: AbortSignal): Promise<Intera
         page.cleanup();
         return { width: viewport.width, height: viewport.height, runs };
       },
-      destroy() { signal.removeEventListener('abort', abort); void task.destroy(); },
+      destroy() { signal.removeEventListener('abort', abort); destroy(); },
     };
   } catch (error) {
     signal.removeEventListener('abort', abort);
+    releaseWorkerUrl();
     throw error;
   }
 }
@@ -214,6 +233,32 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   const shadow = element.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = `
+    ${NUMERIC_RESPONSE_STYLES}
+    .pdf-numeric-response{position:absolute;z-index:3;background:var(--bq-surface,#fff);border-radius:5px;padding:calc(4px * var(--bq-pdf-zoom,1))}
+    .pdf-numeric-response input,.pdf-numeric-response button{min-height:0;height:100%;padding:calc(6px * var(--bq-pdf-zoom,1)) calc(8px * var(--bq-pdf-zoom,1));font-size:clamp(12px,calc(14px * var(--bq-pdf-zoom,1)),20px)}
+    .pdf-numeric-response button[data-valid="true"]{background:linear-gradient(135deg,#16a34a,#15803d);border-color:#15803d;color:#fff}
+    .pdf-free-response{position:absolute;z-index:3;display:flex;flex-direction:column;gap:calc(6px * var(--bq-pdf-zoom,1));padding:calc(10px * var(--bq-pdf-zoom,1));border:1px solid #c7d2fe;border-radius:calc(10px * var(--bq-pdf-zoom,1));background:linear-gradient(180deg,#ffffff 0%,#f5f3ff 100%);box-shadow:0 calc(4px * var(--bq-pdf-zoom,1)) calc(14px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.22)}
+    .pdf-free-response[data-correct="true"]{border-color:#16a34a;background:linear-gradient(180deg,#f0fdf4 0%,#ecfdf5 100%);box-shadow:0 calc(4px * var(--bq-pdf-zoom,1)) calc(14px * var(--bq-pdf-zoom,1)) rgba(22,163,74,.25)}
+    .pdf-free-response[data-invalid="true"] textarea{border-color:#dc2626;box-shadow:0 0 0 calc(2px * var(--bq-pdf-zoom,1)) rgba(220,38,38,.25)}
+    .pdf-free-head{display:flex;align-items:center;gap:calc(6px * var(--bq-pdf-zoom,1));font:750 calc(11px * var(--bq-pdf-zoom,1))/1.2 ui-rounded,"Avenir Next",sans-serif;color:#4338ca;letter-spacing:.02em}
+    .pdf-free-head .pdf-free-badge{display:grid;place-items:center;min-width:calc(20px * var(--bq-pdf-zoom,1));height:calc(20px * var(--bq-pdf-zoom,1));padding:0 calc(6px * var(--bq-pdf-zoom,1));border-radius:999px;background:#4f46e5;color:#fff;font-size:calc(11px * var(--bq-pdf-zoom,1))}
+    .pdf-free-response[data-correct="true"] .pdf-free-head{color:#15803d}
+    .pdf-free-response[data-correct="true"] .pdf-free-head .pdf-free-badge{background:#16a34a}
+    .pdf-free-response textarea{box-sizing:border-box;width:100%;min-height:calc(56px * var(--bq-pdf-zoom,1));padding:calc(8px * var(--bq-pdf-zoom,1));border:1px solid #cbd5e1;border-radius:calc(8px * var(--bq-pdf-zoom,1));background:#fff;color:#0f172a;font:400 calc(14px * var(--bq-pdf-zoom,1))/1.5 ui-rounded,"Avenir Next",sans-serif;resize:vertical}
+    .pdf-free-response textarea:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 calc(2px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.3)}
+    /* In-flow fallback: appended below the rendered page when the PDF has no
+       blank gap to overlay. Static layout, full page width, never covers text. */
+    .pdf-free-response.pdf-free-flow{position:static;width:auto;margin:calc(8px * var(--bq-pdf-zoom,1)) calc(12px * var(--bq-pdf-zoom,1)) calc(12px * var(--bq-pdf-zoom,1))}
+    .pdf-free-foot{display:flex;align-items:center;gap:calc(8px * var(--bq-pdf-zoom,1))}
+    .pdf-free-foot .pdf-free-count{margin-left:auto;font-size:calc(10px * var(--bq-pdf-zoom,1));color:#64748b;font-variant-numeric:tabular-nums}
+    .pdf-free-foot button{display:inline-flex;align-items:center;justify-content:center;gap:calc(6px * var(--bq-pdf-zoom,1));padding:calc(6px * var(--bq-pdf-zoom,1)) calc(12px * var(--bq-pdf-zoom,1));border:0;border-radius:calc(8px * var(--bq-pdf-zoom,1));background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font:750 calc(14px * var(--bq-pdf-zoom,1))/1 ui-rounded,"Avenir Next",sans-serif;cursor:pointer;box-shadow:0 calc(3px * var(--bq-pdf-zoom,1)) calc(10px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.35)}
+    .pdf-free-foot button:hover:not(:disabled){background:linear-gradient(135deg,#4f46e5,#4338ca)}
+    .pdf-free-foot button:disabled{opacity:.55;cursor:not-allowed}
+    .pdf-free-foot button[data-valid="true"]{background:linear-gradient(135deg,#16a34a,#15803d)}
+    .pdf-free-foot button[data-valid="true"]:hover:not(:disabled){background:linear-gradient(135deg,#15803d,#166534)}
+    :host([data-dark-pages="true"]) .pdf-free-response{background:linear-gradient(180deg,#1e1b4b 0%,#312e81 100%);border-color:#818cf8}
+    :host([data-dark-pages="true"]) .pdf-free-head{color:#e0e7ff}
+    :host([data-dark-pages="true"]) .pdf-free-response textarea{background:#0f172a;color:#e2e8f0;border-color:#475569}
     :host{
       display:block!important;
       width:100%!important;
@@ -264,10 +309,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     [data-betterquest="view-toggle"]>a[data-betterquest-view-active="true"]{background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;box-shadow:0 1px 4px #00000024}
     [data-betterquest="view-toggle"]>a:focus-visible{outline:2px solid #7c3aed;outline-offset:1px}
     .tool-btn:focus-visible,.zoom button:focus-visible,.option-hit:focus-visible,.pdf-submit-btn:focus-visible,.submit-pill:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
-    .submit-pill{border:0;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;white-space:nowrap}
-    .submit-pill:hover{background:linear-gradient(135deg,#4f46e5,#4338ca)}
-    .submit-pill[hidden]{display:none}
-    .submit-pill[data-failed="true"]{background:linear-gradient(135deg,#b45309,#92400e)}
     .zoom{display:flex;align-items:center;gap:6px}
     .zoom button{width:32px;height:32px;border:1px solid var(--bq-border,#d7e2f0);border-radius:6px;background:var(--bq-raised,#eef3f6);color:var(--bq-text,#18253a);font:800 16px/1 inherit;cursor:pointer}
     .pages{
@@ -285,6 +326,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       background:var(--bq-raised,#eef3f6);
     }
     .pages.is-zoomed{overflow-x:auto!important}
+    /* End spacer: lets the final question scroll up to the viewport center.
+       Without trailing room the last anchor can only bottom-align. */
+    .pages::after{content:'';flex:0 0 auto;width:1px;height:40vh;pointer-events:none}
     .page{
       position:relative!important;
       width:var(--bq-pdf-page-width,100%)!important;
@@ -517,8 +561,15 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg> Full screen`;
   };
   const handleFsChange = () => {
+    // Entering/exiting fullscreen resizes the page list, so an unchanged
+    // scrollTop would land on a different question. Use the pre-transition
+    // snapshot (click or continuous scroll tracking), refit, then put that
+    // same question back in the center. A second refit from ResizeObserver
+    // fires after this, so restore across two frames.
+    const center = pendingFsQuestion ?? lastSeenCenter ?? currentCenterQuestion();
+    pendingFsQuestion = null;
     syncFs();
-    fitPagesToViewer();
+    refitPreservingCenter(center);
     const boxes = shadow.querySelectorAll('.option-hit').length;
     console.info(`[BetterQuest] Fullscreen changed. Answer boxes on PDF: ${boxes}.`);
   };
@@ -526,6 +577,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   syncFs();
 
   fullscreenBtn.addEventListener('click', () => {
+    pendingFsQuestion = lastSeenCenter ?? currentCenterQuestion();
     const isFs = Boolean(document.fullscreenElement) || element.dataset.fullscreen === 'true';
     const root = container.closest<HTMLElement>('#target') || container;
     if (isFs) {
@@ -551,41 +603,17 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       }
     }
     // The fallback attribute path fires no fullscreenchange, so refit here.
-    fitPagesToViewer();
+    // The real fullscreen path refits in handleFsChange; centering twice is
+    // harmless and covers browsers that fire the event before layout settles.
+    // Keep the snapshot for handleFsChange when native fullscreen fires.
+    const restore = pendingFsQuestion;
+    refitPreservingCenter(restore);
   });
   const zoom = document.createElement('div'); zoom.className = 'zoom';
   const zoomOut = document.createElement('button'); zoomOut.type = 'button'; zoomOut.textContent = '−'; zoomOut.setAttribute('aria-label', 'Zoom out');
   const zoomIn = document.createElement('button'); zoomIn.type = 'button'; zoomIn.textContent = '+'; zoomIn.setAttribute('aria-label', 'Zoom in');
   const zoomValue = document.createElement('output'); zoomValue.setAttribute('aria-label', 'PDF zoom');
-  // Always-visible submit for the selected question: the floating Confirm can
-  // sit off-screen or under folds, especially in fullscreen.
-  const submitPill = document.createElement('button');
-  submitPill.type = 'button';
-  submitPill.className = 'tool-btn submit-pill';
-  submitPill.hidden = true;
-  let pillQn: number | null = null;
-  function paintPill(state: 'ask' | 'sending' | 'failed' | null) {
-    if (state === null || pillQn === null) {
-      pillQn = null;
-      submitPill.hidden = true;
-      return;
-    }
-    submitPill.hidden = false;
-    submitPill.disabled = state === 'sending';
-    delete submitPill.dataset.failed;
-    if (state === 'ask') submitPill.textContent = `Submit Q${pillQn}`;
-    else if (state === 'sending') submitPill.textContent = `Submitting Q${pillQn}…`;
-    else {
-      submitPill.textContent = `Retry Q${pillQn}`;
-      submitPill.dataset.failed = 'true';
-    }
-    submitPill.setAttribute('aria-label', state === 'failed'
-      ? `Submit question ${pillQn} did not reach Quest. Activate to try again.`
-      : `Submit question ${pillQn}`);
-  }
-  submitPill.addEventListener('click', () => { if (pillQn !== null) attemptSubmit(pillQn); });
-
-  zoom.append(zoomOut, zoomValue, zoomIn); toolbarActions.append(submitPill, viewSlot, darkPagesBtn, fullscreenBtn, zoom); toolbar.append(copy, toolbarActions);
+  zoom.append(zoomOut, zoomValue, zoomIn); toolbarActions.append(viewSlot, darkPagesBtn, fullscreenBtn, zoom); toolbar.append(copy, toolbarActions);
   const pages = document.createElement('div'); pages.className = 'pages';
   const loading = document.createElement('div'); loading.className = 'loading'; loading.textContent = 'Loading clickable choices…'; pages.append(loading);
   shell.append(toolbar, pages); shadow.append(style, shell); container.append(element);
@@ -615,6 +643,10 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   // The set of questions and their option counts can grow while the workspace
   // reads Quest's lazily-rendered response table, so it is kept mutable.
   let optionMaximums = new Map<number, number>(options.optionMaximums);
+  let numericResponses = new Map(options.numericResponses || []);
+  let freeResponses = new Map(options.freeResponses || []);
+  const numericInputs = new Map<number, ReturnType<typeof createNumericResponse>>();
+  const freeInputs = new Map<number, ReturnType<typeof createFreeResponse>>();
   let pdfRuns: PdfTextRun[] = [];
   let paintChoices: () => void = () => { };
 
@@ -623,7 +655,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       btn.remove();
       submitButtons.delete(qNum);
     }
-    paintPill(null);
   }
 
   const handleGlobalClick = (event: MouseEvent) => {
@@ -719,6 +750,102 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     paintZoom();
   }
 
+  /** Snapshot for an in-flight fullscreen toggle (click fires before the event). */
+  let pendingFsQuestion: number | null = null;
+  /** Last center seen during normal scrolling — survives Esc exits with no click. */
+  let lastSeenCenter: number | null = null;
+  let lastSeenQueued = false;
+
+  function anchorAbsoluteTop(questionNumber: number): number | null {
+    const anchor = shadow.querySelector<HTMLElement>(`.question-anchor[data-question="${questionNumber}"]`);
+    if (!anchor) return null;
+    const pageEl = anchor.closest<HTMLElement>('.page');
+    if (!pageEl) return null;
+    // Prefer rect math: it stays correct inside the flex column and after
+    // width-driven refits, where offsetTop can lag one frame behind.
+    try {
+      const anchorRect = anchor.getBoundingClientRect?.();
+      const pagesRect = pages.getBoundingClientRect?.();
+      if (anchorRect && pagesRect && (pagesRect.height !== 0 || anchorRect.top !== 0)) {
+        return (anchorRect.top - pagesRect.top) + pages.scrollTop;
+      }
+    } catch { /* fall through to offset math */ }
+    const topPct = Number.parseFloat(anchor.style.top) || 0;
+    const pageH = pageEl.offsetHeight || pageEl.clientHeight || 0;
+    if (pageH > 0) return pageEl.offsetTop + (topPct / 100) * pageH;
+    return null;
+  }
+
+  /** Which question sits at the vertical center of the PDF viewport. */
+  function currentCenterQuestion(): number | null {
+    try {
+      const anchors = [...shadow.querySelectorAll<HTMLElement>('.question-anchor[data-question]')];
+      if (!anchors.length) return null;
+      if (!pages.clientHeight) {
+        // Layout-free environments (tests): fall back to the first anchor.
+        const first = anchors[0]?.dataset.question;
+        const parsed = first !== undefined ? Number(first) : NaN;
+        return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+      }
+      const centerY = pages.scrollTop + pages.clientHeight / 2;
+      let best: number | null = null;
+      let bestDist = Infinity;
+      for (const anchor of anchors) {
+        const q = Number(anchor.dataset.question);
+        if (!Number.isInteger(q) || q <= 0) continue;
+        const top = anchorAbsoluteTop(q);
+        if (top === null) continue;
+        const dist = Math.abs(top - centerY);
+        if (dist < bestDist) { bestDist = dist; best = q; }
+      }
+      return best;
+    } catch { return null; }
+  }
+
+  /** Scroll so the question header sits centered in the PDF viewport. */
+  function centerOnQuestion(questionNumber: number) {
+    try {
+      const top = anchorAbsoluteTop(questionNumber);
+      if (top === null) {
+        const anchor = shadow.querySelector<HTMLElement>(`.question-anchor[data-question="${questionNumber}"]`);
+        anchor?.scrollIntoView?.({ block: 'center', behavior: 'auto' as ScrollBehavior });
+        return;
+      }
+      if (!pages.clientHeight) {
+        const anchor = shadow.querySelector<HTMLElement>(`.question-anchor[data-question="${questionNumber}"]`);
+        anchor?.scrollIntoView?.({ block: 'center', behavior: 'auto' as ScrollBehavior });
+        return;
+      }
+      // The page list forces smooth scrolling; fullscreen restores must jump
+      // instantly or the animation fights the layout change and drifts.
+      pages.style.setProperty('scroll-behavior', 'auto', 'important');
+      // Header slightly above exact center so the question body reads centered.
+      const targetY = Math.max(0, top - pages.clientHeight / 2 + 40);
+      pages.scrollTo?.({ top: targetY, behavior: 'instant' as ScrollBehavior });
+      // Force the instant position even where 'instant' is unsupported.
+      pages.scrollTop = targetY;
+      if (typeof queueMicrotask === 'function') queueMicrotask(() => pages.style.removeProperty('scroll-behavior'));
+      else setTimeout(() => pages.style.removeProperty('scroll-behavior'), 0);
+    } catch { /* centering is best-effort; never break fullscreen */ }
+  }
+
+  /** Refit page widths, then re-center the captured question across frames. */
+  function refitPreservingCenter(center: number | null | undefined) {
+    fitPagesToViewer();
+    if (center === null || center === undefined) return;
+    lastSeenCenter = center;
+    const view = document.defaultView;
+    centerOnQuestion(center);
+    // Layout settles async (native fullscreen + ResizeObserver refit after
+    // us and would otherwise undo the restore), so re-assert across frames.
+    view?.requestAnimationFrame?.(() => {
+      if (disposed) return;
+      fitPagesToViewer();
+      centerOnQuestion(center);
+      view?.requestAnimationFrame?.(() => { if (!disposed) centerOnQuestion(center); });
+    });
+  }
+
   zoomOut.addEventListener('click', () => stepZoom(-1));
   zoomIn.addEventListener('click', () => stepZoom(1));
   // Chrome sends both trackpad pinch and ctrl+wheel as a ctrl-wheel on the element under the pointer.
@@ -734,15 +861,33 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     rememberZoom();
   };
   pages.addEventListener('wheel', handleZoomWheel, { passive: false });
-  document.defaultView?.addEventListener('resize', fitPagesToViewer);
+  const trackCenter = () => {
+    if (lastSeenQueued || disposed) return;
+    lastSeenQueued = true;
+    document.defaultView?.requestAnimationFrame?.(() => {
+      lastSeenQueued = false;
+      if (disposed) return;
+      const current = currentCenterQuestion();
+      if (current !== null) lastSeenCenter = current;
+    });
+  };
+  pages.addEventListener('scroll', trackCenter, { passive: true });
+  const handleViewportResize = () => {
+    const center = lastSeenCenter;
+    fitPagesToViewer();
+    // Window resizes (including fullscreen) change page heights; keep the
+    // same question centered instead of holding a stale pixel scrollTop.
+    if (center !== null) centerOnQuestion(center);
+  };
+  document.defaultView?.addEventListener('resize', handleViewportResize);
   const ResizeObserverCtor = document.defaultView?.ResizeObserver;
-  const resizeObserver = ResizeObserverCtor ? new ResizeObserverCtor(() => fitPagesToViewer()) : undefined;
+  const resizeObserver = ResizeObserverCtor ? new ResizeObserverCtor(() => handleViewportResize()) : undefined;
   resizeObserver?.observe(pages);
 
   const ready = (async () => {
     try {
       source = await (options.openDocument || openPdfDocument)(new URL(options.url, document.URL).href, abort.signal);
-      if (disposed || abort.signal.aborted) return false;
+      if (disposed || abort.signal.aborted) { source.destroy(); source = undefined; return false; }
       const runs: PdfTextRun[] = [];
       pages.replaceChildren();
       for (let pageNumber = 1; pageNumber <= source.pageCount; pageNumber++) {
@@ -750,6 +895,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         const root = document.createElement('article'); root.className = 'page'; root.setAttribute('aria-label', `PDF page ${pageNumber}`);
         const canvas = document.createElement('canvas'); canvas.setAttribute('aria-hidden', 'true'); root.append(canvas); pages.append(root);
         const page = await source.renderPage(pageNumber, canvas);
+        if (disposed || abort.signal.aborted) { canvas.width = 0; canvas.height = 0; return false; }
         root.style.aspectRatio = `${page.width} / ${page.height}`;
         pageElements.set(pageNumber, { root, width: page.width, height: page.height, runs: page.runs }); runs.push(...page.runs);
       }
@@ -758,9 +904,13 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       paintChoices = () => {
         const doc = source;
         if (!doc) return;
+        for (const input of numericInputs.values()) input.element.remove();
+        numericInputs.clear();
+        for (const input of freeInputs.values()) input.element.remove();
+        freeInputs.clear();
         // Rebuild from scratch: this runs again when the question map grows.
         for (const { root: pageRoot } of pageElements.values()) {
-          pageRoot.querySelectorAll('.question-anchor, .option-hit').forEach(node => node.remove());
+          pageRoot.querySelectorAll('.question-anchor, .option-hit, .pdf-free-response, .pdf-numeric-response').forEach(node => node.remove());
         }
         const targets = mapPdfOptionLabels(pdfRuns, optionMaximums);
         if (isBetterQuestDebug(document)) {
@@ -779,26 +929,46 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
 
         // Build persistent question anchors for every question on the PDF so that jump
         // navigation can scroll directly to any question even when all questions are complete.
+        // Single pass over the runs: index the first boundary run per question and
+        // the first target per question so anchor placement is O(Q + N), not O(Q * N).
         const allQuestionNumbers = new Set<number>();
         for (const qNum of optionMaximums.keys()) allQuestionNumbers.add(qNum);
+        for (const qNum of numericResponses.keys()) allQuestionNumbers.add(qNum);
+        for (const qNum of freeResponses.keys()) allQuestionNumbers.add(qNum);
         for (const t of targets) allQuestionNumbers.add(t.questionNumber);
+        const firstBoundaryRun = new Map<number, PdfTextRun>();
+        const paddedRun = new Map<string, PdfTextRun>();
+        const firstTargetByQuestion = new Map<number, PdfOptionTarget>();
         for (const r of pdfRuns) {
-          const b = parseQuestionBoundary(clean(r.text));
-          if (b !== null && b > 0) allQuestionNumbers.add(b);
+          const cleaned = clean(r.text);
+          const b = parseQuestionBoundary(cleaned);
+          if (b !== null && b > 0) {
+            allQuestionNumbers.add(b);
+            if (!firstBoundaryRun.has(b)) firstBoundaryRun.set(b, r);
+          }
+          if (!paddedRun.has(cleaned) && /^\d{3}$/.test(cleaned)) paddedRun.set(cleaned, r);
+          if (b === null) {
+            // Cheap heuristic anchors are resolved below via the target index.
+          }
+        }
+        for (const t of targets) {
+          if (!firstTargetByQuestion.has(t.questionNumber)) firstTargetByQuestion.set(t.questionNumber, t);
         }
 
         for (const qNum of [...allQuestionNumbers].sort((a, b) => a - b)) {
           if (!Number.isInteger(qNum) || qNum <= 0) continue;
-          const qBoundaryRun = pdfRuns.find(r => parseQuestionBoundary(clean(r.text)) === qNum) ||
-            pdfRuns.find(r => clean(r.text) === String(qNum).padStart(3, '0')) ||
-            pdfRuns.find(r => new RegExp(`^0*${qNum}(?:\\b|[:.)\\s])`).test(clean(r.text)));
+          const qBoundaryRun = firstBoundaryRun.get(qNum) ||
+            paddedRun.get(String(qNum).padStart(3, '0')) ||
+            firstTargetByQuestion.get(qNum);
           let targetPage = 1;
           let topPercent = 0;
           if (qBoundaryRun) {
             targetPage = qBoundaryRun.page;
             const pageInfo = pageElements.get(targetPage);
             const height = pageInfo?.height || 800;
-            topPercent = Math.max(0, Math.min(100, ((qBoundaryRun.top - 12) / height) * 100));
+            const isRealBoundary = firstBoundaryRun.has(qNum) || paddedRun.has(String(qNum).padStart(3, '0'));
+            const offset = isRealBoundary ? 12 : 40;
+            topPercent = Math.max(0, Math.min(100, ((qBoundaryRun.top - offset) / height) * 100));
           } else {
             const qTarget = targets.find(t => t.questionNumber === qNum);
             if (qTarget) {
@@ -822,11 +992,137 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           }
         }
 
-        // Ensure boxes for ALL answers possible for every unanswered question
+        for (const [question, response] of numericResponses) {
+          const area = numericResponsePlacement(pdfRuns, question, pageElements);
+          if (!area) continue;
+          const page = pageElements.get(area.page)!;
+          const numeric = createNumericResponse(document, question, response,
+            value => options.onNumericInput?.(question, value) ?? false,
+            value => options.onNumericSubmit?.(question, value) ?? false);
+          numeric.submit.textContent = '✓';
+          numeric.submit.setAttribute('aria-label', `Submit question ${question}`);
+          numeric.submit.title = `Submit question ${question}`;
+          numeric.element.classList.add('pdf-numeric-response');
+          numeric.element.style.left = `${area.left}%`; numeric.element.style.top = `${area.top}%`;
+          numeric.element.style.width = `${area.width}%`; numeric.element.style.height = `${area.height}%`;
+          numeric.element.hidden = currentAnswered.has(question);
+          page.root.append(numeric.element); numericInputs.set(question, numeric);
+        }
+
+        const mountFreeCard = (question: number, response: FreeResponse) => {
+          const free = createFreeResponse(document, question, response,
+            value => options.onFreeInput?.(question, value) ?? false,
+            value => options.onFreeSubmit?.(question, value) ?? false);
+          free.submit.textContent = '✓';
+          free.submit.setAttribute('aria-label', `Submit question ${question}`);
+          free.submit.title = `Submit question ${question}`;
+          const card = free.element;
+          card.classList.add('pdf-free-response');
+          const head = document.createElement('div'); head.className = 'pdf-free-head';
+          const badge = document.createElement('span'); badge.className = 'pdf-free-badge'; badge.textContent = `Q${question}`;
+          const label = document.createElement('span'); label.textContent = 'Your answer';
+          head.append(badge, label);
+          card.prepend(head);
+          const foot = card.querySelector('.free-row');
+          if (foot) foot.classList.add('pdf-free-foot');
+          card.hidden = currentAnswered.has(question);
+          freeInputs.set(question, free);
+          return free;
+        };
+
+        for (const [question, response] of freeResponses) {
+          if (currentAnswered.has(question)) {
+            // Answered free responses stay in the desk; the PDF keeps only the anchor.
+            continue;
+          }
+          const area = freeResponsePlacement(pdfRuns, question, pageElements);
+          if (area) {
+            const page = pageElements.get(area.page);
+            if (page) {
+              const card = mountFreeCard(question, response).element;
+              card.style.left = `${area.left}%`; card.style.top = `${area.top}%`;
+              card.style.width = `${area.width}%`; card.style.minHeight = `${area.height}%`;
+              page.root.append(card);
+              continue;
+            }
+          }
+          // Guaranteed spot: no blank gap on this PDF, so append an in-flow
+          // answer card below the rendered page where the question starts.
+          // It lives under the canvas (never over question text) and is always
+          // present, even on tightly-packed PDFs.
+          const boundary = firstBoundaryRun.get(question);
+          const flowPage = (boundary && pageElements.get(boundary.page)) || pageElements.get(1);
+          if (!flowPage) continue;
+          const card = mountFreeCard(question, response).element;
+          card.classList.add('pdf-free-flow');
+          // The page root pins an aspect ratio for the canvas; release it so
+          // the in-flow card extends the page instead of overflowing it. The
+          // canvas keeps width:100%/height:auto, so the image ratio is kept.
+          flowPage.root.style.aspectRatio = '';
+          flowPage.root.append(card);
+        }
+
+        // A zero/negative count is an explicit text response, never a guessed choice count.
+        if ([...optionMaximums.values()].every(max => max <= 0) && (numericResponses.size || freeResponses.size)) {
+          const parts: string[] = [];
+          if (numericInputs.size < numericResponses.size) parts.push('in response desk');
+          const unplacedFree = [...freeResponses.keys()].filter(q => !freeInputs.has(q) && !currentAnswered.has(q));
+          const placedFree = [...freeResponses.keys()].filter(q => freeInputs.has(q) && !currentAnswered.has(q));
+          let freeLabel = '';
+          if (placedFree.length) freeLabel = `${placedFree.length} free ${placedFree.length === 1 ? 'answer' : 'answers'}`;
+          if (unplacedFree.length) freeLabel += `${freeLabel ? ' · ' : ''}${unplacedFree.length} free ${unplacedFree.length === 1 ? 'answer' : 'answers'} in response desk`;
+          const numericLabel = numericResponses.size ? `Numeric answers${parts.length ? ` ${parts.join(' ')}` : ''}` : '';
+          const combined = [numericLabel, freeLabel].filter(Boolean).join(' · ');
+          meta.textContent = `${doc.pageCount} pages · ${combined || 'Text answers'}`;
+          return;
+        }
+        // Ensure boxes for ALL answers possible for every unanswered question.
+        // Indexed lookups keep this linear: targets are grouped once, column
+        // layout is memoized per page, and boundary runs are pre-sorted so the
+        // next-question search walks only one page instead of the whole document.
+        const targetsByQuestion = new Map<number, PdfOptionTarget[]>();
+        for (const t of targets) {
+          const list = targetsByQuestion.get(t.questionNumber);
+          if (list) list.push(t);
+          else targetsByQuestion.set(t.questionNumber, [t]);
+        }
+        const twoColByPage = new Map<number, boolean>();
+        for (const [pageNumber, info] of pageElements) {
+          let left = false, right = false;
+          for (const r of info.runs) {
+            if (r.top <= 30) continue;
+            if (r.left < info.width * 0.5) left = true;
+            else if (r.left >= info.width * 0.45) right = true;
+            if (left && right) break;
+          }
+          twoColByPage.set(pageNumber, left && right);
+        }
+        const boundaryRunsByPage = new Map<number, PdfTextRun[]>();
+        for (const r of firstBoundaryRun.values()) {
+          const list = boundaryRunsByPage.get(r.page);
+          if (list) list.push(r);
+          else boundaryRunsByPage.set(r.page, [r]);
+        }
+        for (const list of boundaryRunsByPage.values()) list.sort((a, b) => a.top - b.top);
+        const nextBoundaryInColumn = (pageNumber: number, afterTop: number, exclude: number, isLeft: boolean, isTwoCol: boolean): PdfTextRun | undefined => {
+          const list = boundaryRunsByPage.get(pageNumber);
+          if (!list) return undefined;
+          for (const r of list) {
+            if (r.top <= afterTop) continue;
+            const b = parseQuestionBoundary(clean(r.text));
+            if (b === null || b === exclude) continue;
+            if (isTwoCol) {
+              if (isLeft && r.left >= (pageElements.get(pageNumber)?.width ?? 600) * 0.5) continue;
+              if (!isLeft && r.left < (pageElements.get(pageNumber)?.width ?? 600) * 0.45) continue;
+            }
+            return r;
+          }
+          return undefined;
+        };
         for (const [qNum, max] of optionMaximums.entries()) {
           if (currentAnswered.has(qNum)) continue;
           if (max < 1 || max > 9) continue;
-          const qTargets = targets.filter(t => t.questionNumber === qNum);
+          const qTargets = targetsByQuestion.get(qNum) ?? [];
           if (qTargets.length > 0 && qTargets.length < max) {
             const existingValues = new Set(qTargets.map(t => t.optionValue));
             const sorted = [...qTargets].sort((a, b) => a.optionValue - b.optionValue);
@@ -835,18 +1131,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
             const pageH = pageInfo?.height || 800;
             const pageW = pageInfo?.width || 600;
             const isLeft = last.left < pageW * 0.5;
-            const isTwoCol = pdfRuns.some(r => r.left >= pageW * 0.45 && r.top > 30);
+            const isTwoCol = twoColByPage.get(last.page) ?? false;
 
-            const nextQRun = pdfRuns.find(r => {
-              if (r.page !== last.page || r.top <= last.top + 20) return false;
-              const b = parseQuestionBoundary(clean(r.text));
-              if (b === null || b === qNum) return false;
-              if (isTwoCol) {
-                if (isLeft && r.left >= pageW * 0.5) return false;
-                if (!isLeft && r.left < pageW * 0.45) return false;
-              }
-              return true;
-            });
+            const nextQRun = nextBoundaryInColumn(last.page, last.top + 20, qNum, isLeft, isTwoCol);
             const nextQBottom = nextQRun ? nextQRun.top - 12 : pageH - 40;
 
             const missingBelow = max - last.optionValue;
@@ -876,28 +1163,17 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
               }
             }
           } else if (qTargets.length === 0) {
-            const qBoundaryRun = pdfRuns.find(r => parseQuestionBoundary(clean(r.text)) === qNum) ||
-              pdfRuns.find(r => clean(r.text) === String(qNum).padStart(3, '0')) ||
-              pdfRuns.find(r => new RegExp(`^0*${qNum}(?:\\b|[:.)\\s])`).test(clean(r.text)));
+            const qBoundaryRun = firstBoundaryRun.get(qNum) || paddedRun.get(String(qNum).padStart(3, '0'));
             if (qBoundaryRun) {
               const pageInfo = pageElements.get(qBoundaryRun.page);
               const pageH = pageInfo?.height || 800;
               const pageW = pageInfo?.width || 600;
               const isLeft = qBoundaryRun.left < pageW * 0.5;
-              const isTwoCol = pdfRuns.some(r => r.left >= pageW * 0.45 && r.top > 30);
+              const isTwoCol = twoColByPage.get(qBoundaryRun.page) ?? false;
               const colLeft = (isTwoCol && !isLeft) ? pageW * 0.5 : 40;
 
               // Find where the next question begins on this page & column
-              const nextQRun = pdfRuns.find(r => {
-                if (r.page !== qBoundaryRun.page || r.top <= qBoundaryRun.top + 20) return false;
-                const b = parseQuestionBoundary(clean(r.text));
-                if (b === null || b === qNum) return false;
-                if (isTwoCol) {
-                  if (isLeft && r.left >= pageW * 0.5) return false;
-                  if (!isLeft && r.left < pageW * 0.45) return false;
-                }
-                return true;
-              });
+              const nextQRun = nextBoundaryInColumn(qBoundaryRun.page, qBoundaryRun.top + 20, qNum, isLeft, isTwoCol);
               const nextQBottom = nextQRun ? nextQRun.top - 12 : pageH - 40;
 
               const minOptionH = 28;
@@ -999,9 +1275,13 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         }
         const activeTargets = targets.filter(t => !currentAnswered.has(t.questionNumber));
         const pageLabel = `${doc.pageCount} ${doc.pageCount === 1 ? 'page' : 'pages'}`;
-        const choiceLabel = activeTargets.length > 0
-          ? `${activeTargets.length} answer ${activeTargets.length === 1 ? 'choice' : 'choices'}`
-          : 'All questions completed';
+        const pendingFree = [...freeResponses.keys()].filter(q => !currentAnswered.has(q));
+        const pendingNumeric = [...numericResponses.keys()].filter(q => !currentAnswered.has(q));
+        const segments: string[] = [];
+        if (activeTargets.length > 0) segments.push(`${activeTargets.length} answer ${activeTargets.length === 1 ? 'choice' : 'choices'}`);
+        if (pendingNumeric.length) segments.push(`${pendingNumeric.length} numeric ${pendingNumeric.length === 1 ? 'answer' : 'answers'}`);
+        if (pendingFree.length) segments.push(`${pendingFree.length} free ${pendingFree.length === 1 ? 'answer' : 'answers'}`);
+        const choiceLabel = segments.length ? segments.join(' · ') : 'All questions completed';
         meta.textContent = `${pageLabel} · ${choiceLabel}`;
       };
       paintChoices();
@@ -1018,16 +1298,26 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
 
   function refreshMeta() {
     const activeHits = shadow.querySelectorAll<HTMLButtonElement>('.option-hit:not([hidden])');
+    const numericPending = [...numericResponses.keys()].filter(question => !currentAnswered.has(question));
+    const freePending = [...freeResponses.keys()].filter(question => !currentAnswered.has(question));
     const pageLabel = `${pageElements.size} ${pageElements.size === 1 ? 'page' : 'pages'}`;
-    const choiceLabel = activeHits.length > 0
-      ? `${activeHits.length} answer ${activeHits.length === 1 ? 'choice' : 'choices'}`
-      : 'All questions completed';
+    const segments: string[] = [];
+    if (activeHits.length > 0) segments.push(`${activeHits.length} answer ${activeHits.length === 1 ? 'choice' : 'choices'}`);
+    if (numericPending.length) {
+      const label = `${numericPending.length} numeric ${numericPending.length === 1 ? 'answer' : 'answers'}${numericPending.some(question => !numericInputs.has(question)) ? ' in response desk' : ''}`;
+      segments.push(label);
+    }
+    if (freePending.length) {
+      const unplaced = freePending.filter(question => !freeInputs.has(question));
+      const label = `${freePending.length} free ${freePending.length === 1 ? 'answer' : 'answers'}${unplaced.length ? ' in response desk' : ''}`;
+      segments.push(label);
+    }
+    const choiceLabel = segments.length ? segments.join(' · ') : 'All questions completed';
     meta.textContent = `${pageLabel} · ${choiceLabel}`;
   }
 
   function attemptSubmit(questionNumber: number) {
     const btn = submitButtons.get(questionNumber);
-    if (pillQn === questionNumber) paintPill('sending');
     if (btn) {
       btn.disabled = true;
       btn.textContent = 'Submitting…';
@@ -1048,7 +1338,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg> Try again`;
         btn.setAttribute('aria-label', `Submit question ${questionNumber} did not reach Quest. Activate to try again, or answer from the sidebar.`);
       }
-      if (pillQn === questionNumber) paintPill('failed');
     }
   }
 
@@ -1063,6 +1352,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     element,
     ready,
     setSelected(questionNumber: number, optionValue: string) {
+      if (disposed) return;
+      if (numericResponses.has(questionNumber)) { numericInputs.get(questionNumber)?.setValue(optionValue); return; }
+      if (freeResponses.has(questionNumber)) { freeInputs.get(questionNumber)?.setValue(optionValue); return; }
       if (currentAnswered.has(questionNumber)) return;
       for (const button of shadow.querySelectorAll<HTMLButtonElement>('.option-hit')) {
         const q = Number(button.dataset.question);
@@ -1076,7 +1368,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         btn.remove();
         submitButtons.delete(qNum);
       }
-      paintPill(null);
       if (optionValue) {
         const activeHit = shadow.querySelector<HTMLButtonElement>(
           `.option-hit[data-question="${questionNumber}"][data-option="${optionValue}"]`
@@ -1087,7 +1378,8 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           btn.className = 'pdf-submit-btn';
           btn.dataset.question = String(questionNumber);
           btn.setAttribute('aria-label', `Submit question ${questionNumber}`);
-          btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg> Confirm`;
+          btn.title = `Submit question ${questionNumber}`;
+          btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
           const leftPct = Number.parseFloat(activeHit.style.left) || 0;
           const topPct = Number.parseFloat(activeHit.style.top) || 0;
           if (leftPct > 78) {
@@ -1102,12 +1394,17 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           });
           activeHit.parentElement.append(btn);
           submitButtons.set(questionNumber, btn);
-          pillQn = questionNumber;
-          paintPill('ask');
         }
       }
     },
     markWrong(questionNumber: number, optionValue: string) {
+      if (numericResponses.has(questionNumber)) { numericInputs.get(questionNumber)?.input.setAttribute('aria-invalid', 'true'); return; }
+      if (freeResponses.has(questionNumber)) {
+        const card = freeInputs.get(questionNumber)?.element;
+        card?.setAttribute('data-invalid', 'true');
+        freeInputs.get(questionNumber)?.input.setAttribute('aria-invalid', 'true');
+        return;
+      }
       if (currentAnswered.has(questionNumber) || keptCorrect.has(questionNumber)) return;
       const box = shadow.querySelector<HTMLElement>(
         `.option-hit[data-question="${questionNumber}"][data-option="${optionValue}"]`
@@ -1128,6 +1425,21 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       if (verdict === 'wrong') flashScreen(screenLayerHost());
     },
     celebrate(questionNumber: number, optionValue: string, party: boolean) {
+      const free = freeInputs.get(questionNumber);
+      if (free && freeResponses.has(questionNumber)) {
+        if (free.element.hidden && !party) return;
+        keptCorrect.add(questionNumber);
+        free.element.hidden = false;
+        free.element.dataset.correct = 'true';
+        free.element.removeAttribute('data-invalid');
+        free.input.setAttribute('aria-label', `Question ${questionNumber} is correct`);
+        if (party) celebrateScreen(screenLayerHost());
+        const confirm = submitButtons.get(questionNumber);
+        confirm?.remove();
+        submitButtons.delete(questionNumber);
+        refreshMeta();
+        return;
+      }
       const boxes = [...shadow.querySelectorAll<HTMLElement>(`.option-hit[data-question="${questionNumber}"]`)];
       const target = boxes.find(box => box.dataset.option === optionValue);
       if (!target) return;
@@ -1148,20 +1460,23 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       const confirm = submitButtons.get(questionNumber);
       confirm?.remove();
       submitButtons.delete(questionNumber);
-      if (pillQn === questionNumber) paintPill(null);
       refreshMeta();
     },
     setFullscreen(active: boolean) {
+      const center = lastSeenCenter ?? currentCenterQuestion();
       if (active) {
         element.dataset.fullscreen = 'true';
       } else {
         element.removeAttribute('data-fullscreen');
       }
       syncFs();
-      fitPagesToViewer();
+      refitPreservingCenter(center);
     },
     setAnsweredQuestions(answered: ReadonlySet<number>) {
+      if (disposed) return;
       currentAnswered = new Set(answered);
+      for (const [question, input] of numericInputs) input.element.hidden = currentAnswered.has(question);
+      for (const [question, input] of freeInputs) input.element.hidden = currentAnswered.has(question);
       if (isBetterQuestDebug(element.ownerDocument)) {
         const list = [...currentAnswered].sort((a, b) => a - b);
         console.info(`[BetterQuest debug] PDF treats these questions as completed (boxes hidden): ${list.length ? list.join(', ') : '(none)'}`);
@@ -1176,7 +1491,6 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         if (currentAnswered.has(qNum)) {
           btn.remove();
           submitButtons.delete(qNum);
-          if (pillQn === qNum) paintPill(null);
         }
       }
       refreshMeta();
@@ -1187,10 +1501,14 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       // map grows so every question gets its answer boxes. Nothing is applied
       // until the pages are painted, so the workspace re-feeds the map from its
       // ready handler.
-      if (!pdfRuns.length) return false;
+      if (disposed || !pdfRuns.length) return false;
       let grew = false;
       for (const [qNum, max] of next) {
-        if ((optionMaximums.get(qNum) ?? 0) < max) { optionMaximums.set(qNum, max); grew = true; }
+        const current = optionMaximums.get(qNum);
+        if (current === undefined) { optionMaximums.set(qNum, max); grew = true; continue; }
+        // Text answers use 0 (numeric) / -1 (free) markers that must win over an
+        // earlier half-rendered guess, and choice counts only ever grow.
+        if (max <= 0 ? current !== max : current < max) { optionMaximums.set(qNum, max); grew = true; }
       }
       if (!grew) return false;
       paintChoices();
@@ -1201,7 +1519,42 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       refreshMeta();
       return true;
     },
+    setNumericValue(questionNumber: number, value: string) {
+      if (disposed) return;
+      const response = numericResponses.get(questionNumber);
+      if (response) numericResponses.set(questionNumber, { ...response, value });
+      numericInputs.get(questionNumber)?.setValue(value);
+    },
+    setFreeValue(questionNumber: number, value: string) {
+      if (disposed) return;
+      const response = freeResponses.get(questionNumber);
+      if (response) freeResponses.set(questionNumber, { ...response, value });
+      freeInputs.get(questionNumber)?.setValue(value);
+    },
+    setFreeResponses(next: ReadonlyMap<number, FreeResponse>) {
+      if (disposed) return;
+      let changed = freeResponses.size !== next.size;
+      for (const [question, response] of next) {
+        if (!freeResponses.has(question) || optionMaximums.get(question) !== -1) changed = true;
+        optionMaximums.set(question, -1);
+        freeInputs.get(question)?.update(response);
+      }
+      freeResponses = new Map(next);
+      if (changed && pdfRuns.length) paintChoices();
+    },
+    setNumericResponses(next: ReadonlyMap<number, NumericResponse>) {
+      if (disposed) return;
+      let changed = numericResponses.size !== next.size;
+      for (const [question, response] of next) {
+        if (!numericResponses.has(question) || optionMaximums.get(question) !== 0) changed = true;
+        optionMaximums.set(question, 0);
+        numericInputs.get(question)?.update(response);
+      }
+      numericResponses = new Map(next);
+      if (changed && pdfRuns.length) paintChoices();
+    },
     scrollToQuestion(questionNumber: number): boolean {
+      if (disposed) return false;
       const anchor = shadow.querySelector<HTMLElement>(`.question-anchor[data-question="${questionNumber}"]`);
       if (anchor) {
         const pageEl = anchor.closest<HTMLElement>('.page');
@@ -1263,8 +1616,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       document.removeEventListener('click', handleGlobalClick);
       document.removeEventListener('keydown', handleKey);
       document.removeEventListener('betterquest:party', handlePartyTrigger);
-      document.defaultView?.removeEventListener('resize', fitPagesToViewer);
+      document.defaultView?.removeEventListener('resize', handleViewportResize);
       pages.removeEventListener('wheel', handleZoomWheel);
+      pages.removeEventListener('scroll', trackCenter);
       if (zoomWriteTimer !== undefined) {
         clearTimeout(zoomWriteTimer);
         writeZoom(zoomLevel);
@@ -1272,6 +1626,17 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       resizeObserver?.disconnect();
       abort.abort();
       source?.destroy();
+      source = undefined;
+      pdfRuns = [];
+      paintChoices = () => {};
+      optionMaximums.clear(); currentAnswered.clear(); keptCorrect.clear();
+      numericInputs.clear(); numericResponses.clear();
+      freeInputs.clear(); freeResponses.clear();
+      for (const page of pageElements.values()) {
+        const canvas = page.root.querySelector('canvas');
+        if (canvas) { canvas.width = 0; canvas.height = 0; }
+      }
+      pageElements.clear();
       for (const btn of submitButtons.values()) btn.remove();
       submitButtons.clear();
       element.remove();

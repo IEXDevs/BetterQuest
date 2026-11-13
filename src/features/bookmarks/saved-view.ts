@@ -1,7 +1,7 @@
 import { BookmarkService, bookmarkUrl } from './service';
 import type { Subscribe } from '../assignments/section';
 
-/** A grouped, metadata-only in-page view. No new extension page or PDF viewer. */
+/** An on-demand, non-modal popup reusing the existing grouped bookmark library. */
 export function createSavedQuestionsView(document: Document, service: BookmarkService, subscribe: Subscribe, onClose: (restoreFocus: boolean) => void, focusUpcoming: () => boolean) {
   document.querySelectorAll('[data-betterquest="saved-questions"]').forEach(node => node.remove());
   const host = document.createElement('div'); host.dataset.betterquest = 'saved-questions'; host.hidden = true;
@@ -9,37 +9,37 @@ export function createSavedQuestionsView(document: Document, service: BookmarkSe
   shadow.addEventListener('click', event => event.stopPropagation());
   const style = document.createElement('style');
   style.textContent = `
-    :host{display:block;margin:10px 18px 4px;color:var(--bq-text,#26384a);scroll-margin-top:80px;font-family:inherit;user-select:none;-webkit-user-select:none;overflow-x:hidden}
+    :host{display:block;position:fixed;z-index:10000;width:min(330px,calc(100vw - 24px));margin:0;color:var(--bq-text,#26384a);font-family:inherit;overflow:visible}
     :host([hidden]){display:none}
-    section{background:var(--bq-surface,#fff);border:1px solid var(--bq-border,#e1e7ed);border-radius:7px;padding:16px 18px;font:inherit;font-size:13px;line-height:1.5;user-select:none;-webkit-user-select:none;overflow-x:hidden;animation:bq-saved-in .26s cubic-bezier(0.16,1,0.3,1) both}
+    section{background:color-mix(in srgb,var(--bq-surface,#fff) 94%,transparent);color:var(--bq-text,#edf3fb);border:1px solid var(--bq-border,#e1e7ed);border-radius:11px;padding:16px;font:13px/1.45 ui-rounded,'Avenir Next',-apple-system,sans-serif;text-align:left;max-height:calc(100dvh - var(--bq-saved-top,80px) - 12px);box-sizing:border-box;overflow:auto;box-shadow:0 28px 70px -10px #000000b8,0 0 0 1px #ffffff14,inset 0 1px #ffffff29;backdrop-filter:blur(28px) saturate(190%);animation:bq-saved-in .28s cubic-bezier(0.16,1,0.3,1) both}
     @keyframes bq-saved-in{0%{opacity:0;transform:translateY(-8px)}100%{opacity:1;transform:translateY(0)}}
     @media(prefers-reduced-motion:reduce){section{animation:none!important}}
     header{display:flex;align-items:center;justify-content:space-between;gap:15px}
-    h2{font:inherit;font-size:17px;font-weight:600;margin:0}h2:focus-visible{outline:2px solid #2563eb;outline-offset:4px}
+    h2{font:800 17px/1.2 ui-rounded,'Avenir Next',sans-serif;letter-spacing:-.02em;margin:0}h2:focus-visible{outline:2px solid #2563eb;outline-offset:4px}
     .actions{display:flex;gap:8px;align-items:center}button{font:inherit;cursor:pointer;background:transparent;color:var(--bq-accent,#227ab0);border:0;border-radius:4px;padding:5px 7px}
     button:hover{background:var(--bq-raised,#eff6ff)}button:disabled{opacity:.5;cursor:wait}
     button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--bq-accent,#2563eb);outline-offset:2px}
     .empty{color:var(--bq-muted,#71808c);font-size:12px;margin:8px 0}.error{color:var(--bq-warning,#a3453c)}
     .groups{max-height:420px;overflow-y:auto;overflow-x:hidden;margin-top:12px}
-    details{border-top:1px solid var(--bq-border,#edf1f4);padding:10px 0;transition:background .22s cubic-bezier(0.16,1,0.3,1),border-radius .22s ease}
-    details[open]{background:color-mix(in srgb,var(--bq-surface,#fff) 94%,var(--bq-raised,#eff6ff));border-radius:7px;padding:10px 10px}
+    details{border-bottom:1px solid var(--bq-border,#edf1f4);border-radius:7px;padding:2px 0;transition:background .22s cubic-bezier(0.16,1,0.3,1)}
+    details[open]{background:color-mix(in srgb,var(--bq-surface,#fff) 94%,var(--bq-raised,#eff6ff));padding-bottom:8px}
     details[open]>*:not(summary){animation:details-fluid-slide .24s cubic-bezier(0.16,1,0.3,1) both}
     @keyframes details-fluid-slide{0%{opacity:0;transform:translateY(-6px)}100%{opacity:1;transform:translateY(0)}}
-    summary{cursor:pointer;font-weight:650;display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:5px;transition:background .2s cubic-bezier(0.16,1,0.3,1),transform .2s cubic-bezier(0.16,1,0.3,1),color .18s ease;user-select:none;-webkit-user-select:none;list-style:none}
+    summary{cursor:pointer;font-weight:650;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:7px;transition:background .2s cubic-bezier(0.16,1,0.3,1),transform .2s cubic-bezier(0.16,1,0.3,1),color .18s ease;user-select:none;-webkit-user-select:none;list-style:none}
     summary::-webkit-details-marker{display:none}
     summary:hover{background:var(--bq-raised,#eff6ff);color:var(--bq-accent,#227ab0);transform:translateX(3px)}
     summary::after{content:'›';font-size:19px;line-height:1;display:inline-block;transition:transform .3s cubic-bezier(0.34,1.56,0.64,1);transform:rotate(90deg)}
     details[open] summary::after{transform:rotate(-90deg);color:var(--bq-accent,#818cf8)}
-    h3{font:inherit;font-size:13px;font-weight:600;margin:12px 0 6px}ul{padding:0;margin:0;list-style:none}
-    li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0;min-width:0}a{color:var(--bq-accent,#227ab0);text-decoration:none}a:hover{text-decoration:underline}
-    .question-note{display:block;color:var(--bq-muted,#71808c);font-size:11px}.remove{font-size:11px}
+    h3{font-family:inherit;font-size:12px;font-weight:700;line-height:1.4;color:var(--bq-muted,#71808c);margin:12px 10px 2px}ul{padding:0;margin:0;list-style:none}
+    li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 10px;min-width:0;border-radius:7px}li:hover{background:var(--bq-raised,#eff6ff)}a{color:var(--bq-accent,#227ab0);text-decoration:none}a:hover{text-decoration:underline}
+    .question-note{display:block;color:var(--bq-muted,#71808c);font-size:12px}.remove{font-size:12px;color:var(--bq-muted,#71808c)}.remove:hover{color:var(--bq-accent,#227ab0)}
   `;
-  const section = document.createElement('section'); section.setAttribute('aria-labelledby', 'bq-saved-title');
+  const section = document.createElement('section'); section.setAttribute('aria-labelledby', 'bq-saved-title'); section.setAttribute('role', 'dialog');
   const header = document.createElement('header');
   const heading = document.createElement('h2'); heading.id = 'bq-saved-title'; heading.textContent = 'Saved Questions'; heading.tabIndex = -1;
   const actions = document.createElement('div'); actions.className = 'actions';
   const upcoming = document.createElement('button'); upcoming.type = 'button'; upcoming.textContent = 'Upcoming'; upcoming.title = 'Jump to the course assignment summary';
-  upcoming.addEventListener('click', () => { focusUpcoming(); });
+  upcoming.addEventListener('click', () => { close(false); focusUpcoming(); });
   const closeButton = document.createElement('button'); closeButton.type = 'button'; closeButton.textContent = '×'; closeButton.setAttribute('aria-label', 'Close Saved Questions');
   actions.append(upcoming, closeButton); header.append(heading, actions);
   const groups = document.createElement('div'); groups.className = 'groups'; groups.setAttribute('aria-live', 'polite');
@@ -47,10 +47,41 @@ export function createSavedQuestionsView(document: Document, service: BookmarkSe
   let disposed = false;
   let generation = 0;
   let stop: (() => void) | undefined;
+  let anchor: HTMLElement | undefined;
+
+  function position(navbar: HTMLElement) {
+    anchor = navbar;
+    if (navbar.nextSibling !== host) navbar.after(host);
+    const view = document.defaultView;
+    if (!view) return;
+    const button = navbar.querySelector<HTMLElement>('.bq-toolbar-saved');
+    const rect = (button || navbar).getBoundingClientRect();
+    const top = Math.max(8, rect.bottom + 8);
+    const width = Math.min(330, view.innerWidth - 24);
+    const left = Math.max(12, Math.min((rect.left + rect.right - width) / 2 - 24, view.innerWidth - width - 12));
+    host.style.top = `${top}px`;
+    host.style.left = `${left}px`;
+    host.style.removeProperty('right');
+    host.style.setProperty('--bq-saved-top', `${top}px`);
+  }
+  const reposition = () => { if (!host.hidden && anchor) position(anchor); };
+  const outsideClick = (event: MouseEvent) => {
+    if (host.hidden) return;
+    const path = event.composedPath();
+    if (path.includes(host) || path.some(node => (node as Element)?.classList?.contains('bq-toolbar-saved'))) return;
+    close(false);
+  };
+  const escape = (event: KeyboardEvent) => {
+    if (!host.hidden && event.key === 'Escape') { event.preventDefault(); close(); }
+  };
+  document.addEventListener('click', outsideClick);
+  document.addEventListener('keydown', escape);
+  document.defaultView?.addEventListener('resize', reposition);
+  document.addEventListener('scroll', reposition, true);
 
   function close(restoreFocus = true) {
     host.hidden = true; generation++; stop?.(); stop = undefined;
-    document.body?.removeAttribute('data-betterquest-saved-questions-open');
+    groups.replaceChildren();
     onClose(restoreFocus);
   }
   closeButton.addEventListener('click', () => close());
@@ -72,7 +103,7 @@ export function createSavedQuestionsView(document: Document, service: BookmarkSe
       for (const [courseId, assignments] of organized) {
         const first = [...assignments.values()][0][0];
         const count = [...assignments.values()].reduce((total, rows) => total + rows.length, 0);
-        const course = document.createElement('details'); course.dataset.courseId = courseId; course.open = expanded.has(courseId) || organized.size === 1;
+        const course = document.createElement('details'); course.dataset.courseId = courseId; course.open = expanded.has(courseId);
         const summary = document.createElement('summary'); summary.textContent = `${first.course.title} (${count})`; course.append(summary);
         for (const rows of assignments.values()) {
           const heading = document.createElement('h3'); heading.textContent = rows[0].assignment.title;
@@ -111,22 +142,23 @@ export function createSavedQuestionsView(document: Document, service: BookmarkSe
     }
   }
   return {
-    position(navbar: HTMLElement) { if (navbar.nextSibling !== host) navbar.after(host); },
+    position,
     open(navbar: HTMLElement, showUpcoming: boolean, options: { focus?: boolean; scroll?: boolean } = {}) {
       if (disposed) return;
-      if (navbar.nextSibling !== host) navbar.after(host);
+      position(navbar);
       host.hidden = false; upcoming.hidden = !showUpcoming;
-      if (document.body) document.body.dataset.betterquestSavedQuestionsOpen = 'true';
       if (!stop) { try { stop = subscribe(() => { void refresh(); }); } catch { /* Reopening still reads persisted state. */ } }
       groups.textContent = 'Loading saved questions…'; void refresh();
-      if (options.scroll !== false) host.scrollIntoView?.({ block: 'start' });
       if (options.focus !== false) heading.focus({ preventScroll: true });
     },
     close,
     isOpen: () => !host.hidden && !disposed,
     dispose() {
       disposed = true; generation++; stop?.(); stop = undefined;
-      document.body?.removeAttribute('data-betterquest-saved-questions-open');
+      document.removeEventListener('click', outsideClick);
+      document.removeEventListener('keydown', escape);
+      document.defaultView?.removeEventListener('resize', reposition);
+      document.removeEventListener('scroll', reposition, true);
       host.remove();
     },
   };

@@ -833,8 +833,9 @@ test('when all questions of a homework are completed, BetterQuest automatically 
   }
 });
 
-test('styles collapse extra gaps when Saved Questions is open while preserving native clearance when closed', () => {
-  assert.match(QUEST_DARK_STYLES, /betterquest-saved-questions-open/);
+test('Saved Questions never conditionally changes native page spacing', () => {
+  assert.doesNotMatch(QUEST_DARK_STYLES, /betterquest-saved-questions-open/);
+  assert.doesNotMatch(QUEST_DARK_STYLES, /:has\([^\n]*saved-questions/);
   assert.match(QUEST_DARK_STYLES, /#selector-div/);
   assert.match(QUEST_DARK_STYLES, /#course-info-header-div/);
 });
