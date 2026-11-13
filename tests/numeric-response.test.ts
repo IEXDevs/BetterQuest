@@ -7,6 +7,7 @@ import { createPdfAssessmentWorkspace } from '../src/features/assessment/workspa
 import { createInteractivePdfViewer, type InteractivePdfOptions } from '../src/features/assessment/pdf-viewer';
 import { numericResponsePlacement } from '../src/features/assessment/numeric-placement';
 import type { NumericResponse } from '../src/features/assessment/numeric-response';
+import { NUMERIC_RESPONSE_STYLES, createNumericResponse } from '../src/features/assessment/numeric-response';
 
 const fixture = readFileSync(new URL('./fixtures/quest-numeric-response.html', import.meta.url), 'utf8');
 const descriptor: NumericResponse = { value: '', placeholder: 'ex: 20.5 or 3.1e6', title: 'Enter integer, decimal or scientific notation.', maxLength: 255, disabled: false };
@@ -196,4 +197,26 @@ test('tight or unknown PDF gaps stay available in the desk without covering ques
     assert.match(viewer.element.shadowRoot!.querySelector('.meta')!.textContent!, /response desk/);
     assert.doesNotMatch(viewer.element.shadowRoot!.querySelector('.meta')!.textContent!, /All questions completed/);
   } finally { viewer.dispose(); dom.window.close(); }
+});
+
+test('numeric submit turns green when valid and Enter submits only then', () => {
+  const dom = new JSDOM('<div></div>');
+  try {
+    const doc = dom.window.document;
+    let submits = 0;
+    const numeric = createNumericResponse(doc, 7,
+      { value: '', placeholder: 'ex: 20.5', title: 'Enter a number.', maxLength: -1, disabled: false },
+      () => true,
+      () => { submits++; return true; });
+    assert.equal(numeric.submit.disabled, true);
+    assert.equal(numeric.submit.dataset.valid, 'false');
+    numeric.input.value = '20.5';
+    numeric.input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    assert.equal(numeric.submit.disabled, false);
+    assert.equal(numeric.submit.dataset.valid, 'true', 'valid entry flags the green state');
+    assert.ok(NUMERIC_RESPONSE_STYLES.includes('.numeric-response button[data-valid="true"]'));
+    const enter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    numeric.input.dispatchEvent(enter);
+    assert.equal(submits, 1);
+  } finally { dom.window.close(); }
 });

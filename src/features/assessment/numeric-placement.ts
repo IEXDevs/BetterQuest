@@ -43,7 +43,7 @@ function textResponsePlacement(runs: PdfTextRun[], question: number,
     && run.top >= firstTop && (!next || run.top < next.top - boundary.height / 2));
   if (!content.length) return null;
   const left = Math.min(...content.map(run => run.left));
-  const top = Math.max(...content.map(run => run.top + run.height)) + 4;
+  const top = Math.max(...content.map(run => run.top + run.height)) + 10;
   const bottom = next ? next.top - 24 : page.height - 24;
   // The previous 48-unit control plus 8/24-unit margins required an 80-unit
   // blank gap. A compact field can safely use the smaller gap below a fraction.

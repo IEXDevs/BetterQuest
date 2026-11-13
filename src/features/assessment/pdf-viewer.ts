@@ -234,8 +234,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   const style = document.createElement('style');
   style.textContent = `
     ${NUMERIC_RESPONSE_STYLES}
-    .pdf-numeric-response{position:absolute;z-index:3;background:var(--bq-surface,#fff);border-radius:5px}
-    .pdf-numeric-response input,.pdf-numeric-response button{min-height:0;height:100%;padding:2px 6px;font-size:clamp(10px,calc(12px * var(--bq-pdf-zoom,1)),18px)}
+    .pdf-numeric-response{position:absolute;z-index:3;background:var(--bq-surface,#fff);border-radius:5px;padding:calc(4px * var(--bq-pdf-zoom,1))}
+    .pdf-numeric-response input,.pdf-numeric-response button{min-height:0;height:100%;padding:calc(6px * var(--bq-pdf-zoom,1)) calc(8px * var(--bq-pdf-zoom,1));font-size:clamp(12px,calc(14px * var(--bq-pdf-zoom,1)),20px)}
+    .pdf-numeric-response button[data-valid="true"]{background:linear-gradient(135deg,#16a34a,#15803d);border-color:#15803d;color:#fff}
     .pdf-free-response{position:absolute;z-index:3;display:flex;flex-direction:column;gap:calc(6px * var(--bq-pdf-zoom,1));padding:calc(10px * var(--bq-pdf-zoom,1));border:1px solid #c7d2fe;border-radius:calc(10px * var(--bq-pdf-zoom,1));background:linear-gradient(180deg,#ffffff 0%,#f5f3ff 100%);box-shadow:0 calc(4px * var(--bq-pdf-zoom,1)) calc(14px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.22)}
     .pdf-free-response[data-correct="true"]{border-color:#16a34a;background:linear-gradient(180deg,#f0fdf4 0%,#ecfdf5 100%);box-shadow:0 calc(4px * var(--bq-pdf-zoom,1)) calc(14px * var(--bq-pdf-zoom,1)) rgba(22,163,74,.25)}
     .pdf-free-response[data-invalid="true"] textarea{border-color:#dc2626;box-shadow:0 0 0 calc(2px * var(--bq-pdf-zoom,1)) rgba(220,38,38,.25)}
@@ -243,16 +244,18 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     .pdf-free-head .pdf-free-badge{display:grid;place-items:center;min-width:calc(20px * var(--bq-pdf-zoom,1));height:calc(20px * var(--bq-pdf-zoom,1));padding:0 calc(6px * var(--bq-pdf-zoom,1));border-radius:999px;background:#4f46e5;color:#fff;font-size:calc(11px * var(--bq-pdf-zoom,1))}
     .pdf-free-response[data-correct="true"] .pdf-free-head{color:#15803d}
     .pdf-free-response[data-correct="true"] .pdf-free-head .pdf-free-badge{background:#16a34a}
-    .pdf-free-response textarea{box-sizing:border-box;width:100%;min-height:calc(56px * var(--bq-pdf-zoom,1));padding:calc(8px * var(--bq-pdf-zoom,1));border:1px solid #cbd5e1;border-radius:calc(8px * var(--bq-pdf-zoom,1));background:#fff;color:#0f172a;font:400 calc(12px * var(--bq-pdf-zoom,1))/1.5 ui-rounded,"Avenir Next",sans-serif;resize:vertical}
+    .pdf-free-response textarea{box-sizing:border-box;width:100%;min-height:calc(56px * var(--bq-pdf-zoom,1));padding:calc(8px * var(--bq-pdf-zoom,1));border:1px solid #cbd5e1;border-radius:calc(8px * var(--bq-pdf-zoom,1));background:#fff;color:#0f172a;font:400 calc(14px * var(--bq-pdf-zoom,1))/1.5 ui-rounded,"Avenir Next",sans-serif;resize:vertical}
     .pdf-free-response textarea:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 calc(2px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.3)}
     /* In-flow fallback: appended below the rendered page when the PDF has no
        blank gap to overlay. Static layout, full page width, never covers text. */
     .pdf-free-response.pdf-free-flow{position:static;width:auto;margin:calc(8px * var(--bq-pdf-zoom,1)) calc(12px * var(--bq-pdf-zoom,1)) calc(12px * var(--bq-pdf-zoom,1))}
     .pdf-free-foot{display:flex;align-items:center;gap:calc(8px * var(--bq-pdf-zoom,1))}
     .pdf-free-foot .pdf-free-count{margin-left:auto;font-size:calc(10px * var(--bq-pdf-zoom,1));color:#64748b;font-variant-numeric:tabular-nums}
-    .pdf-free-foot button{display:inline-flex;align-items:center;gap:calc(6px * var(--bq-pdf-zoom,1));padding:calc(6px * var(--bq-pdf-zoom,1)) calc(14px * var(--bq-pdf-zoom,1));border:0;border-radius:calc(8px * var(--bq-pdf-zoom,1));background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font:750 calc(11px * var(--bq-pdf-zoom,1))/1.2 ui-rounded,"Avenir Next",sans-serif;cursor:pointer;box-shadow:0 calc(3px * var(--bq-pdf-zoom,1)) calc(10px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.35)}
+    .pdf-free-foot button{display:inline-flex;align-items:center;justify-content:center;gap:calc(6px * var(--bq-pdf-zoom,1));padding:calc(6px * var(--bq-pdf-zoom,1)) calc(12px * var(--bq-pdf-zoom,1));border:0;border-radius:calc(8px * var(--bq-pdf-zoom,1));background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font:750 calc(14px * var(--bq-pdf-zoom,1))/1 ui-rounded,"Avenir Next",sans-serif;cursor:pointer;box-shadow:0 calc(3px * var(--bq-pdf-zoom,1)) calc(10px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.35)}
     .pdf-free-foot button:hover:not(:disabled){background:linear-gradient(135deg,#4f46e5,#4338ca)}
     .pdf-free-foot button:disabled{opacity:.55;cursor:not-allowed}
+    .pdf-free-foot button[data-valid="true"]{background:linear-gradient(135deg,#16a34a,#15803d)}
+    .pdf-free-foot button[data-valid="true"]:hover:not(:disabled){background:linear-gradient(135deg,#15803d,#166534)}
     :host([data-dark-pages="true"]) .pdf-free-response{background:linear-gradient(180deg,#1e1b4b 0%,#312e81 100%);border-color:#818cf8}
     :host([data-dark-pages="true"]) .pdf-free-head{color:#e0e7ff}
     :host([data-dark-pages="true"]) .pdf-free-response textarea{background:#0f172a;color:#e2e8f0;border-color:#475569}
@@ -323,6 +326,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       background:var(--bq-raised,#eef3f6);
     }
     .pages.is-zoomed{overflow-x:auto!important}
+    /* End spacer: lets the final question scroll up to the viewport center.
+       Without trailing room the last anchor can only bottom-align. */
+    .pages::after{content:'';flex:0 0 auto;width:1px;height:40vh;pointer-events:none}
     .page{
       position:relative!important;
       width:var(--bq-pdf-page-width,100%)!important;
@@ -556,15 +562,14 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   };
   const handleFsChange = () => {
     // Entering/exiting fullscreen resizes the page list, so an unchanged
-    // scrollTop would land on a different question. Snapshot the question at
-    // the viewport center first, refit, then put that same question back in
-    // the center.
-    const pending = pendingFsQuestion;
+    // scrollTop would land on a different question. Use the pre-transition
+    // snapshot (click or continuous scroll tracking), refit, then put that
+    // same question back in the center. A second refit from ResizeObserver
+    // fires after this, so restore across two frames.
+    const center = pendingFsQuestion ?? lastSeenCenter ?? currentCenterQuestion();
     pendingFsQuestion = null;
-    const center = pending ?? currentCenterQuestion();
     syncFs();
-    fitPagesToViewer();
-    if (center !== null && center !== undefined) centerOnQuestion(center);
+    refitPreservingCenter(center);
     const boxes = shadow.querySelectorAll('.option-hit').length;
     console.info(`[BetterQuest] Fullscreen changed. Answer boxes on PDF: ${boxes}.`);
   };
@@ -572,7 +577,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   syncFs();
 
   fullscreenBtn.addEventListener('click', () => {
-    pendingFsQuestion = currentCenterQuestion();
+    pendingFsQuestion = lastSeenCenter ?? currentCenterQuestion();
     const isFs = Boolean(document.fullscreenElement) || element.dataset.fullscreen === 'true';
     const root = container.closest<HTMLElement>('#target') || container;
     if (isFs) {
@@ -600,13 +605,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     // The fallback attribute path fires no fullscreenchange, so refit here.
     // The real fullscreen path refits in handleFsChange; centering twice is
     // harmless and covers browsers that fire the event before layout settles.
-    fitPagesToViewer();
-    if (pendingFsQuestion !== null && pendingFsQuestion !== undefined) {
-      const restore = pendingFsQuestion;
-      // Keep the snapshot for handleFsChange when native fullscreen fires.
-      centerOnQuestion(restore);
-      document.defaultView?.requestAnimationFrame?.(() => centerOnQuestion(restore));
-    }
+    // Keep the snapshot for handleFsChange when native fullscreen fires.
+    const restore = pendingFsQuestion;
+    refitPreservingCenter(restore);
   });
   const zoom = document.createElement('div'); zoom.className = 'zoom';
   const zoomOut = document.createElement('button'); zoomOut.type = 'button'; zoomOut.textContent = '−'; zoomOut.setAttribute('aria-label', 'Zoom out');
@@ -751,22 +752,27 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
 
   /** Snapshot for an in-flight fullscreen toggle (click fires before the event). */
   let pendingFsQuestion: number | null = null;
+  /** Last center seen during normal scrolling — survives Esc exits with no click. */
+  let lastSeenCenter: number | null = null;
+  let lastSeenQueued = false;
 
   function anchorAbsoluteTop(questionNumber: number): number | null {
     const anchor = shadow.querySelector<HTMLElement>(`.question-anchor[data-question="${questionNumber}"]`);
     if (!anchor) return null;
     const pageEl = anchor.closest<HTMLElement>('.page');
     if (!pageEl) return null;
-    const topPct = Number.parseFloat(anchor.style.top) || 0;
-    const pageH = pageEl.offsetHeight || pageEl.clientHeight || 0;
-    if (pageH > 0) return pageEl.offsetTop + (topPct / 100) * pageH;
+    // Prefer rect math: it stays correct inside the flex column and after
+    // width-driven refits, where offsetTop can lag one frame behind.
     try {
       const anchorRect = anchor.getBoundingClientRect?.();
       const pagesRect = pages.getBoundingClientRect?.();
       if (anchorRect && pagesRect && (pagesRect.height !== 0 || anchorRect.top !== 0)) {
         return (anchorRect.top - pagesRect.top) + pages.scrollTop;
       }
-    } catch { /* JSDOM without layout: fall through */ }
+    } catch { /* fall through to offset math */ }
+    const topPct = Number.parseFloat(anchor.style.top) || 0;
+    const pageH = pageEl.offsetHeight || pageEl.clientHeight || 0;
+    if (pageH > 0) return pageEl.offsetTop + (topPct / 100) * pageH;
     return null;
   }
 
@@ -774,7 +780,8 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   function currentCenterQuestion(): number | null {
     try {
       const anchors = [...shadow.querySelectorAll<HTMLElement>('.question-anchor[data-question]')];
-      if (!anchors.length || !pages.clientHeight) {
+      if (!anchors.length) return null;
+      if (!pages.clientHeight) {
         // Layout-free environments (tests): fall back to the first anchor.
         const first = anchors[0]?.dataset.question;
         const parsed = first !== undefined ? Number(first) : NaN;
@@ -796,20 +803,47 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
   }
 
   /** Scroll so the question header sits centered in the PDF viewport. */
-  function centerOnQuestion(questionNumber: number, behavior: ScrollBehavior = 'auto') {
+  function centerOnQuestion(questionNumber: number) {
     try {
       const top = anchorAbsoluteTop(questionNumber);
-      if (top === null || !pages.clientHeight) {
-        // No measurable layout (or missing anchor): keep the question visible
-        // with a centered jump instead of dropping the restore entirely.
+      if (top === null) {
         const anchor = shadow.querySelector<HTMLElement>(`.question-anchor[data-question="${questionNumber}"]`);
-        anchor?.scrollIntoView?.({ block: 'center', behavior });
+        anchor?.scrollIntoView?.({ block: 'center', behavior: 'auto' as ScrollBehavior });
         return;
       }
+      if (!pages.clientHeight) {
+        const anchor = shadow.querySelector<HTMLElement>(`.question-anchor[data-question="${questionNumber}"]`);
+        anchor?.scrollIntoView?.({ block: 'center', behavior: 'auto' as ScrollBehavior });
+        return;
+      }
+      // The page list forces smooth scrolling; fullscreen restores must jump
+      // instantly or the animation fights the layout change and drifts.
+      pages.style.setProperty('scroll-behavior', 'auto', 'important');
       // Header slightly above exact center so the question body reads centered.
       const targetY = Math.max(0, top - pages.clientHeight / 2 + 40);
-      pages.scrollTo?.({ top: targetY, behavior });
+      pages.scrollTo?.({ top: targetY, behavior: 'instant' as ScrollBehavior });
+      // Force the instant position even where 'instant' is unsupported.
+      pages.scrollTop = targetY;
+      if (typeof queueMicrotask === 'function') queueMicrotask(() => pages.style.removeProperty('scroll-behavior'));
+      else setTimeout(() => pages.style.removeProperty('scroll-behavior'), 0);
     } catch { /* centering is best-effort; never break fullscreen */ }
+  }
+
+  /** Refit page widths, then re-center the captured question across frames. */
+  function refitPreservingCenter(center: number | null | undefined) {
+    fitPagesToViewer();
+    if (center === null || center === undefined) return;
+    lastSeenCenter = center;
+    const view = document.defaultView;
+    centerOnQuestion(center);
+    // Layout settles async (native fullscreen + ResizeObserver refit after
+    // us and would otherwise undo the restore), so re-assert across frames.
+    view?.requestAnimationFrame?.(() => {
+      if (disposed) return;
+      fitPagesToViewer();
+      centerOnQuestion(center);
+      view?.requestAnimationFrame?.(() => { if (!disposed) centerOnQuestion(center); });
+    });
   }
 
   zoomOut.addEventListener('click', () => stepZoom(-1));
@@ -827,9 +861,27 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     rememberZoom();
   };
   pages.addEventListener('wheel', handleZoomWheel, { passive: false });
-  document.defaultView?.addEventListener('resize', fitPagesToViewer);
+  const trackCenter = () => {
+    if (lastSeenQueued || disposed) return;
+    lastSeenQueued = true;
+    document.defaultView?.requestAnimationFrame?.(() => {
+      lastSeenQueued = false;
+      if (disposed) return;
+      const current = currentCenterQuestion();
+      if (current !== null) lastSeenCenter = current;
+    });
+  };
+  pages.addEventListener('scroll', trackCenter, { passive: true });
+  const handleViewportResize = () => {
+    const center = lastSeenCenter;
+    fitPagesToViewer();
+    // Window resizes (including fullscreen) change page heights; keep the
+    // same question centered instead of holding a stale pixel scrollTop.
+    if (center !== null) centerOnQuestion(center);
+  };
+  document.defaultView?.addEventListener('resize', handleViewportResize);
   const ResizeObserverCtor = document.defaultView?.ResizeObserver;
-  const resizeObserver = ResizeObserverCtor ? new ResizeObserverCtor(() => fitPagesToViewer()) : undefined;
+  const resizeObserver = ResizeObserverCtor ? new ResizeObserverCtor(() => handleViewportResize()) : undefined;
   resizeObserver?.observe(pages);
 
   const ready = (async () => {
@@ -947,6 +999,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           const numeric = createNumericResponse(document, question, response,
             value => options.onNumericInput?.(question, value) ?? false,
             value => options.onNumericSubmit?.(question, value) ?? false);
+          numeric.submit.textContent = '✓';
+          numeric.submit.setAttribute('aria-label', `Submit question ${question}`);
+          numeric.submit.title = `Submit question ${question}`;
           numeric.element.classList.add('pdf-numeric-response');
           numeric.element.style.left = `${area.left}%`; numeric.element.style.top = `${area.top}%`;
           numeric.element.style.width = `${area.width}%`; numeric.element.style.height = `${area.height}%`;
@@ -958,6 +1013,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           const free = createFreeResponse(document, question, response,
             value => options.onFreeInput?.(question, value) ?? false,
             value => options.onFreeSubmit?.(question, value) ?? false);
+          free.submit.textContent = '✓';
+          free.submit.setAttribute('aria-label', `Submit question ${question}`);
+          free.submit.title = `Submit question ${question}`;
           const card = free.element;
           card.classList.add('pdf-free-response');
           const head = document.createElement('div'); head.className = 'pdf-free-head';
@@ -1320,7 +1378,8 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           btn.className = 'pdf-submit-btn';
           btn.dataset.question = String(questionNumber);
           btn.setAttribute('aria-label', `Submit question ${questionNumber}`);
-          btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg> Confirm`;
+          btn.title = `Submit question ${questionNumber}`;
+          btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
           const leftPct = Number.parseFloat(activeHit.style.left) || 0;
           const topPct = Number.parseFloat(activeHit.style.top) || 0;
           if (leftPct > 78) {
@@ -1404,18 +1463,14 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       refreshMeta();
     },
     setFullscreen(active: boolean) {
-      const center = currentCenterQuestion();
+      const center = lastSeenCenter ?? currentCenterQuestion();
       if (active) {
         element.dataset.fullscreen = 'true';
       } else {
         element.removeAttribute('data-fullscreen');
       }
       syncFs();
-      fitPagesToViewer();
-      if (center !== null) {
-        centerOnQuestion(center);
-        document.defaultView?.requestAnimationFrame?.(() => { if (!disposed) centerOnQuestion(center); });
-      }
+      refitPreservingCenter(center);
     },
     setAnsweredQuestions(answered: ReadonlySet<number>) {
       if (disposed) return;
@@ -1561,8 +1616,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
       document.removeEventListener('click', handleGlobalClick);
       document.removeEventListener('keydown', handleKey);
       document.removeEventListener('betterquest:party', handlePartyTrigger);
-      document.defaultView?.removeEventListener('resize', fitPagesToViewer);
+      document.defaultView?.removeEventListener('resize', handleViewportResize);
       pages.removeEventListener('wheel', handleZoomWheel);
+      pages.removeEventListener('scroll', trackCenter);
       if (zoomWriteTimer !== undefined) {
         clearTimeout(zoomWriteTimer);
         writeZoom(zoomLevel);

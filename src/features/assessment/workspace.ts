@@ -468,6 +468,32 @@ function withNativeResponsesVisible<T>(elements: PdfAssessmentElements, read: ()
   }
 }
 
+/**
+ * Snapshot of native control availability read from inside the visible scope.
+ * Fullscreen hides every #target child except the PDF frame, so availability
+ * read outside the scope is always false there — and would wrongly disable
+ * the PDF/desk inputs on the next reconcile. Read once here, reuse the map.
+ */
+function availabilitySnapshot(
+  elements: PdfAssessmentElements,
+  bindings: ReturnType<typeof readAssessmentResponses>,
+): Map<string, { select: boolean; submit: boolean }> {
+  return withNativeResponsesVisible(elements, () => {
+    const map = new Map<string, { select: boolean; submit: boolean }>();
+    for (const binding of bindings) {
+      try {
+        map.set(binding.id, {
+          select: isNativeControlAvailable(binding.select),
+          submit: isNativeControlAvailable(binding.submit),
+        });
+      } catch {
+        map.set(binding.id, { select: false, submit: false });
+      }
+    }
+    return map;
+  });
+}
+
 function hideNativeStatsElements(document: Document, root: HTMLElement) {
   document.querySelectorAll('#tally-div, [id*="tally"], .tally').forEach(el => {
     if (el.closest('[data-betterquest]')) return;
@@ -995,26 +1021,28 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   const numericInputs = new Map<number, ReturnType<typeof createNumericResponse>>();
   const freeInputs = new Map<number, ReturnType<typeof createFreeResponse>>();
 
-  function numericResponses(bindings: ReturnType<typeof readAssessmentResponses>) {
+  function numericResponses(bindings: ReturnType<typeof readAssessmentResponses>, availability?: Map<string, { select: boolean; submit: boolean }>) {
     const responses = new Map<number, NumericResponse>();
     for (const binding of bindings) if (binding.kind === 'numeric' && binding.select.tagName === 'INPUT') {
       const input = binding.select as HTMLInputElement;
+      const available = availability?.get(binding.id)?.select ?? isNativeControlAvailable(input);
       responses.set(Number(binding.number), { value: input.value, placeholder: input.placeholder, title: input.title,
-        maxLength: input.maxLength, disabled: binding.answered || input.readOnly || !isNativeControlAvailable(input) });
+        maxLength: input.maxLength, disabled: binding.answered || input.readOnly || !available });
     }
     return responses;
   }
 
-  function freeResponses(bindings: ReturnType<typeof readAssessmentResponses>) {
+  function freeResponses(bindings: ReturnType<typeof readAssessmentResponses>, availability?: Map<string, { select: boolean; submit: boolean }>) {
     const responses = new Map<number, FreeResponse>();
-    for (const binding of bindings) if (binding.kind === 'free' && binding.select.tagName === 'TEXTAREA') {
-      const area = binding.select as HTMLTextAreaElement;
+    for (const binding of bindings) if (binding.kind === 'free' && (binding.select.tagName === 'TEXTAREA' || binding.select.tagName === 'INPUT')) {
+      const area = binding.select as HTMLTextAreaElement | HTMLInputElement;
+      const available = availability?.get(binding.id)?.select ?? isNativeControlAvailable(area);
       // Quest essay fields carry no placeholder/title of their own — fall back
       // to a prompt so the desk and PDF card never render a bare empty box.
       responses.set(Number(binding.number), { value: area.value,
         placeholder: area.placeholder || 'Type your answer…',
         title: area.title || 'Type your full answer, then Submit.',
-        maxLength: area.maxLength, disabled: binding.answered || area.readOnly || !isNativeControlAvailable(area) });
+        maxLength: area.maxLength, disabled: binding.answered || area.readOnly || !available });
     }
     return responses;
   }
@@ -1052,8 +1080,10 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     if (!elements || disposed) return false;
     return withNativeResponsesVisible(elements, () => {
       const binding = readAssessmentResponses(elements.table).find(item => Number(item.number) === questionNumber);
-      if (!binding || binding.kind !== 'free' || binding.answered || binding.select.tagName !== 'TEXTAREA') return false;
-      const area = binding.select as HTMLTextAreaElement;
+      if (!binding || binding.kind !== 'free' || binding.answered) return false;
+      const tag = binding.select.tagName;
+      if (tag !== 'TEXTAREA' && tag !== 'INPUT') return false;
+      const area = binding.select as HTMLTextAreaElement | HTMLInputElement;
       if (!isNativeControlAvailable(area) || area.readOnly || (area.maxLength >= 0 && value.length > area.maxLength)) return false;
       if (area.value !== value) {
         area.value = value;
@@ -1070,7 +1100,11 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     if (input?.tagName !== 'INPUT' || input.name !== 'response' || input.type !== 'text') return;
     const row = input.closest('tr');
     const questionNumber = Number(clean(row?.cells[0]?.textContent).replace(/\.$/, ''));
-    if (Number.isInteger(questionNumber) && questionNumber > 0) syncNumericValue(questionNumber, input.value);
+    if (!Number.isInteger(questionNumber) || questionNumber <= 0) return;
+    // Single-line prose answers ride on text inputs too — mirror them to the
+    // free-response controls, not the numeric ones.
+    if (knownByNumber.get(questionNumber)?.kind === 'free') syncFreeValue(questionNumber, input.value);
+    else syncNumericValue(questionNumber, input.value);
   };
   root.addEventListener('input', onNativeNumericInput);
   root.addEventListener('change', onNativeNumericInput);
@@ -1322,8 +1356,9 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
   function ensurePdfViewer(elements: PdfAssessmentElements, bindings: ReturnType<typeof readAssessmentResponses>) {
     if (!viewerFactory || pdfViewerStarted || !bindings.length) return;
     const optionMaximums = computeOptionMaximums(bindings);
-    const numericMap = numericResponses(bindings);
-    const freeMap = freeResponses(bindings);
+    const availability = availabilitySnapshot(elements, bindings);
+    const numericMap = numericResponses(bindings, availability);
+    const freeMap = freeResponses(bindings, availability);
     if (!optionMaximums.size && !numericMap.size && !freeMap.size) return;
     if (isBetterQuestDebug(root.ownerDocument)) {
       const map = [...optionMaximums.entries()].sort((a, b) => a[0] - b[0]).map(([q, m]) => `Q${q}:${m}`);
@@ -1714,12 +1749,16 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
     hideNativeStatsElements(document, root);
     paintSummary(bindings, elements.tally);
     ensurePdfViewer(elements, bindings);
+    // Availability must be read from inside the visible scope: fullscreen
+    // hides the native table, so a direct read here is always unavailable
+    // there and would disable live PDF/desk inputs on every reconcile.
+    const availability = availabilitySnapshot(elements, bindings);
     // Quest's Scroller renders response rows lazily, so the viewer can be built
     // from a partial table. Feed it the growing map as more rows arrive so every
     // question ends up with its answer boxes.
     if (pdfViewerStarted) {
-      pdfViewer?.setNumericResponses?.(numericResponses(bindings));
-      (pdfViewer as unknown as { setFreeResponses?: (m: Map<number, FreeResponse>) => void })?.setFreeResponses?.(freeResponses(bindings));
+      pdfViewer?.setNumericResponses?.(numericResponses(bindings, availability));
+      (pdfViewer as unknown as { setFreeResponses?: (m: Map<number, FreeResponse>) => void })?.setFreeResponses?.(freeResponses(bindings, availability));
       pdfViewer?.setOptionMaximums?.(computeOptionMaximums(bindings));
     }
     // Use the accumulated set — Scroller may only expose a window of rows now.
@@ -1781,8 +1820,8 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       binding.id, binding.number, binding.kind,
       binding.kind === 'free' ? binding.select.value.slice(0, 120) : binding.select.value,
       binding.kind === 'free' ? binding.select.value.length : binding.options,
-      binding.attempts, binding.answered, isNativeControlAvailable(binding.select),
-      isNativeControlAvailable(binding.submit),
+      binding.attempts, binding.answered, availability.get(binding.id)?.select,
+      availability.get(binding.id)?.submit,
     ]));
     if (signature === responseSignature) return;
     responseSignature = signature;
@@ -1956,7 +1995,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       const choices = document.createElement('div'); choices.className = 'choices'; choices.setAttribute('role', 'group'); choices.setAttribute('aria-label', `Question ${binding.number} response`);
       if (binding.kind === 'free') {
         const questionNumber = Number(binding.number);
-        const response = freeResponses([binding]).get(questionNumber)!;
+        const response = freeResponses([binding], availability).get(questionNumber)!;
         const free = createFreeResponse(document, questionNumber, response,
           value => writeFreeNative(questionNumber, value),
           value => writeFreeNative(questionNumber, value, true) && submitNative(questionNumber));
@@ -1967,7 +2006,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
       }
       if (binding.kind === 'numeric') {
         const questionNumber = Number(binding.number);
-        const response = numericResponses([binding]).get(questionNumber)!;
+        const response = numericResponses([binding], availability).get(questionNumber)!;
         const numeric = createNumericResponse(document, questionNumber, response,
           value => writeNumericNative(questionNumber, value),
           value => writeNumericNative(questionNumber, value, true) && submitNative(questionNumber));
@@ -1985,7 +2024,7 @@ export function createPdfAssessmentWorkspace(root: HTMLElement, options: { creat
         choices.append(choice);
       }
       const submit = document.createElement('button'); submit.type = 'button'; submit.className = 'submit'; submit.textContent = `Submit question ${binding.number}`;
-      submit.hidden = !binding.select.value || !isNativeControlAvailable(binding.submit);
+      submit.hidden = !binding.select.value || !(availability.get(binding.id)?.submit ?? false);
       submit.addEventListener('click', () => {
         submitNative(Number(binding.number));
       });

@@ -269,6 +269,20 @@ export function isResponseOptionAvailable(option: HTMLOptionElement): boolean {
   return Boolean(option.value && !option.disabled && !option.hidden && !option.closest('optgroup[disabled]'));
 }
 
+/**
+ * Quest serves numeric answers as text inputs carrying numeric affordances
+ * (the standard "integer, decimal or scientific notation" title/placeholder,
+ * a decimal/numeric inputmode, or a pattern). A text input with none of those
+ * is a short prose answer — a single-line free response, not a number.
+ */
+export function isNumericTextInput(input: HTMLInputElement): boolean {
+  const mode = (input.inputMode || '').toLowerCase();
+  if (mode === 'decimal' || mode === 'numeric') return true;
+  if (input.pattern) return true;
+  const hints = `${input.title || ''} ${input.placeholder || ''}`;
+  return /integer|decimal|scientific|notation|tolerance|significant|numeric|\bnumber\b/i.test(hints);
+}
+
 export interface AssessmentMetrics {
   score: string;
   classAverage: string;
@@ -473,7 +487,10 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
 
     const select = row.querySelector<HTMLSelectElement>('select[name="response"], select[aria-label="Select your response"], select');
     const free = select ? null : cells[1]?.querySelector<HTMLTextAreaElement>('textarea[name="response"], textarea');
-    const numeric = select || free ? null : cells[1]?.querySelector<HTMLInputElement>('input[type="text"][name="response"]');
+    const textInput = select || free ? null : cells[1]?.querySelector<HTMLInputElement>('input[type="text"][name="response"]');
+    // A text input with no numeric affordances is a short prose answer, not a number.
+    const proseInput = textInput && !isNumericTextInput(textInput) ? textInput : null;
+    const numeric = textInput && !proseInput ? textInput : null;
     // Never match per-row history toggles or other non-submit buttons: only
     // explicit submit controls qualify, and anything history-related is out.
     const submitCandidates = [...row.querySelectorAll<HTMLButtonElement>(
@@ -489,8 +506,8 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
     let val = '';
     if (select) {
       val = select.value;
-    } else if (free) {
-      val = free.value;
+    } else if (free ?? proseInput) {
+      val = (free ?? proseInput)!.value;
     } else if (numeric) {
       val = numeric.value;
     } else {
@@ -524,12 +541,13 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
       continue;
     }
 
-    if (free) {
-      const text = free.value.trim();
-      const freeDisabled = free.disabled || free.readOnly || free.getAttribute('aria-disabled') === 'true';
+    const prose = free ?? proseInput;
+    if (prose) {
+      const text = prose.value.trim();
+      const proseDisabled = prose.disabled || prose.readOnly || prose.getAttribute('aria-disabled') === 'true';
       rows.push({ id, number: clean(cells[0]?.textContent).replace(/\.$/, '') || String(rows.length + 1),
-        select: free, kind: 'free', submit: submit || missingSubmit(row), options: [], attempts,
-        answered: isCorrect || triesExhausted || (freeDisabled && Boolean(text)) || Boolean(!isSubmitAvailable && text && recorded),
+        select: prose, kind: 'free', submit: submit || missingSubmit(row), options: [], attempts,
+        answered: isCorrect || triesExhausted || (proseDisabled && Boolean(text)) || Boolean(!isSubmitAvailable && text && recorded),
       });
       continue;
     }

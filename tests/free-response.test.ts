@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { readAssessmentResponses } from '../src/adapters/quest/assessment';
 import { freeResponsePlacement } from '../src/features/assessment/numeric-placement';
+import { NUMERIC_RESPONSE_STYLES, createFreeResponse } from '../src/features/assessment/numeric-response';
 import { createInteractivePdfViewer } from '../src/features/assessment/pdf-viewer';
 import { createPdfAssessmentWorkspace } from '../src/features/assessment/workspace';
 
@@ -38,6 +39,25 @@ test('finished free-response prose stays free and answered', () => {
     assert.equal(rows.length, 1);
     assert.equal(rows[0].kind, 'free');
     assert.equal(rows[0].answered, true);
+  } finally { dom.window.close(); }
+});
+
+test('a plain text input with no numeric hints parses as free, not numeric', () => {
+  const dom = new JSDOM(`<div data-betterquest-native-visible="true"><table id="instance-table-courseuserassignment_1"><tbody><tr class="instanceitempart" data-id="cuaip_23"><td>23.</td><td><input type="text" name="response" placeholder="Type your answer"></td><td class="status"></td><td class="previous">0 / 3</td><td><button aria-label="Submit response">Submit</button></td></tr></tbody></table></div>`);
+  try {
+    const rows = readAssessmentResponses(dom.window.document.querySelector('table')!);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].kind, 'free', 'prose input must not be mistaken for a number');
+    assert.equal(rows[0].answered, false);
+  } finally { dom.window.close(); }
+});
+
+test('a text input with numeric hints still parses as numeric', () => {
+  const dom = new JSDOM(`<div data-betterquest-native-visible="true"><table id="instance-table-courseuserassignment_1"><tbody><tr class="instanceitempart" data-id="cuaip_7"><td>7.</td><td><input type="text" name="response" title="Enter integer, decimal or scientific notation." placeholder="ex: 20.5 or 3.1e6"></td><td class="status"></td><td class="previous">0 / 7</td><td><button aria-label="Submit response">Submit</button></td></tr></tbody></table></div>`);
+  try {
+    const rows = readAssessmentResponses(dom.window.document.querySelector('table')!);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].kind, 'numeric');
   } finally { dom.window.close(); }
 });
 
@@ -119,6 +139,37 @@ test('sidebar free-response mirrors the native field and submits exactly once', 
   } finally { workspace.dispose(); dom.window.close(); }
 });
 
+test('free-response stays enabled and goes green when fullscreen hides its wrappers', () => {
+  const dom = new JSDOM(`<div id="target"><div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF" src="/student/images/problem_pdf?instance=courseuserassignment_1"></iframe></div></div><div id="view-responses-table-id"><table id="instance-table-courseuserassignment_1"><tbody><tr class="instanceitempart" data-id="cuaip_1"><td>1.</td><td><textarea name="response" placeholder="Type your answer"></textarea></td><td class="status"></td><td class="previous">0 / 3</td><td><button aria-label="Submit response">Submit</button></td></tr></tbody></table></div></div>`, { url: 'https://quest.cns.utexas.edu/student/instances/show?instance=courseuserassignment_1', pretendToBeVisual: true });
+  dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList;
+  const doc = dom.window.document;
+  const workspace = createPdfAssessmentWorkspace(doc.querySelector<HTMLElement>('#target')!, {
+    createPdfViewer: (container) => {
+      const element = doc.createElement('section'); element.dataset.betterquest = 'interactive-pdf'; container.append(element);
+      return { element, ready: new Promise(() => {}), dispose() { element.remove(); } };
+    },
+  });
+  try {
+    workspace.reconcile();
+    // Exactly what fullscreen does: every #target child but #pdf-frame leaves layout.
+    const root = doc.querySelector<HTMLElement>('#target')!;
+    for (const child of [...root.children]) {
+      if (child.id !== 'pdf-frame' && !child.hasAttribute('data-betterquest')) {
+        (child as HTMLElement).style.setProperty('display', 'none', 'important');
+      }
+    }
+    workspace.reconcile();
+    const rail = doc.querySelector('[data-betterquest="assessment-rail"]')!.shadowRoot!;
+    const field = rail.querySelector<HTMLTextAreaElement>('[aria-label="Free response answer for question 1"]')!;
+    assert.equal(field.disabled, false, 'hiding wrappers like fullscreen must not disable the prose box');
+    const submit = rail.querySelector<HTMLButtonElement>('.free-response button')!;
+    field.value = 'My explanation';
+    field.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    assert.equal(submit.disabled, false, 'typed prose must enable submit');
+    assert.equal(submit.dataset.valid, 'true', 'typed prose must flag the green state');
+  } finally { workspace.dispose(); dom.window.close(); }
+});
+
 test('tightly-packed PDF still gets an in-flow free-response card below the page', async () => {
   const dom = new JSDOM('<div></div>', { url: 'https://quest.cns.utexas.edu/student/instances/show' });
   let answer = '', submits = 0;
@@ -155,4 +206,35 @@ test('tightly-packed PDF still gets an in-flow free-response card below the page
     assert.equal(card.hidden, true, 'answered flow card hides');
     assert.match(shadow.querySelector('.meta')!.textContent!, /All questions completed/);
   } finally { viewer.dispose(); dom.window.close(); }
+});
+
+test('free-response submit turns green when valid and Enter submits only then', () => {
+  const dom = new JSDOM('<div></div>');
+  try {
+    const doc = dom.window.document;
+    let submits = 0;
+    const free = createFreeResponse(doc, 1,
+      { value: '', placeholder: 'Type your answer', title: 'Free response', maxLength: -1, disabled: false },
+      () => true,
+      () => { submits++; return true; });
+    assert.equal(free.submit.disabled, true, 'empty prose keeps submit disabled');
+    assert.equal(free.submit.dataset.valid, 'false');
+    const emptyEnter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    free.input.dispatchEvent(emptyEnter);
+    assert.equal(emptyEnter.defaultPrevented, true, 'Enter on invalid prose is swallowed');
+    assert.equal(submits, 0);
+    free.input.value = 'Photosynthesis converts light';
+    free.input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    assert.equal(free.submit.disabled, false);
+    assert.equal(free.submit.dataset.valid, 'true', 'valid prose flags the green state');
+    const shiftEnter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true });
+    free.input.dispatchEvent(shiftEnter);
+    assert.equal(shiftEnter.defaultPrevented, false, 'Shift+Enter keeps its newline');
+    assert.equal(submits, 0);
+    const enter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    free.input.dispatchEvent(enter);
+    assert.equal(enter.defaultPrevented, true, 'Enter submits instead of newline');
+    assert.equal(submits, 1);
+    assert.ok(NUMERIC_RESPONSE_STYLES.includes('data-valid'), 'green submit state is styled');
+  } finally { dom.window.close(); }
 });
