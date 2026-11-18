@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BetterQuest — local FRQ fixture</title>
+<style>
+body{margin:0;background:#111b29;color:#e2e8f0;font:14px system-ui}button,select{font:inherit;padding:6px 10px}.qh-navbar{display:flex;align-items:center;justify-content:space-between;padding:12px;background:#21394d}.qh-nav{display:flex;list-style:none;gap:8px;margin:0}.qh-breadcrumb{list-style:none}#fixture-controls{padding:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:#1d2939}#main-content{padding:12px}#target{max-width:1800px;margin:auto}#pdf-frame{height:70vh}#fixture-report{white-space:pre-wrap;margin:8px;font:12px monospace}a{color:#a5b4fc}.d-flex{display:flex}.justify-content-between{justify-content:space-between}h1{font-size:18px}.row{display:flex}
+</style></head>
+<body id="body-id" class="mdb-skin">
+<div id="quest-nav-header-div"><nav class="qh-navbar"><div class="qh-breadcrumbs"><nav aria-label="breadcrumb"><ol class="qh-breadcrumb"><li>Local synthetic assignment</li></ol></nav></div><ul class="qh-nav"><li class="qh-nav-item"><a href="#">Fixture account</a></li></ul></nav></div>
+<div id="fixture-controls" data-betterquest="fixture-controls">
+<strong>Local FRQ fixture</strong><label>Layout <select id="layout"><option value="roomy">Final Q23</option><option value="next">Following question boundary</option><option value="tight">No overlay space</option><option value="no-boundary">Missing PDF boundary</option></select></label>
+<label>Code <select id="version"><option value="fixed">Fixed</option><option value="before">Before fix</option></select></label>
+<button id="jump">Go to Q23</button><button id="incorrect">Next submit: incorrect</button><button id="rerender">Rerender responses</button><button id="reload-completed">Reload completed Q23</button>
+<span>Synthetic data; no Quest connection.</span></div>
+<pre id="fixture-report" data-betterquest="fixture-report">Loading local assignment…</pre>
+<main id="main-content"><div id="target"><h1>Synthetic PDF assignment</h1>
+<div class="d-flex justify-content-between"><div id="due_date_field"><span id="due_date_span"><span class="qlabel">Due date</span> <span class="qtext">Local fixture</span></span></div><div id="upper-paging-div"></div></div>
+<div id="pdf-frame"><div id="presentation-pdf-frame"><iframe title="Assignment PDF"></iframe></div></div>
+<div id="view-responses-table-id"><table id="instance-table-courseuserassignment_900023"><tbody></tbody></table></div><div id="tally-div"></div>
+</div></main><script type="module" src="/scripts/fixtures/frq/main.ts"></script></body></html>

@@ -239,26 +239,29 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     .pdf-numeric-response button[data-valid="true"]{background:linear-gradient(135deg,#16a34a,#15803d);border-color:#15803d;color:#fff}
     .pdf-free-response{position:absolute;z-index:3;display:flex;flex-direction:column;gap:calc(6px * var(--bq-pdf-zoom,1));padding:calc(10px * var(--bq-pdf-zoom,1));border:1px solid #c7d2fe;border-radius:calc(10px * var(--bq-pdf-zoom,1));background:linear-gradient(180deg,#ffffff 0%,#f5f3ff 100%);box-shadow:0 calc(4px * var(--bq-pdf-zoom,1)) calc(14px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.22)}
     .pdf-free-response[data-correct="true"]{border-color:#16a34a;background:linear-gradient(180deg,#f0fdf4 0%,#ecfdf5 100%);box-shadow:0 calc(4px * var(--bq-pdf-zoom,1)) calc(14px * var(--bq-pdf-zoom,1)) rgba(22,163,74,.25)}
-    .pdf-free-response[data-invalid="true"] textarea{border-color:#dc2626;box-shadow:0 0 0 calc(2px * var(--bq-pdf-zoom,1)) rgba(220,38,38,.25)}
+    .pdf-free-response[data-invalid="true"] input{border-color:#dc2626;box-shadow:0 0 0 calc(2px * var(--bq-pdf-zoom,1)) rgba(220,38,38,.25)}
     .pdf-free-head{display:flex;align-items:center;gap:calc(6px * var(--bq-pdf-zoom,1));font:750 calc(11px * var(--bq-pdf-zoom,1))/1.2 ui-rounded,"Avenir Next",sans-serif;color:#4338ca;letter-spacing:.02em}
     .pdf-free-head .pdf-free-badge{display:grid;place-items:center;min-width:calc(20px * var(--bq-pdf-zoom,1));height:calc(20px * var(--bq-pdf-zoom,1));padding:0 calc(6px * var(--bq-pdf-zoom,1));border-radius:999px;background:#4f46e5;color:#fff;font-size:calc(11px * var(--bq-pdf-zoom,1))}
     .pdf-free-response[data-correct="true"] .pdf-free-head{color:#15803d}
     .pdf-free-response[data-correct="true"] .pdf-free-head .pdf-free-badge{background:#16a34a}
-    .pdf-free-response textarea{box-sizing:border-box;width:100%;min-height:calc(56px * var(--bq-pdf-zoom,1));padding:calc(8px * var(--bq-pdf-zoom,1));border:1px solid #cbd5e1;border-radius:calc(8px * var(--bq-pdf-zoom,1));background:#fff;color:#0f172a;font:400 calc(14px * var(--bq-pdf-zoom,1))/1.5 ui-rounded,"Avenir Next",sans-serif;resize:vertical}
-    .pdf-free-response textarea:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 calc(2px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.3)}
+    .pdf-free-response input{box-sizing:border-box;width:100%;height:calc(32px * var(--bq-pdf-zoom,1));padding:calc(6px * var(--bq-pdf-zoom,1)) calc(8px * var(--bq-pdf-zoom,1));border:1px solid #cbd5e1;border-radius:calc(6px * var(--bq-pdf-zoom,1));background:#fff;color:#0f172a;font:400 calc(14px * var(--bq-pdf-zoom,1))/1.4 ui-rounded,"Avenir Next",sans-serif}
+    /* The measured PDF gap is a ceiling, not the card's desired height. Keep
+       controls inside that gap; the in-flow fallback stays natural. */
+    .pdf-free-response:not(.pdf-free-flow){overflow:auto}
+    .pdf-free-response > *{flex-shrink:0}
+    .pdf-free-response input:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 calc(2px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.3)}
     /* In-flow fallback: appended below the rendered page when the PDF has no
        blank gap to overlay. Static layout, full page width, never covers text. */
     .pdf-free-response.pdf-free-flow{position:static;width:auto;margin:calc(8px * var(--bq-pdf-zoom,1)) calc(12px * var(--bq-pdf-zoom,1)) calc(12px * var(--bq-pdf-zoom,1))}
     .pdf-free-foot{display:flex;align-items:center;gap:calc(8px * var(--bq-pdf-zoom,1))}
-    .pdf-free-foot .pdf-free-count{margin-left:auto;font-size:calc(10px * var(--bq-pdf-zoom,1));color:#64748b;font-variant-numeric:tabular-nums}
-    .pdf-free-foot button{display:inline-flex;align-items:center;justify-content:center;gap:calc(6px * var(--bq-pdf-zoom,1));padding:calc(6px * var(--bq-pdf-zoom,1)) calc(12px * var(--bq-pdf-zoom,1));border:0;border-radius:calc(8px * var(--bq-pdf-zoom,1));background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font:750 calc(14px * var(--bq-pdf-zoom,1))/1 ui-rounded,"Avenir Next",sans-serif;cursor:pointer;box-shadow:0 calc(3px * var(--bq-pdf-zoom,1)) calc(10px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.35)}
+    .pdf-free-foot button{display:inline-flex;align-items:center;justify-content:center;height:calc(32px * var(--bq-pdf-zoom,1));min-height:0;gap:calc(6px * var(--bq-pdf-zoom,1));padding:calc(6px * var(--bq-pdf-zoom,1)) calc(10px * var(--bq-pdf-zoom,1));border:0;border-radius:calc(6px * var(--bq-pdf-zoom,1));background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font:750 calc(14px * var(--bq-pdf-zoom,1))/1 ui-rounded,"Avenir Next",sans-serif;cursor:pointer;box-shadow:0 calc(3px * var(--bq-pdf-zoom,1)) calc(10px * var(--bq-pdf-zoom,1)) rgba(99,102,241,.35)}
     .pdf-free-foot button:hover:not(:disabled){background:linear-gradient(135deg,#4f46e5,#4338ca)}
     .pdf-free-foot button:disabled{opacity:.55;cursor:not-allowed}
     .pdf-free-foot button[data-valid="true"]{background:linear-gradient(135deg,#16a34a,#15803d)}
     .pdf-free-foot button[data-valid="true"]:hover:not(:disabled){background:linear-gradient(135deg,#15803d,#166534)}
     :host([data-dark-pages="true"]) .pdf-free-response{background:linear-gradient(180deg,#1e1b4b 0%,#312e81 100%);border-color:#818cf8}
     :host([data-dark-pages="true"]) .pdf-free-head{color:#e0e7ff}
-    :host([data-dark-pages="true"]) .pdf-free-response textarea{background:#0f172a;color:#e2e8f0;border-color:#475569}
+    :host([data-dark-pages="true"]) .pdf-free-response input{background:#0f172a;color:#e2e8f0;border-color:#475569}
     :host{
       display:block!important;
       width:100%!important;
@@ -1025,13 +1028,18 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
           card.prepend(head);
           const foot = card.querySelector('.free-row');
           if (foot) foot.classList.add('pdf-free-foot');
-          card.hidden = currentAnswered.has(question);
+          card.hidden = currentAnswered.has(question) && !keptCorrect.has(question);
+          if (keptCorrect.has(question)) {
+            card.dataset.correct = 'true';
+            free.input.readOnly = true;
+            free.submit.disabled = true;
+          }
           freeInputs.set(question, free);
           return free;
         };
 
         for (const [question, response] of freeResponses) {
-          if (currentAnswered.has(question)) {
+          if (currentAnswered.has(question) && !keptCorrect.has(question)) {
             // Answered free responses stay in the desk; the PDF keeps only the anchor.
             continue;
           }
@@ -1041,7 +1049,7 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
             if (page) {
               const card = mountFreeCard(question, response).element;
               card.style.left = `${area.left}%`; card.style.top = `${area.top}%`;
-              card.style.width = `${area.width}%`; card.style.minHeight = `${area.height}%`;
+              card.style.width = `${area.width}%`; card.style.maxHeight = `${area.height}%`;
               page.root.append(card);
               continue;
             }
@@ -1432,6 +1440,9 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         free.element.hidden = false;
         free.element.dataset.correct = 'true';
         free.element.removeAttribute('data-invalid');
+        free.setValue(optionValue);
+        free.input.readOnly = true;
+        free.submit.disabled = true;
         free.input.setAttribute('aria-label', `Question ${questionNumber} is correct`);
         if (party) celebrateScreen(screenLayerHost());
         const confirm = submitButtons.get(questionNumber);
@@ -1475,8 +1486,14 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
     setAnsweredQuestions(answered: ReadonlySet<number>) {
       if (disposed) return;
       currentAnswered = new Set(answered);
+      // An initially completed FRQ has no card. If Quest reopens its response
+      // row, recreate the control rather than leaving it missing indefinitely.
+      if ([...freeResponses.keys()].some(question => !currentAnswered.has(question) && !freeInputs.has(question))) paintChoices();
       for (const [question, input] of numericInputs) input.element.hidden = currentAnswered.has(question);
-      for (const [question, input] of freeInputs) input.element.hidden = currentAnswered.has(question);
+      for (const [question, input] of freeInputs) {
+        input.element.hidden = currentAnswered.has(question) && !keptCorrect.has(question);
+        if (keptCorrect.has(question)) { input.input.readOnly = true; input.submit.disabled = true; }
+      }
       if (isBetterQuestDebug(element.ownerDocument)) {
         const list = [...currentAnswered].sort((a, b) => a - b);
         console.info(`[BetterQuest debug] PDF treats these questions as completed (boxes hidden): ${list.length ? list.join(', ') : '(none)'}`);
@@ -1538,6 +1555,10 @@ export function createInteractivePdfViewer(container: HTMLElement, options: Inte
         if (!freeResponses.has(question) || optionMaximums.get(question) !== -1) changed = true;
         optionMaximums.set(question, -1);
         freeInputs.get(question)?.update(response);
+        if (keptCorrect.has(question)) {
+          const free = freeInputs.get(question);
+          if (free) { free.input.readOnly = true; free.submit.disabled = true; }
+        }
       }
       freeResponses = new Map(next);
       if (changed && pdfRuns.length) paintChoices();
