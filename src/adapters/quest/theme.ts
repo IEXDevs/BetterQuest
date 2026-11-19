@@ -81,9 +81,6 @@ export const QUEST_DARK_STYLES = `
   #selector-div .qlabel { margin: 0; white-space: nowrap; font-weight: 650; font-size: 0.95rem; flex-shrink: 0; color: var(--bq-text, inherit); }
   #selector-div select.custom-select,
   #selector-div select.browser-default { flex: 1; min-width: 0; max-width: 100%; margin: 0; }
-  body[data-betterquest-saved-questions-open="true"] > br,
-  body[data-betterquest-saved-questions-open="true"] #quest-nav-header-div ~ br:not(main br),
-  #quest-nav-header-div:has([data-betterquest="saved-questions"]:not([hidden])) ~ br:not(main br) { display: none !important; }
   :is(#course-info-header-div, #element-info-header-div, #user-bulletins-div):empty { display: none !important; }
   #main-content[data-betterquest-theme="dark"] .assessment-integrity-banner {
     margin:0 0 .65rem!important;

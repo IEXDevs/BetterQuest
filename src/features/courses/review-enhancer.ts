@@ -8,10 +8,18 @@ export interface ReviewStats {
   remainingToGoal: number;
 }
 
+function nativeReviewText(container: HTMLElement): string {
+  const walker = container.ownerDocument.createTreeWalker(container, 5, {
+    acceptNode: node => node.nodeType === 1
+      ? ((node as Element).hasAttribute('data-betterquest') ? 2 : 3) : 1,
+  });
+  const text: string[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) text.push(node.textContent || '');
+  return text.join('');
+}
+
 export function extractReviewStats(container: HTMLElement): ReviewStats | null {
-  const source = container.cloneNode(true) as HTMLElement;
-  source.querySelectorAll('[data-betterquest]').forEach(node => node.remove());
-  const text = source.textContent || '';
+  const text = nativeReviewText(container);
   // Match "you have completed 46 / 121 review problems", "completed: 46 of 121", etc.
   const match = text.match(/(?:you have\s+)?completed[\s\S]{0,100}?(\d+)\s*(?:\/|of)\s*(\d+)/i) ||
     text.match(/(\d+)\s*(?:\/|of)\s*(\d+)\s*(?:review\s*problems|problems\s*completed)/i) ||
@@ -278,9 +286,7 @@ export function enhanceCourseReviewTab(document: Document, options: { run?: Exec
       /* ignore */
     }
   }
-  const source = reviewPane.cloneNode(true) as HTMLElement;
-  source.querySelectorAll('[data-betterquest]').forEach(node => node.remove());
-  if (!stats && !/Custom Reviews allow|Our research shows/i.test(source.textContent || '')) return false;
+  if (!stats && !/Custom Reviews allow|Our research shows/i.test(nativeReviewText(reviewPane))) return false;
   const signature = JSON.stringify(stats);
   if (existingDashboard?.dataset.stats === signature) {
     hideRawReviewElements(reviewPane, document);

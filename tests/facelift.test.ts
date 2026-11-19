@@ -781,7 +781,7 @@ test('slides announce wrong and correct verdicts on the picked option', async ()
     assert.equal(doc.querySelectorAll('.bq-slide-verdict').length, 1);
     assert.match(doc.querySelector('.bq-slide-verdict')!.textContent || '', /Incorrect/);
     assert.equal(doc.querySelector('.bq-celebration'), null, 'Wrong answers do not celebrate');
-    assert.ok(doc.querySelector('.bq-screen-flash'), 'Wrong verdicts flash the whole screen red');
+    assert.equal(doc.querySelector('.bq-screen-flash'), null, 'Default wrong verdicts stay inline');
     wrongIcon.classList.add('d-none');
     rightIcon.classList.remove('d-none');
     part.querySelector('.feedback_msg')!.textContent = 'Correct';
@@ -790,9 +790,7 @@ test('slides announce wrong and correct verdicts on the picked option', async ()
     assert.equal(doc.querySelectorAll('.bq-slide-verdict').length, 1, 'Only one verdict shows at a time');
     assert.match(doc.querySelector('.bq-slide-verdict')!.textContent || '', /Correct/);
     const party = doc.querySelector<HTMLElement>('.bq-celebration');
-    assert.ok(party, 'Correct verdict turns the whole screen green with a checkmark');
-    assert.equal(party!.style.position, 'fixed', 'The green wash covers the viewport with inline styles');
-    assert.match(party!.textContent || '', /✓/, 'The big checkmark rides along');
+    assert.equal(party, null, 'Default correct verdicts stay inline');
     feedback.classList.add('d-none');
     await pause();
     assert.equal(part.hasAttribute('data-betterquest-verdict'), false, 'Verdict clears with the feedback');
@@ -817,7 +815,10 @@ test('the console party trigger works on slides pages too', async () => {
     const doc = dom.window.document;
     const before = doc.querySelectorAll('.bq-celebration').length;
     doc.dispatchEvent(new dom.window.Event('betterquest:party'));
-    assert.equal(doc.querySelectorAll('.bq-celebration').length, before + 1, 'Console event shows the celebration on slides');
+    assert.equal(doc.querySelectorAll('.bq-celebration').length, before, 'Console event does not enable whimsy');
+    doc.documentElement.dataset.betterquestWhimsy = 'enabled';
+    doc.dispatchEvent(new dom.window.Event('betterquest:party'));
+    assert.equal(doc.querySelectorAll('.bq-celebration').length, before + 1);
     doc.dispatchEvent(new dom.window.CustomEvent('betterquest:party', { detail: 'wrong' }));
     assert.ok(doc.querySelector('.bq-screen-flash'), 'Console event flashes red on slides');
     features.dispose();

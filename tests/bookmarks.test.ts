@@ -236,7 +236,8 @@ test('saved view groups real bookmark records by course/assignment and links to 
     const host = dom.window.document.querySelector<HTMLElement>('[data-betterquest="saved-questions"]')!;
     assert.equal(host.previousElementSibling, dom.window.document.querySelector('.qh-navbar'));
     assert.equal(host.shadowRoot!.querySelector('.caption'), null, 'Caption text is removed');
-    assert.equal(dom.window.document.body.dataset.betterquestSavedQuestionsOpen, 'true');
+    assert.equal(host.shadowRoot!.querySelector('section')?.getAttribute('role'), 'dialog');
+    assert.equal(host.shadowRoot!.querySelectorAll('details[open]').length, 0);
     assert.equal(host.shadowRoot!.querySelectorAll('details').length, 2);
     assert.equal(host.shadowRoot!.querySelectorAll('h3').length, 2);
     assert.equal(host.shadowRoot!.querySelector('li a')?.textContent, 'Question 1 ↗');
@@ -257,17 +258,15 @@ test('BetterQuest navbar opens/closes Saved Questions on response pages and keep
     await pause(); const row = dom.window.document.querySelector('tr.instanceitempart')!;
     buttonFor(row).click(); await pause();
     const navigation = dom.window.document.querySelector('[data-betterquest="navigation"]')!;
-    const launcher = navigation.querySelector<HTMLButtonElement>('button.qh-nav-link')!;
+    const launcher = navigation.querySelector<HTMLButtonElement>('.bq-toolbar-saved')!;
     assert.equal(launcher.disabled, false); launcher.click(); await pause();
-    navigation.querySelector(':scope > span')!.shadowRoot!.querySelector<HTMLButtonElement>('.saved-action')!.click(); await pause();
     const view = dom.window.document.querySelector<HTMLElement>('[data-betterquest="saved-questions"]')!;
-    assert.equal(view.hidden, false); assert.equal(launcher.getAttribute('aria-expanded'), 'false');
+    assert.equal(view.hidden, false); assert.equal(launcher.getAttribute('aria-expanded'), 'true');
     view.shadowRoot!.querySelector<HTMLButtonElement>('.remove')!.click(); await pause();
     assert.equal(buttonFor(row).getAttribute('aria-pressed'), 'false');
     view.shadowRoot!.querySelector<HTMLButtonElement>('[aria-label="Close Saved Questions"]')!.click();
     assert.equal(view.hidden, true); assert.equal(launcher.getAttribute('aria-expanded'), 'false');
     launcher.click(); await pause();
-    navigation.querySelector(':scope > span')!.shadowRoot!.querySelector<HTMLButtonElement>('.saved-action')!.click(); await pause();
     assert.equal(dom.window.document.querySelectorAll('[data-betterquest="saved-questions"]').length, 1);
   } finally { integration.dispose(); dom.window.close(); }
 });
@@ -328,7 +327,7 @@ test('workspace response desk question cards render a bookmark button that saves
   }
 });
 
-test('Saved Questions automatically opens in top navigation when saved questions exist', async () => {
+test('Saved Questions stays closed with saved questions and opens only through its button', async () => {
   const dom = page();
   const f = store();
   await seed(f);
@@ -339,10 +338,12 @@ test('Saved Questions automatically opens in top navigation when saved questions
   const integration = startIntegration(dom.window.document, dom.window as unknown as Window, { run: f.run, subscribe: f.subscribe });
   try {
     await pause();
+    assert.equal(dom.window.document.querySelector('[data-betterquest="saved-questions"]'), null);
+    dom.window.document.querySelector<HTMLButtonElement>('.bq-toolbar-saved')!.click();
+    await pause();
     const view = dom.window.document.querySelector<HTMLElement>('[data-betterquest="saved-questions"]')!;
-    assert.ok(view, 'Saved questions view host was created automatically');
-    assert.equal(view.hidden, false, 'Saved questions view is open automatically');
-    assert.equal(dom.window.document.body.dataset.betterquestSavedQuestionsOpen, 'true');
+    assert.ok(view);
+    assert.equal(view.hidden, false);
     assert.equal(view.previousElementSibling, dom.window.document.querySelector('.qh-navbar'));
 
     // Test dismissal

@@ -43,6 +43,15 @@ export function createNavigationButton(
   });
 
   toolbar.append(button, questButton);
+  const savedButton = document.createElement('button');
+  savedButton.type = 'button';
+  savedButton.className = 'qh-nav-link bq-toolbar-btn bq-toolbar-saved';
+  savedButton.setAttribute('aria-label', 'Saved Questions');
+  savedButton.setAttribute('aria-haspopup', 'dialog');
+  savedButton.setAttribute('aria-expanded', 'false');
+  savedButton.title = 'Saved Questions';
+  savedButton.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>';
+  toolbar.prepend(savedButton);
   host.append(toolbar);
-  return { host, button, questButton, toolbar };
+  return { host, button, questButton, savedButton, toolbar };
 }

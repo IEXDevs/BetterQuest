@@ -35,9 +35,6 @@ export function applyNavigationFacelift(document: Document, navbar: HTMLElement)
     #selector-div .col{display:flex;align-items:center;gap:12px}
     #selector-div .qlabel{margin:0;white-space:nowrap;font-weight:650;font-size:0.95rem;flex-shrink:0;color:var(--bq-text,inherit)}
     #selector-div select.custom-select,#selector-div select.browser-default{flex:1;min-width:0;max-width:100%;margin:0}
-    body[data-betterquest-saved-questions-open="true"] > br,
-    body[data-betterquest-saved-questions-open="true"] #quest-nav-header-div ~ br:not(main br),
-    #quest-nav-header-div:has([data-betterquest="saved-questions"]:not([hidden])) ~ br:not(main br){display:none!important}
     :is(#course-info-header-div, #element-info-header-div, #user-bulletins-div):empty{display:none!important}
     .qh-navbar[data-betterquest-nav="compact"]{min-height:62px;padding:0 18px;background:linear-gradient(110deg,#17283d 0%,#213750 58%,#17283d 100%);box-shadow:0 6px 24px #08131f25;color:#edf3fb}
     .qh-navbar[data-betterquest-nav="compact"] .qh-breadcrumbs,

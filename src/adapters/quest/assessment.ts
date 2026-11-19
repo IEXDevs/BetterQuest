@@ -3,7 +3,9 @@ import { betterQuestDebugLog } from '../../shared/debug';
 export interface AssessmentResponseBinding {
   id: string;
   number: string;
-  select: HTMLSelectElement;
+  /** Native response control; retained name preserves existing choice callers. */
+  select: HTMLSelectElement | HTMLInputElement | HTMLTextAreaElement;
+  kind?: 'choice' | 'numeric' | 'free';
   submit: HTMLButtonElement;
   options: { value: string; label: string }[];
   attempts: number;
@@ -267,6 +269,20 @@ export function isResponseOptionAvailable(option: HTMLOptionElement): boolean {
   return Boolean(option.value && !option.disabled && !option.hidden && !option.closest('optgroup[disabled]'));
 }
 
+/**
+ * Quest serves numeric answers as text inputs carrying numeric affordances
+ * (the standard "integer, decimal or scientific notation" title/placeholder,
+ * a decimal/numeric inputmode, or a pattern). A text input with none of those
+ * is a short prose answer — a single-line free response, not a number.
+ */
+export function isNumericTextInput(input: HTMLInputElement): boolean {
+  const mode = (input.inputMode || '').toLowerCase();
+  if (mode === 'decimal' || mode === 'numeric') return true;
+  if (input.pattern) return true;
+  const hints = `${input.title || ''} ${input.placeholder || ''}`;
+  return /integer|decimal|scientific|notation|tolerance|significant|numeric|\bnumber\b/i.test(hints);
+}
+
 export interface AssessmentMetrics {
   score: string;
   classAverage: string;
@@ -440,6 +456,19 @@ export function readAssessmentResponses(table: HTMLTableElement): AssessmentResp
 
 // Remembers the last parsed summary so debug logs fire only when it changes.
 let lastResponseSummary = '';
+// Weak keys let removed/recycled Quest rows be collected. Unchanged reads must
+// not manufacture a fresh select and option subtree for every static answer.
+const staticResponseControls = new WeakMap<HTMLTableRowElement, { select: HTMLSelectElement; optionCount: number }>();
+const staticFreeControls = new WeakMap<HTMLTableRowElement, HTMLTextAreaElement>();
+const missingSubmitControls = new WeakMap<HTMLTableRowElement, HTMLButtonElement>();
+function missingSubmit(row: HTMLTableRowElement): HTMLButtonElement {
+  let button = missingSubmitControls.get(row);
+  if (!button) {
+    button = row.ownerDocument.createElement('button'); button.disabled = true; button.hidden = true;
+    missingSubmitControls.set(row, button);
+  }
+  return button;
+}
 
 function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResponseBinding[] {
   const rows: AssessmentResponseBinding[] = [];
@@ -457,6 +486,11 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
     if (!revealing && !isElementVisible(row)) continue;
 
     const select = row.querySelector<HTMLSelectElement>('select[name="response"], select[aria-label="Select your response"], select');
+    const free = select ? null : cells[1]?.querySelector<HTMLTextAreaElement>('textarea[name="response"], textarea');
+    const textInput = select || free ? null : cells[1]?.querySelector<HTMLInputElement>('input[type="text"][name="response"]');
+    // A text input with no numeric affordances is a short prose answer, not a number.
+    const proseInput = textInput && !isNumericTextInput(textInput) ? textInput : null;
+    const numeric = textInput && !proseInput ? textInput : null;
     // Never match per-row history toggles or other non-submit buttons: only
     // explicit submit controls qualify, and anything history-related is out.
     const submitCandidates = [...row.querySelectorAll<HTMLButtonElement>(
@@ -472,6 +506,10 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
     let val = '';
     if (select) {
       val = select.value;
+    } else if (free ?? proseInput) {
+      val = (free ?? proseInput)!.value;
+    } else if (numeric) {
+      val = numeric.value;
     } else {
       const answerText = clean(cells[1]?.textContent);
       const answerMatch = answerText.match(/^([1-9])\b/);
@@ -503,6 +541,23 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
       continue;
     }
 
+    const prose = free ?? proseInput;
+    if (prose) {
+      const text = prose.value.trim();
+      const proseDisabled = prose.disabled || prose.readOnly || prose.getAttribute('aria-disabled') === 'true';
+      rows.push({ id, number: clean(cells[0]?.textContent).replace(/\.$/, '') || String(rows.length + 1),
+        select: prose, kind: 'free', submit: submit || missingSubmit(row), options: [], attempts,
+        answered: isCorrect || triesExhausted || (proseDisabled && Boolean(text)) || Boolean(!isSubmitAvailable && text && recorded),
+      });
+      continue;
+    }
+    if (numeric) {
+      rows.push({ id, number: clean(cells[0]?.textContent).replace(/\.$/, '') || String(rows.length + 1),
+        select: numeric, kind: 'numeric', submit: submit || missingSubmit(row), options: [], attempts,
+        answered: isCorrect || triesExhausted || ((numeric.disabled || numeric.readOnly) && Boolean(val)) || Boolean(!isSubmitAvailable && val && recorded),
+      });
+      continue;
+    }
     if (select) {
       let options = [...select.options]
         .filter(isResponseOptionAvailable)
@@ -522,7 +577,7 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
         id,
         number: clean(cells[0]?.textContent).replace(/\.$/, '') || String(rows.length + 1),
         select,
-        submit: submit || row.ownerDocument.createElement('button'),
+        submit: submit || missingSubmit(row),
         options,
         attempts,
         answered: isAnswered,
@@ -530,27 +585,51 @@ function readAssessmentResponsesFromDom(table: HTMLTableElement): AssessmentResp
       continue;
     }
 
-    // No select input: normally a static completed answer in cell 1 (e.g. "3" in
-    // quest-responses.html). Quest re-seeds its virtualized rows around a submit,
-    // so a row can briefly appear with no answer control, value, attempts or
-    // status. That half-rendered row must stay in the list — dropping it removes
-    // the question from the viewer's option map, which would leave the whole PDF
-    // without any clickable boxes. It must simply not be reported as answered.
+    // No live control: normally a static completed answer. A lone digit is a
+    // finished choice answer (e.g. "3" in quest-responses.html); longer prose
+    // is a finished free response and must never invent choice boxes.
+    const staticText = clean(cells[1]?.textContent);
+    const staticDigit = staticText.match(/^([1-9])\b/);
+    if (!staticDigit && staticText) {
+      let area = staticFreeControls.get(row);
+      if (!area) {
+        area = row.ownerDocument.createElement('textarea'); area.disabled = true;
+        area.setAttribute('aria-label', 'Submitted free response');
+        staticFreeControls.set(row, area);
+      }
+      area.value = staticText;
+      const effectiveSubmit = submit || missingSubmit(row);
+      if (!effectiveSubmit.disabled) effectiveSubmit.disabled = true;
+      if (!effectiveSubmit.hidden) effectiveSubmit.hidden = true;
+      rows.push({
+        id,
+        number: clean(cells[0]?.textContent).replace(/\.$/, '') || String(rows.length + 1),
+        select: area,
+        kind: 'free',
+        submit: effectiveSubmit,
+        options: [],
+        attempts: attempts || 1,
+        answered: true,
+      });
+      continue;
+    }
     const optionCount = Math.max(val ? Number(val) : 1, maxTries, 5);
     const options = Array.from({ length: optionCount }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
-    const syntheticSelect = row.ownerDocument.createElement('select');
-    syntheticSelect.disabled = true;
-    for (const optItem of options) {
-      const opt = row.ownerDocument.createElement('option');
-      opt.value = optItem.value;
-      opt.textContent = optItem.label;
-      if (optItem.value === val) opt.selected = true;
-      syntheticSelect.append(opt);
+    let controls = staticResponseControls.get(row);
+    if (!controls || controls.optionCount !== optionCount) {
+      const select = row.ownerDocument.createElement('select'); select.disabled = true;
+      for (const optItem of options) {
+        const opt = row.ownerDocument.createElement('option');
+        opt.value = optItem.value; opt.textContent = optItem.label;
+        select.append(opt);
+      }
+      controls = { select, optionCount }; staticResponseControls.set(row, controls);
     }
-    if (val) syntheticSelect.value = val;
-    const effectiveSubmit = submit || row.ownerDocument.createElement('button');
-    effectiveSubmit.disabled = true;
-    effectiveSubmit.hidden = true;
+    const syntheticSelect = controls.select;
+    syntheticSelect.value = val || '1';
+    const effectiveSubmit = submit || missingSubmit(row);
+    if (!effectiveSubmit.disabled) effectiveSubmit.disabled = true;
+    if (!effectiveSubmit.hidden) effectiveSubmit.hidden = true;
     rows.push({
       id,
       number: clean(cells[0]?.textContent).replace(/\.$/, '') || String(rows.length + 1),
