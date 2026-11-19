@@ -26,7 +26,7 @@ export const NUMERIC_RESPONSE_STYLES = `
   .numeric-response :focus-visible{outline:2px solid var(--bq-accent,#227ab0);outline-offset:2px}
   .free-response{display:flex;flex-direction:column;gap:6px;min-width:0;font:12px/1.4 system-ui,sans-serif}
   .free-response[hidden]{display:none!important}
-  .free-response input{box-sizing:border-box;flex:1;width:100%;min-width:0;height:32px;padding:6px 8px;border:1px solid var(--bq-border,#cbd5e1);border-radius:5px;background:var(--bq-surface,#fff);color:var(--bq-text,#18253a);font:inherit}
+  .free-response textarea{box-sizing:border-box;flex:1;width:100%;min-width:0;min-height:32px;padding:6px 8px;border:1px solid var(--bq-border,#cbd5e1);border-radius:5px;background:var(--bq-surface,#fff);color:var(--bq-text,#18253a);font:inherit;resize:vertical}
   .free-response .free-row{display:flex;align-items:center;gap:6px;min-width:0}
   .free-response button{flex-shrink:0;height:32px;min-height:32px;padding:6px 10px;border:1px solid var(--bq-border,#cbd5e1);border-radius:5px;background:var(--bq-raised,#eef2f6);color:var(--bq-text,#18253a);font:600 12px/1.4 system-ui,sans-serif;cursor:pointer}
   .free-response button:disabled{opacity:.5;cursor:default}
@@ -83,7 +83,7 @@ export function createFreeResponse(document: Document, questionNumber: number, r
   const element = document.createElement('div'); element.className = 'free-response';
   element.dataset.question = String(questionNumber); element.setAttribute('role', 'group');
   element.setAttribute('aria-label', `Question ${questionNumber} free response`);
-  const area = document.createElement('input'); area.type = 'text'; area.autocomplete = 'off';
+  const area = document.createElement('textarea'); area.autocomplete = 'off'; area.rows = 2;
   area.setAttribute('aria-label', `Free response answer for question ${questionNumber}`);
   const row = document.createElement('div'); row.className = 'free-row';
   const submit = document.createElement('button'); submit.type = 'button'; submit.textContent = '✓';
