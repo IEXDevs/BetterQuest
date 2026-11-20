@@ -97,3 +97,16 @@ test('Saved Questions opening and closing leaves assessment header, spacers and 
     assert.equal(QUEST_DARK_STYLES.includes('betterquest-saved-questions-open'), false);
   } finally { integration.dispose(); dom.window.close(); }
 });
+
+test('Saved Questions text stays readable on its light fallback surface', () => {
+  const dom = new JSDOM('<nav><button class="bq-toolbar-saved"></button></nav>');
+  const popup = createSavedQuestionsView(dom.window.document, new BookmarkService(async () => emptyState()), () => () => {}, () => {}, () => false);
+  try {
+    popup.position(dom.window.document.querySelector('nav')!);
+    const host = dom.window.document.querySelector<HTMLElement>('[data-betterquest="saved-questions"]')!;
+    const css = host.shadowRoot!.querySelector('style')!.textContent!;
+    const section = css.match(/section\{([^}]*)\}/)![1];
+    assert.match(section, /background:color-mix\(in srgb,var\(--bq-surface,#fff\)/);
+    assert.match(section, /(?:^|;)color:var\(--bq-text,#26384a\)/);
+  } finally { popup.dispose(); dom.window.close(); }
+});
