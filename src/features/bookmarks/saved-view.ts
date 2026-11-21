@@ -11,7 +11,7 @@ export function createSavedQuestionsView(document: Document, service: BookmarkSe
   style.textContent = `
     :host{display:block;position:fixed;z-index:10000;width:min(330px,calc(100vw - 24px));margin:0;color:var(--bq-text,#26384a);font-family:inherit;overflow:visible}
     :host([hidden]){display:none}
-    section{background:color-mix(in srgb,var(--bq-surface,#fff) 94%,transparent);color:var(--bq-text,#edf3fb);border:1px solid var(--bq-border,#e1e7ed);border-radius:11px;padding:16px;font:13px/1.45 ui-rounded,'Avenir Next',-apple-system,sans-serif;text-align:left;max-height:calc(100dvh - var(--bq-saved-top,80px) - 12px);box-sizing:border-box;overflow:auto;box-shadow:0 28px 70px -10px #000000b8,0 0 0 1px #ffffff14,inset 0 1px #ffffff29;backdrop-filter:blur(28px) saturate(190%);animation:bq-saved-in .28s cubic-bezier(0.16,1,0.3,1) both}
+    section{background:color-mix(in srgb,var(--bq-surface,#fff) 94%,transparent);color:var(--bq-text,#26384a);border:1px solid var(--bq-border,#e1e7ed);border-radius:11px;padding:16px;font:13px/1.45 ui-rounded,'Avenir Next',-apple-system,sans-serif;text-align:left;max-height:calc(100dvh - var(--bq-saved-top,80px) - 12px);box-sizing:border-box;overflow:auto;box-shadow:0 28px 70px -10px #000000b8,0 0 0 1px #ffffff14,inset 0 1px #ffffff29;backdrop-filter:blur(28px) saturate(190%);animation:bq-saved-in .28s cubic-bezier(0.16,1,0.3,1) both}
     @keyframes bq-saved-in{0%{opacity:0;transform:translateY(-8px)}100%{opacity:1;transform:translateY(0)}}
     @media(prefers-reduced-motion:reduce){section{animation:none!important}}
     header{display:flex;align-items:center;justify-content:space-between;gap:15px}
